@@ -73,22 +73,32 @@ Retrieve tenant coordinates from the Google SecOps Web UI for both environments:
 
 ### Local Shell Configuration (`.env` or terminal rc)
 
+Graft namespaces engine credentials with `GRAFT_<ENGINE>_*`, while supporting generic `GRAFT_*` fallbacks:
+
 ```bash
 # ==============================================================================
-# Staging Tenant (Used for graft secops verify & graft secops test)
+# Multi-Tenant Enterprise Topology (Recommended)
 # ==============================================================================
-export GRAFT_STAGING_PROJECT="my-secops-staging-project"
-export GRAFT_STAGING_LOCATION="us"
-export GRAFT_STAGING_INSTANCE_ID="11111111-2222-3333-4444-555555555555"
-export GRAFT_STAGING_SA_EMAIL="graft-secops-deployer@my-secops-staging-project.iam.gserviceaccount.com"
+# Staging Tenant (Used for graft secops verify & graft secops test)
+export GRAFT_SECOPS_STAGING_PROJECT="my-secops-staging-project"
+export GRAFT_SECOPS_STAGING_LOCATION="us"
+export GRAFT_SECOPS_STAGING_INSTANCE_ID="11111111-2222-3333-4444-555555555555"
+export GRAFT_SECOPS_STAGING_SA_EMAIL="graft-secops-deployer@my-secops-staging-project.iam.gserviceaccount.com"
+
+# Production Tenant (Used for graft secops managed diff & apply)
+export GRAFT_SECOPS_PROD_PROJECT="my-secops-prod-project"
+export GRAFT_SECOPS_PROD_LOCATION="us"
+export GRAFT_SECOPS_PROD_INSTANCE_ID="66666666-7777-8888-9999-000000000000"
+export GRAFT_SECOPS_PROD_SA_EMAIL="graft-secops-deployer@my-secops-prod-project.iam.gserviceaccount.com"
 
 # ==============================================================================
-# Production Tenant (Used for graft secops diff & graft secops apply)
+# Single-Tenant Lab Topology (Sandboxes & Personal Research)
+# In lab environments, staging and production can point to the same instance:
 # ==============================================================================
-export GRAFT_PROD_PROJECT="my-secops-prod-project"
-export GRAFT_PROD_LOCATION="us"
-export GRAFT_PROD_INSTANCE_ID="66666666-7777-8888-9999-000000000000"
-export GRAFT_PROD_SA_EMAIL="graft-secops-deployer@my-secops-prod-project.iam.gserviceaccount.com"
+# export GRAFT_SECOPS_PROJECT="my-lab-secops-project"
+# export GRAFT_SECOPS_LOCATION="us"
+# export GRAFT_SECOPS_INSTANCE_ID="11111111-2222-3333-4444-555555555555"
+# export GRAFT_SECOPS_SA_EMAIL="graft-deployer@my-lab-secops-project.iam.gserviceaccount.com"
 ```
 
 ---
@@ -104,12 +114,12 @@ When configuring GitHub Actions, authenticate using **Workload Identity Federati
 | `GCP_WORKLOAD_IDENTITY_PROVIDER` | Secret | Global / All | `projects/<NUM>/locations/global/workloadIdentityPools/<POOL>/providers/<PROVIDER>` |
 | `GCP_STAGING_SERVICE_ACCOUNT` | Secret | Staging (PR) | `graft-secops-deployer@<STAGING_PROJECT>.iam.gserviceaccount.com` |
 | `GCP_PROD_SERVICE_ACCOUNT` | Secret | Production (`main`) | `graft-secops-deployer@<PROD_PROJECT>.iam.gserviceaccount.com` |
-| `GRAFT_STAGING_PROJECT` | Variable | Staging (PR) | GCP Project ID for Staging |
-| `GRAFT_STAGING_LOCATION` | Variable | Staging (PR) | Staging region (`us`, `europe-west3`, etc.) |
-| `GRAFT_STAGING_INSTANCE_ID` | Variable | Staging (PR) | Staging Customer ID (UUID) |
-| `GRAFT_PROD_PROJECT` | Variable | Production (`main`) | GCP Project ID for Production |
-| `GRAFT_PROD_LOCATION` | Variable | Production (`main`) | Production region (`us`, `europe-west3`, etc.) |
-| `GRAFT_PROD_INSTANCE_ID` | Variable | Production (`main`) | Production Customer ID (UUID) |
+| `GRAFT_SECOPS_STAGING_PROJECT` | Variable | Staging (PR) | GCP Project ID for Staging |
+| `GRAFT_SECOPS_STAGING_LOCATION` | Variable | Staging (PR) | Staging region (`us`, `europe-west3`, etc.) |
+| `GRAFT_SECOPS_STAGING_INSTANCE_ID` | Variable | Staging (PR) | Staging Customer ID (UUID) |
+| `GRAFT_SECOPS_PROD_PROJECT` | Variable | Production (`main`) | GCP Project ID for Production |
+| `GRAFT_SECOPS_PROD_LOCATION` | Variable | Production (`main`) | Production region (`us`, `europe-west3`, etc.) |
+| `GRAFT_SECOPS_PROD_INSTANCE_ID` | Variable | Production (`main`) | Production Customer ID (UUID) |
 
 ---
 

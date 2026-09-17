@@ -1,0 +1,48 @@
+name: Detection Rule Proposal
+description: Propose a new detection rule or enhancement for an engine
+labels: ["detection", "rule-proposal"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use this form to propose new detection logic or coverage expansions across supported engines.
+  - type: input
+    id: title
+    attributes:
+      label: Detection Rule Name
+      description: Snake_case name matching Graft convention (e.g. `gcp_iam_service_account_key_create`).
+      placeholder: "workspace_suspicious_forwarding_rule"
+    validations:
+      required: true
+  - type: dropdown
+    id: engine
+    attributes:
+      label: Target Engine
+      options:
+        - Google SecOps (Chronicle)
+        - CrowdStrike Falcon
+        - Microsoft Sentinel
+        - Splunk Enterprise Security
+    validations:
+      required: true
+  - type: textarea
+    id: adversary_behavior
+    attributes:
+      label: Adversary Behavior & Threat Context
+      description: Describe the threat, TTPs, or tradecraft this rule intends to detect.
+    validations:
+      required: true
+  - type: input
+    id: mitre
+    attributes:
+      label: MITRE ATT&CK Mapping
+      description: Primary Tactic and Technique IDs (e.g. `persistence: T1098.001`).
+      placeholder: "initial_access: T1566.002"
+    validations:
+      required: true
+  - type: textarea
+    id: logic_draft
+    attributes:
+      label: Draft Logic / Pseudo-code
+      description: Draft YARA-L, KQL, or query logic if available.
+      render: shell

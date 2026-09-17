@@ -1,0 +1,46 @@
+name: Bug Report
+description: Report a defect, error, or unexpected behavior in Graft
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for filing a bug report. Please ensure you are running a supported version of Python (>= 3.13) and `uv`.
+  - type: input
+    id: version
+    attributes:
+      label: Graft & Python Version
+      description: Output of `python3 --version` and git commit hash.
+      placeholder: "Python 3.13.2, commit cee85f2"
+    validations:
+      required: true
+  - type: textarea
+    id: description
+    attributes:
+      label: Description of the Bug
+      description: Clear and concise description of what the bug is.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Steps to Reproduce
+      description: Exact CLI commands and inputs that trigger the issue.
+      placeholder: |
+        1. Run `graft secops verify ...`
+        2. See error
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected Behavior
+      description: What you expected to happen instead.
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Terminal Output / Stack Trace
+      description: Paste terminal output or error logs here.
+      render: shell

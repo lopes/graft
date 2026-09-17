@@ -37,8 +37,8 @@ Graft follows strict **Hexagonal Architecture (Ports & Adapters)**:
 flowchart TD
     CLI["<b>Unified CLI</b> (argparse)<br/><code>graft lint</code> • <code>graft export</code> • <code>graft secops [cmd]</code>"]
     CORE["<b>Driving Core</b> (src/graft/core/)<br/>• 100% Engine-Agnostic Domain Models (dataclasses)<br/>• Decoupled JSON Schema & MITRE STIX Validators<br/>• Git Blame Enriched Exporters (CSV / JSON)<br/>• MITRE ATT&CK Navigator Layer Generator<br/>• Hexagonal Ports (typing.Protocol)"]
-    SECOPS["<b>Google SecOps Adapter</b> (src/graft/adapters/secops/)<br/>• Chronicle v1alpha REST Client (urllib)<br/>• verifyRuleText Pre-Merge Dry Run<br/>• Custom Rule Lifecycle Deployer<br/>• Managed RuleSet Reconciler<br/>• Staging Replay Test Harness"]
-    FUTURE["<b>Future Engine Adapters</b><br/>(Splunk, Elastic, Sentinel)"]
+    SECOPS["<b>Google SecOps Engine</b> (src/graft/engines/secops/)<br/>• Chronicle v1 REST Client (urllib)<br/>• verifyRuleText Pre-Merge Dry Run<br/>• Custom Rule Lifecycle Deployer<br/>• Managed RuleSet Reconciler<br/>• Staging Replay Test Harness"]
+    FUTURE["<b>Future Engines</b><br/>(CrowdStrike, Sentinel, Splunk)"]
 
     CLI --> CORE
     CORE --> SECOPS
@@ -47,14 +47,28 @@ flowchart TD
 
 ---
 
-## Quick Start & Prerequisites
+## Documentation
+
+For full guides and architecture specifications, see the **[Graft Documentation Index (docs/README.md)](docs/README.md)**:
+
+- **[System Architecture](docs/architecture.md):** Hexagonal Ports & Adapters and stdlib runtime policy.
+- **[Rule Authoring Guide](docs/rule_authoring.md):** 5-block envelope format, YARA-L logic, and runbooks.
+- **[GitOps Reconciliation](docs/gitops_reconciliation.md):** Managing vendor-curated content, drift detection (`diff`), and synchronization (`apply`, `pull`).
+- **[Synthetic Replay Testing](docs/replay_testing.md):** Dynamic verification using quarantined rules and synthetic UDM event injection.
+- **[Visibility, Matrix & Catalogs](docs/visibility_and_matrix.md):** MITRE ATT&CK matrix, Navigator v4 layers, and Git author attribution.
+- **[Google SecOps Engine Setup](docs/engines/secops.md):** Credentials, dual-tenant vs single-tenant lab topologies, and API mechanics.
+- **[Extending Engines Tutorial](docs/engines/extending_engines.md):** Developer guide to scaffolding and implementing new engine adapters.
+
+---
+
+## Quick Start & CLI Reference
 
 ### Prerequisites
 - **Python >= 3.13**
 - **[uv](https://docs.astral.sh/uv/)** (Fast Python package and project manager)
-- **Google Cloud SDK (`gcloud`)** with access to a Google SecOps tenant instance (see [docs/adapters/secops.md](docs/adapters/secops.md))
+- **Google Cloud SDK (`gcloud`)** with access to a Google SecOps tenant instance (see [docs/engines/secops.md](docs/engines/secops.md))
 
-### Installation & Verification
+### Installation & Quality Verification
 
 ```bash
 # Clone repository
@@ -64,13 +78,41 @@ cd graft
 # Install virtualenv and dev dependencies
 uv sync
 
-# Run static quality gates
+# Run static quality gates & test suite
 uv run ruff check .
 uv run ruff format --check .
 uv run mypy --strict src tests
-
-# Run unit tests (<1s execution)
 uv run pytest
+```
+
+### Essential CLI Commands
+
+```bash
+# 1. Offline rule and manifest linting
+graft lint
+graft lint rules/secops/custom/workspace_nrd_possible_phishing.yaml
+
+# 2. Scaffolding new engines or rules
+graft new engine sentinel
+graft new rule gcp_cloud_storage_public_bucket --engine secops
+
+# 3. Threat coverage matrix & catalog exports
+graft export matrix --format table
+graft export matrix --format navigator --out layers/coverage.json
+graft export catalog --format markdown
+graft export catalog --format csv --out exports/catalog.csv
+
+# 4. Google SecOps pre-merge syntax dry run
+graft secops verify rules/secops/custom/workspace_nrd_possible_phishing.yaml
+
+# 5. Synthetic UDM replay testing
+graft secops test
+graft secops test rules/secops/custom/workspace_nrd_possible_phishing.yaml --require-staging
+
+# 6. GitOps managed curated content reconciliation
+graft secops managed diff
+graft secops managed apply
+graft secops managed pull --out rules/secops/managed.yaml
 ```
 
 ---

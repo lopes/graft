@@ -185,7 +185,7 @@ To guarantee state preservation, eliminate hallucination, and prevent context sa
 | **5** | Unified `graft` CLI Dispatcher | `[x]` | `384bba7` | 2026-09-17 17:21 UTC | Section 6.7 |
 | **6** | Staging Replay Harness (Graceful Degradation) | `[x]` | `12e1dfa` | 2026-09-17 18:21 UTC | Section 6.8 |
 | **7** | Visibility & Value Tooling | `[x]` | `9953dac` | 2026-09-17 19:29 UTC | Section 6.9 |
-| **8** | Comprehensive Documentation & Repo Hygiene | `[ ]` | — | — | Section 6.9 |
+| **8** | Comprehensive Documentation & Repo Hygiene | `[x]` | `5bf68bf` | 2026-09-17 19:57 UTC | Section 6.10 |
 | **9** | CI/CD Pipeline & Branch Governance | `[ ]` | — | — | Section 6.10 |
 
 ---

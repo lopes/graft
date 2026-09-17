@@ -1,0 +1,18 @@
+# Global default code owners
+* @lopes
+
+# Core architecture and schemas
+/src/graft/core/ @lopes
+/schemas/ @lopes
+
+# Detection Rules
+/rules/ @lopes
+
+# Engine Adapters
+/src/graft/adapters/ @lopes
+
+# CLI Subsystem
+/src/graft/cli/ @lopes
+
+# CI/CD Workflows
+/.github/ @lopes
