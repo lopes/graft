@@ -3,7 +3,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from graft.adapters.secops.auth import SecOpsAuthError, SecOpsAuthResolver
+from graft.engines.secops.auth import SecOpsAuthError, SecOpsAuthResolver
 
 
 def test_auth_resolver_explicit_token() -> None:

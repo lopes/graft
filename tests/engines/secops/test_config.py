@@ -1,6 +1,6 @@
 import pytest
 
-from graft.adapters.secops.config import SecOpsConfig
+from graft.engines.secops.config import SecOpsConfig
 
 
 def test_secops_config_initialization_and_properties() -> None:

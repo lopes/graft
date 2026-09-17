@@ -2,10 +2,10 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from graft.adapters.secops.client import SecOpsClient
-from graft.adapters.secops.compiler import SecOpsCompilerAdapter, synthesize_yaral_rule
 from graft.core.models.compiler import CompilationDiagnostic, CompilationResult
 from graft.core.models.rule import BaseDeploymentConfig, RuleEnvelope, RuleMetadata, Runbook
+from graft.engines.secops.client import SecOpsClient
+from graft.engines.secops.compiler import SecOpsCompilerAdapter, synthesize_yaral_rule
 
 
 @pytest.fixture

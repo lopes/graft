@@ -1,6 +1,5 @@
 import logging
 
-from graft.adapters.secops.client import SecOpsClient
 from graft.core.models.managed import (
     ManagedDeployment,
     ManagedExclusion,
@@ -8,6 +7,7 @@ from graft.core.models.managed import (
     ManagedState,
 )
 from graft.core.ports.managed import ManagedEnginePort
+from graft.engines.secops.client import SecOpsClient
 
 logger = logging.getLogger("graft.secops.managed")
 

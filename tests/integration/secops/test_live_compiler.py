@@ -2,9 +2,9 @@ import os
 
 import pytest
 
-from graft.adapters.secops.client import SecOpsClient
-from graft.adapters.secops.compiler import SecOpsCompilerAdapter
-from graft.adapters.secops.config import SecOpsConfig
+from graft.engines.secops.client import SecOpsClient
+from graft.engines.secops.compiler import SecOpsCompilerAdapter
+from graft.engines.secops.config import SecOpsConfig
 
 
 @pytest.mark.integration

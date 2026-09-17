@@ -2,17 +2,17 @@ from pathlib import Path
 
 import pytest
 
-from graft.adapters.secops.managed_loader import (
-    ManagedManifestLoadError,
-    dump_managed_manifest_to_yaml,
-    load_managed_manifest_from_str,
-    load_managed_manifest_from_yaml,
-)
 from graft.core.models.managed import (
     ManagedDeployment,
     ManagedExclusion,
     ManagedRuleSet,
     ManagedState,
+)
+from graft.engines.secops.managed_loader import (
+    ManagedManifestLoadError,
+    dump_managed_manifest_to_yaml,
+    load_managed_manifest_from_str,
+    load_managed_manifest_from_yaml,
 )
 
 

@@ -1,7 +1,7 @@
-from graft.adapters.secops.client import SecOpsClient
 from graft.core.models.compiler import CompilationDiagnostic, CompilationResult
 from graft.core.models.rule import RuleEnvelope
 from graft.core.ports.compiler import RuleCompilerPort
+from graft.engines.secops.client import SecOpsClient
 
 
 def synthesize_yaral_rule(rule: RuleEnvelope) -> tuple[str, int]:

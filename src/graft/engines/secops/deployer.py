@@ -1,7 +1,7 @@
-from graft.adapters.secops.client import SecOpsClient
-from graft.adapters.secops.compiler import synthesize_yaral_rule
 from graft.core.models.rule import BaseDeploymentConfig, RuleEnvelope, RuleMetadata, Runbook
 from graft.core.ports.deployer import RuleDeployerPort
+from graft.engines.secops.client import SecOpsClient
+from graft.engines.secops.compiler import synthesize_yaral_rule
 
 
 class SecOpsDeployerAdapter(RuleDeployerPort):

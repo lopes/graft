@@ -6,8 +6,8 @@ import urllib.request
 from collections.abc import Mapping
 from typing import Any, cast
 
-from graft.adapters.secops.auth import SecOpsAuthResolver
-from graft.adapters.secops.config import SecOpsConfig
+from graft.engines.secops.auth import SecOpsAuthResolver
+from graft.engines.secops.config import SecOpsConfig
 
 
 class SecOpsApiError(RuntimeError):

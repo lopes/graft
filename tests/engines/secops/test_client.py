@@ -6,9 +6,9 @@ from typing import Any
 
 import pytest
 
-from graft.adapters.secops.auth import SecOpsAuthResolver
-from graft.adapters.secops.client import SecOpsApiError, SecOpsClient
-from graft.adapters.secops.config import SecOpsConfig
+from graft.engines.secops.auth import SecOpsAuthResolver
+from graft.engines.secops.client import SecOpsApiError, SecOpsClient
+from graft.engines.secops.config import SecOpsConfig
 
 
 @pytest.fixture

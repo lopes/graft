@@ -3,15 +3,15 @@ from typing import Any
 
 import pytest
 
-from graft.adapters.secops.client import SecOpsClient
-from graft.adapters.secops.config import SecOpsConfig
-from graft.adapters.secops.managed import SecOpsManagedAdapter
 from graft.core.models.managed import (
     ManagedDeployment,
     ManagedExclusion,
     ManagedRuleSet,
     ManagedState,
 )
+from graft.engines.secops.client import SecOpsClient
+from graft.engines.secops.config import SecOpsConfig
+from graft.engines.secops.managed import SecOpsManagedAdapter
 
 INSTANCE_BASE = "projects/test-project/locations/us/instances/11111111-2222-3333-4444-555555555555"
 
