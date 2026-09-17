@@ -177,8 +177,8 @@ To guarantee state preservation, eliminate hallucination, and prevent context sa
 
 | Phase | Title | Status | Commit Hash | Completed At | Next Step Prompt |
 | :---: | :--- | :---: | :---: | :---: | :--- |
-| **0** | Stack & Tooling Bootstrap | `[x]` | — | 2026-09-17 11:24 UTC | Section 6.2 |
-| **1** | Hexagonal Domain & Engine Ports | `[ ]` | — | — | Section 6.2 |
+| **0** | Stack & Tooling Bootstrap | `[x]` | `9179ca3` | 2026-09-17 11:24 UTC | Section 6.1 |
+| **1** | Hexagonal Domain & Engine Ports | `[x]` | — | 2026-09-17 11:37 UTC | Section 6.3 |
 | **2** | Schema Inheritance, Envelope & Linters | `[ ]` | — | — | Section 6.3 |
 | **3** | SecOps REST Client & Compiler Adapter | `[ ]` | — | — | Section 6.4 |
 | **4** | Consolidated Managed Engine & GitOps Sync | `[ ]` | — | — | Section 6.5 |

@@ -1,0 +1,1 @@
+"""Google SecOps engine adapter."""
