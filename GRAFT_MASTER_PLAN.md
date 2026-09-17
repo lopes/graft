@@ -183,7 +183,7 @@ To guarantee state preservation, eliminate hallucination, and prevent context sa
 | **3** | SecOps REST Client & Compiler Adapter | `[x]` | `608ca22` | 2026-09-17 15:18 UTC | Section 6.5 |
 | **4** | Consolidated Managed Engine & GitOps Sync | `[x]` | `037e1f6` | 2026-09-17 15:40 UTC | Section 6.6 |
 | **5** | Unified `graft` CLI Dispatcher | `[x]` | `384bba7` | 2026-09-17 17:21 UTC | Section 6.7 |
-| **6** | Staging Replay Harness (Graceful Degradation) | `[ ]` | — | — | Section 6.7 |
+| **6** | Staging Replay Harness (Graceful Degradation) | `[x]` | `12e1dfa` | 2026-09-17 18:21 UTC | Section 6.8 |
 | **7** | Visibility & Value Tooling | `[ ]` | — | — | Section 6.8 |
 | **8** | Comprehensive Documentation & Repo Hygiene | `[ ]` | — | — | Section 6.9 |
 | **9** | CI/CD Pipeline & Branch Governance | `[ ]` | — | — | Section 6.10 |

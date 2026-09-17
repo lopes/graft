@@ -101,8 +101,22 @@ def test_secops_config_single_tenant_generic_vars(monkeypatch: pytest.MonkeyPatc
 
 
 def test_secops_config_staging_fallback_to_prod(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.delenv("GRAFT_STAGING_PROJECT", raising=False)
-    monkeypatch.delenv("GRAFT_PROJECT", raising=False)
+    for key in (
+        "GRAFT_SECOPS_STAGING_PROJECT",
+        "GRAFT_SECOPS_STAGING_LOCATION",
+        "GRAFT_SECOPS_STAGING_INSTANCE_ID",
+        "GRAFT_STAGING_PROJECT",
+        "GRAFT_STAGING_LOCATION",
+        "GRAFT_STAGING_INSTANCE_ID",
+        "GRAFT_SECOPS_PROJECT",
+        "GRAFT_SECOPS_LOCATION",
+        "GRAFT_SECOPS_INSTANCE_ID",
+        "GRAFT_PROJECT",
+        "GRAFT_LOCATION",
+        "GRAFT_INSTANCE_ID",
+    ):
+        monkeypatch.delenv(key, raising=False)
+
     monkeypatch.setenv("GRAFT_PROD_PROJECT", "single-prod-proj")
     monkeypatch.setenv("GRAFT_PROD_LOCATION", "us")
     monkeypatch.setenv("GRAFT_PROD_INSTANCE_ID", "single-prod-instance")
@@ -113,11 +127,27 @@ def test_secops_config_staging_fallback_to_prod(monkeypatch: pytest.MonkeyPatch)
 
 
 def test_secops_config_from_env_missing_raises(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.delenv("GRAFT_STAGING_PROJECT", raising=False)
-    monkeypatch.delenv("GRAFT_STAGING_LOCATION", raising=False)
-    monkeypatch.delenv("GRAFT_STAGING_INSTANCE_ID", raising=False)
-    monkeypatch.delenv("GRAFT_PROD_PROJECT", raising=False)
-    monkeypatch.delenv("GRAFT_PROJECT", raising=False)
+    for key in (
+        "GRAFT_SECOPS_STAGING_PROJECT",
+        "GRAFT_SECOPS_STAGING_LOCATION",
+        "GRAFT_SECOPS_STAGING_INSTANCE_ID",
+        "GRAFT_STAGING_PROJECT",
+        "GRAFT_STAGING_LOCATION",
+        "GRAFT_STAGING_INSTANCE_ID",
+        "GRAFT_SECOPS_PROD_PROJECT",
+        "GRAFT_SECOPS_PROD_LOCATION",
+        "GRAFT_SECOPS_PROD_INSTANCE_ID",
+        "GRAFT_PROD_PROJECT",
+        "GRAFT_PROD_LOCATION",
+        "GRAFT_PROD_INSTANCE_ID",
+        "GRAFT_SECOPS_PROJECT",
+        "GRAFT_SECOPS_LOCATION",
+        "GRAFT_SECOPS_INSTANCE_ID",
+        "GRAFT_PROJECT",
+        "GRAFT_LOCATION",
+        "GRAFT_INSTANCE_ID",
+    ):
+        monkeypatch.delenv(key, raising=False)
 
     with pytest.raises(KeyError, match="Missing required SecOps environment variables"):
         SecOpsConfig.from_env("staging")

@@ -25,12 +25,18 @@ EMPTY_VAL=
     monkeypatch.delenv("GRAFT_INSTANCE_ID", raising=False)
     monkeypatch.delenv("SPACED_KEY", raising=False)
 
-    loaded = load_env_file(env_file)
+    try:
+        loaded = load_env_file(env_file)
 
-    assert loaded["GRAFT_PROJECT"] == "test-lab-project"
-    assert loaded["GRAFT_LOCATION"] == "us"
-    assert loaded["GRAFT_INSTANCE_ID"] == "12345678-abcd-ef01-2345-6789abcdef01"
-    assert loaded["SPACED_KEY"] == "spaced_value"
+        assert loaded["GRAFT_PROJECT"] == "test-lab-project"
+        assert loaded["GRAFT_LOCATION"] == "us"
+        assert loaded["GRAFT_INSTANCE_ID"] == "12345678-abcd-ef01-2345-6789abcdef01"
+        assert loaded["SPACED_KEY"] == "spaced_value"
+    finally:
+        import os
+
+        for key in ("GRAFT_PROJECT", "GRAFT_LOCATION", "GRAFT_INSTANCE_ID", "SPACED_KEY"):
+            os.environ.pop(key, None)
 
 
 def test_load_env_file_does_not_overwrite_existing_env(
