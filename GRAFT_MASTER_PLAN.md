@@ -184,7 +184,7 @@ To guarantee state preservation, eliminate hallucination, and prevent context sa
 | **4** | Consolidated Managed Engine & GitOps Sync | `[x]` | `037e1f6` | 2026-09-17 15:40 UTC | Section 6.6 |
 | **5** | Unified `graft` CLI Dispatcher | `[x]` | `384bba7` | 2026-09-17 17:21 UTC | Section 6.7 |
 | **6** | Staging Replay Harness (Graceful Degradation) | `[x]` | `12e1dfa` | 2026-09-17 18:21 UTC | Section 6.8 |
-| **7** | Visibility & Value Tooling | `[ ]` | — | — | Section 6.8 |
+| **7** | Visibility & Value Tooling | `[x]` | `9953dac` | 2026-09-17 19:29 UTC | Section 6.9 |
 | **8** | Comprehensive Documentation & Repo Hygiene | `[ ]` | — | — | Section 6.9 |
 | **9** | CI/CD Pipeline & Branch Governance | `[ ]` | — | — | Section 6.10 |
 
@@ -334,7 +334,7 @@ Stop when Phase 1 exit criteria are satisfied.
 - **Exit Criteria:**
   - All unit tests pass in <500ms without network calls.
   - Base and extended schemas validate against JSON Schema Draft 2020-12 meta-schema.
-  - Reference custom rule in `rules/secops/custom/example_rule.yaml` and reference managed manifest in `rules/secops/managed.yaml` validate cleanly.
+  - Reference custom rules in `rules/secops/custom/` and reference managed manifest in `rules/secops/managed.yaml` validate cleanly.
   - Remote push executed successfully: `git push origin <branch>`.
 
 #### 3. Session Kickstart Prompt (Phase 2)
@@ -352,7 +352,7 @@ Objectives:
 5. Bundle pre-indexed MITRE ATT&CK Enterprise data in `src/graft/data/mitre_attack.json`.
 6. Implement `src/graft/core/loader.py` for safe YAML loading.
 7. Implement `src/graft/core/validation/schema_validator.py` and `src/graft/core/validation/mitre_validator.py`.
-8. Create valid reference artifacts in `rules/secops/custom/example_rule.yaml` and `rules/secops/managed.yaml`.
+8. Create valid reference artifacts in `rules/secops/custom/` and `rules/secops/managed.yaml`.
 9. Verify with `pytest`, `mypy --strict`, and `ruff check`.
 10. Commit changes (`schemas: implement base and secops rule schemas with offline validators`), push to remote (`git push origin <branch>`), update Progress Tracker to [x], and report.
 

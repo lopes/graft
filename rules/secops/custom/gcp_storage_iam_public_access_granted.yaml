@@ -1,0 +1,90 @@
+metadata:
+  id: "f84a1e93-61bc-4382-90ab-38f12a819003"
+  name: "gcp_storage_iam_public_access_granted"
+  description: "Detects Google Cloud Storage IAM policy modifications that grant public access to allUsers or allAuthenticatedUsers."
+  status: "production"
+  authors:
+    - "Cloud Security Operations"
+  mitre:
+    initial_access:
+      - "T1078.004"
+    defense_evasion:
+      - "T1562.001"
+  tags:
+    - "gcp"
+    - "gcs"
+    - "cloud_storage"
+    - "public_exposure"
+    - "iam"
+  references:
+    - "https://cloud.google.com/storage/docs/access-control/iam"
+    - "https://attack.mitre.org/techniques/T1078/004/"
+
+logic: |
+  events:
+    $e.metadata.event_type = "USER_RESOURCE_UPDATE"
+    $e.metadata.product_name = "GCP Cloud Audit"
+    $e.metadata.product_event_type = "storage.setIamPermissions"
+    $e.security_result.action = "ALLOW"
+    re.regex($e.target.resource.attribute.labels["members"], `(?i)(allUsers|allAuthenticatedUsers)`)
+  condition:
+    $e
+
+deployment:
+  enabled: true
+  alerting: true
+  run_frequency: "live"
+
+runbook:
+  context: |
+    Granting roles on Cloud Storage buckets to allUsers (public internet) or
+    allAuthenticatedUsers (any Google account) allows unauthorized access to
+    sensitive cloud storage objects, creating significant data exfiltration risk.
+  triage: |
+    1. Identify the targeted Cloud Storage bucket resource name.
+    2. Determine the calling principal and authorization context.
+    3. Verify the specific roles granted (e.g., roles/storage.objectViewer, roles/storage.admin).
+    4. Check if public access prevention is enforced on the project or bucket level.
+  response: |
+    1. Immediately revoke the public member binding using gcloud storage.
+    2. Enforce public access prevention on the bucket.
+    3. Review Cloud Storage access and audit logs to identify data accessed during public window.
+
+tests:
+  - id: "match_public_bucket_policy"
+    description: "Fires an alert when allUsers is granted access to a bucket"
+    expect: 1
+    events:
+      - timestamp: "2026-09-17T16:00:00Z"
+        payload:
+          metadata:
+            event_type: "USER_RESOURCE_UPDATE"
+            product_name: "GCP Cloud Audit"
+            product_event_type: "storage.setIamPermissions"
+          target:
+            resource:
+              name: "projects/_/buckets/corp-confidential-data"
+              attribute:
+                labels:
+                  members: "allUsers"
+          security_result:
+            action: "ALLOW"
+
+  - id: "ignore_internal_bucket_policy"
+    description: "Verifies no alert fires on standard internal IAM member grants"
+    expect: 0
+    events:
+      - timestamp: "2026-09-17T16:05:00Z"
+        payload:
+          metadata:
+            event_type: "USER_RESOURCE_UPDATE"
+            product_name: "GCP Cloud Audit"
+            product_event_type: "storage.setIamPermissions"
+          target:
+            resource:
+              name: "projects/_/buckets/corp-confidential-data"
+              attribute:
+                labels:
+                  members: "user:analyst@corp.example.com"
+          security_result:
+            action: "ALLOW"

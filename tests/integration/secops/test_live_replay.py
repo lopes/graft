@@ -17,7 +17,9 @@ def test_live_replay_staging() -> None:
     client = SecOpsClient(config=config)
     adapter = SecOpsReplayAdapter(client=client, config=config)
 
-    rule = load_rule_from_yaml("rules/secops/custom/example_rule.yaml", schema_name="secops_custom")
+    rule = load_rule_from_yaml(
+        "rules/secops/custom/gcp_iam_service_account_key_create.yaml", schema_name="secops_custom"
+    )
     assert len(rule.tests) >= 1
 
     result = adapter.run_test_vector(rule, rule.tests[0])

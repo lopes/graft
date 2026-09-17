@@ -3,7 +3,19 @@ import sys
 from pathlib import Path
 from typing import Any
 
+from graft.core.catalog import (
+    build_catalog_entry_from_rule,
+    export_catalog_csv,
+    export_catalog_json,
+    export_catalog_markdown,
+)
 from graft.core.loader import RuleLoadError, load_rule_from_yaml
+from graft.core.matrix import (
+    calculate_mitre_coverage,
+    export_navigator_layer,
+    render_matrix_table,
+)
+from graft.core.models.rule import RuleEnvelope
 from graft.engines.secops.managed_loader import (
     ManagedManifestLoadError,
     load_managed_manifest_from_yaml,
@@ -107,17 +119,74 @@ def execute_update_mitre(
     return 0
 
 
+def _load_all_rules(rules_dir: Path | str = "rules") -> list[tuple[RuleEnvelope, str, Path]]:
+    root = Path(rules_dir)
+    loaded: list[tuple[RuleEnvelope, str, Path]] = []
+    if not root.is_dir():
+        return loaded
+
+    for yaml_path in sorted(root.rglob("*.yaml")):
+        if yaml_path.name in ("managed.yaml", "managed.yml"):
+            continue
+        try:
+            parts = yaml_path.parts
+            engine = "secops"
+            if "rules" in parts:
+                idx = parts.index("rules")
+                if idx + 1 < len(parts):
+                    engine = parts[idx + 1]
+            schema = f"{engine}_custom"
+            rule = load_rule_from_yaml(yaml_path, schema_name=schema, validate_mitre=False)
+            loaded.append((rule, engine, yaml_path))
+        except (RuleLoadError, ValueError, OSError):
+            continue
+    return loaded
+
+
 def execute_export(
     target: str,
     out_path: str | None = None,
-    format_type: str = "json",
+    format_type: str | None = None,
     json_output: bool = False,
+    rules_dir: str = "rules",
 ) -> int:
-    msg = f"Exported {target} in {format_type} format."
-    if json_output:
-        sys.stdout.write(
-            json.dumps({"success": True, "target": target, "format": format_type}) + "\n"
-        )
+    loaded = _load_all_rules(rules_dir)
+    output_str = ""
+
+    if target in ("matrix", "navigator"):
+        fmt = format_type or "navigator"
+        rules = [r[0] for r in loaded]
+        report = calculate_mitre_coverage(rules)
+
+        if fmt == "table":
+            output_str = render_matrix_table(report)
+        else:  # navigator or json
+            payload = export_navigator_layer(report)
+            output_str = json.dumps(payload, indent=2)
+
+    elif target in ("catalog", "metadata"):
+        fmt = format_type or ("json" if json_output else "markdown")
+        entries = [build_catalog_entry_from_rule(r[0], engine=r[1], path=r[2]) for r in loaded]
+
+        if fmt == "csv":
+            output_str = export_catalog_csv(entries)
+        elif fmt == "json":
+            catalog_payload = export_catalog_json(entries)
+            output_str = json.dumps(catalog_payload, indent=2)
+        else:  # markdown
+            output_str = export_catalog_markdown(entries)
+
+    if out_path:
+        dest = Path(out_path)
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        dest.write_text(output_str + "\n", encoding="utf-8")
+        if json_output:
+            sys.stdout.write(
+                json.dumps({"success": True, "target": target, "out": str(dest)}) + "\n"
+            )
+        else:
+            sys.stdout.write(f"Exported {target} to {dest}\n")
     else:
-        sys.stdout.write(f"{msg}\n")
+        sys.stdout.write(output_str + "\n")
+
     return 0

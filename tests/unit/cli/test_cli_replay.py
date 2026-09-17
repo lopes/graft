@@ -21,7 +21,9 @@ def test_cli_test_graceful_degradation_when_staging_missing(
     ):
         monkeypatch.delenv(var, raising=False)
 
-    exit_code = main(["secops", "test", "rules/secops/custom/example_rule.yaml"])
+    exit_code = main(
+        ["secops", "test", "rules/secops/custom/gcp_iam_service_account_key_create.yaml"]
+    )
     assert exit_code == 0
     captured = capsys.readouterr()
     assert "WARNING" in captured.out or "Skipping" in captured.out
@@ -42,7 +44,12 @@ def test_cli_test_require_staging_fails_when_staging_missing(
         monkeypatch.delenv(var, raising=False)
 
     exit_code = main(
-        ["secops", "test", "rules/secops/custom/example_rule.yaml", "--require-staging"]
+        [
+            "secops",
+            "test",
+            "rules/secops/custom/gcp_iam_service_account_key_create.yaml",
+            "--require-staging",
+        ]
     )
     assert exit_code == 1
     captured = capsys.readouterr()
@@ -67,7 +74,9 @@ def test_cli_test_execution_all_passed(
         )
         mock_adapter_cls.return_value = mock_adapter
 
-        exit_code = main(["secops", "test", "rules/secops/custom/example_rule.yaml"])
+        exit_code = main(
+            ["secops", "test", "rules/secops/custom/gcp_iam_service_account_key_create.yaml"]
+        )
         assert exit_code == 0
         captured = capsys.readouterr()
         assert "PASS" in captured.out
@@ -91,7 +100,9 @@ def test_cli_test_execution_assertion_failed(
         )
         mock_adapter_cls.return_value = mock_adapter
 
-        exit_code = main(["secops", "test", "rules/secops/custom/example_rule.yaml"])
+        exit_code = main(
+            ["secops", "test", "rules/secops/custom/gcp_iam_service_account_key_create.yaml"]
+        )
         assert exit_code == 1
         captured = capsys.readouterr()
         assert "FAIL" in captured.err or "FAIL" in captured.out
@@ -115,7 +126,14 @@ def test_cli_test_json_output(
         )
         mock_adapter_cls.return_value = mock_adapter
 
-        exit_code = main(["--json", "secops", "test", "rules/secops/custom/example_rule.yaml"])
+        exit_code = main(
+            [
+                "--json",
+                "secops",
+                "test",
+                "rules/secops/custom/gcp_iam_service_account_key_create.yaml",
+            ]
+        )
         assert exit_code == 0
         captured = capsys.readouterr()
         data = json.loads(captured.out)

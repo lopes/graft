@@ -47,9 +47,15 @@ def build_parser() -> argparse.ArgumentParser:
         "export", help="Export metadata catalog or ATT&CK Navigator layer"
     )
     export_p.add_argument(
-        "target", choices=["metadata", "navigator"], help="Target export artifact"
+        "target",
+        choices=["matrix", "navigator", "catalog", "metadata"],
+        help="Target export artifact",
     )
-    export_p.add_argument("--format", choices=["csv", "json"], default="json", help="Export format")
+    export_p.add_argument(
+        "--format",
+        choices=["navigator", "table", "markdown", "csv", "json"],
+        help="Export format",
+    )
     export_p.add_argument("--out", help="Output file path")
 
     # 4. new (engine | rule)

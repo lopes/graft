@@ -149,8 +149,8 @@ tests:
 
 
 def test_load_reference_example_rule() -> None:
-    example_path = Path("rules/secops/custom/example_rule.yaml")
+    example_path = Path("rules/secops/custom/workspace_nrd_possible_phishing.yaml")
     envelope = load_rule_from_yaml(example_path)
-    assert envelope.metadata.name == "powershell_encoded_launch"
+    assert envelope.metadata.name == "workspace_nrd_possible_phishing"
     assert envelope.deployment.run_frequency == "live"
     assert len(envelope.tests) == 2

@@ -20,14 +20,16 @@ def test_main_no_args_shows_help(capsys: pytest.CaptureFixture[str]) -> None:
 
 
 def test_main_lint_clean(capsys: pytest.CaptureFixture[str]) -> None:
-    exit_code = main(["lint", "rules/secops/custom/example_rule.yaml"])
+    exit_code = main(["lint", "rules/secops/custom/gcp_iam_service_account_key_create.yaml"])
     assert exit_code == 0
     captured = capsys.readouterr()
     assert "PASS" in captured.out or "clean" in captured.out.lower()
 
 
 def test_main_lint_json_output(capsys: pytest.CaptureFixture[str]) -> None:
-    exit_code = main(["--json", "lint", "rules/secops/custom/example_rule.yaml"])
+    exit_code = main(
+        ["--json", "lint", "rules/secops/custom/gcp_iam_service_account_key_create.yaml"]
+    )
     assert exit_code == 0
     captured = capsys.readouterr()
     data = json.loads(captured.out)
@@ -89,7 +91,9 @@ def test_main_export(capsys: pytest.CaptureFixture[str]) -> None:
     exit_code = main(["export", "metadata", "--format", "json"])
     assert exit_code == 0
     captured = capsys.readouterr()
-    assert "Exported" in captured.out
+    data = json.loads(captured.out)
+    assert isinstance(data, list)
+    assert len(data) >= 1
 
 
 def test_main_secops_managed_diff_returns_2_on_drift() -> None:

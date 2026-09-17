@@ -1,0 +1,117 @@
+metadata:
+  id: "b1d72370-5fa3-4cb8-a579-22a468d6f101"
+  name: "workspace_nrd_possible_phishing"
+  description: "Detects a user opening an email from a newly registered domain (created < 7 days ago), which may indicate a phishing attempt."
+  status: "production"
+  authors:
+    - "Joe Lopes <lopes.id>"
+    - "Detection Engineering"
+  mitre:
+    initial_access:
+      - "T1566.002"
+  tags:
+    - "google_workspace"
+    - "email"
+    - "nrd"
+    - "phishing"
+    - "whois"
+  references:
+    - "https://lopes.id/log/high-fidelity-nrd-detections/"
+    - "https://support.google.com/a/answer/12384955"
+    - "https://attack.mitre.org/techniques/T1566/002/"
+
+logic: |
+  events:
+    $mail.metadata.event_type = "EMAIL_TRANSACTION"
+    $mail.metadata.product_event_type = "2"
+    strings.extract_domain($mail.network.email.from) = $domain
+
+    $whois.graph.entity.domain.name = $domain
+    $whois.graph.metadata.entity_type = "DOMAIN_NAME"
+    $whois.graph.metadata.vendor_name = "WHOIS"
+    $whois.graph.metadata.product_name = "WHOISXMLAPI Simple Whois"
+    $whois.graph.metadata.source_type = "GLOBAL_CONTEXT"
+    $whois.graph.entity.domain.creation_time.seconds > 0
+
+    // domain was created in the last 7 days: 7 * 24 * 60 * 60 = 604800 seconds
+    604800 > timestamp.current_seconds() - $whois.graph.entity.domain.creation_time.seconds
+
+  match:
+    $domain over 1h
+
+  outcome:
+    $risk_score = 65
+    $created_at = array_distinct(timestamp.get_date($whois.graph.entity.domain.creation_time.seconds))
+    $sender = array_distinct($mail.network.email.from)
+    $recipients = array_distinct($mail.network.email.to)
+    $num_messages = count($mail.network.email.mail_id)
+
+  condition:
+    $mail and $whois
+
+deployment:
+  enabled: true
+  alerting: true
+  run_frequency: "live"
+
+runbook:
+  context: |
+    Adversaries frequently register new domains and immediately weaponize them in
+    spear-phishing campaigns before reputation feeds and web categorization tools
+    index them. Correlating Google Workspace message open events with domain
+    registration timestamps isolates zero-day phishing infrastructure.
+  triage: |
+    1. Identify recipient user account and workstation coordinates.
+    2. Review email subject, sender domain WHOIS registrar, and message attachments.
+    3. Check if recipient clicked any hyperlinks or submitted credentials.
+    4. Search email transaction logs across the organization for other recipients of the same domain.
+  response: |
+    1. Quarantine the suspicious message across all Workspace inboxes.
+    2. Add the sender domain to global perimeter and email blocklists.
+    3. If credentials were provided or malicious payload downloaded, initiate host containment and session revocation.
+
+tests:
+  - id: "match_opened_nrd_email"
+    description: "Triggers when a user opens an email originating from a newly registered domain"
+    expect: 1
+    events:
+      - timestamp: "2026-09-17T14:00:00Z"
+        payload:
+          metadata:
+            event_type: "EMAIL_TRANSACTION"
+            product_event_type: "2"
+          network:
+            email:
+              from: "security-update@login-verify-account.top"
+              to:
+                - "employee@corp.example.com"
+              mail_id: "msg-workspace-98214"
+      - timestamp: "2026-09-17T14:00:05Z"
+        payload:
+          graph:
+            metadata:
+              entity_type: "DOMAIN_NAME"
+              vendor_name: "WHOIS"
+              product_name: "WHOISXMLAPI Simple Whois"
+              source_type: "GLOBAL_CONTEXT"
+            entity:
+              domain:
+                name: "login-verify-account.top"
+                creation_time:
+                  seconds: 1773700000
+
+  - id: "ignore_standard_unopened_email"
+    description: "Verifies no alert triggers when email is received but not opened"
+    expect: 0
+    events:
+      - timestamp: "2026-09-17T14:10:00Z"
+        payload:
+          metadata:
+            event_type: "EMAIL_TRANSACTION"
+            product_event_type: "1"
+          network:
+            email:
+              from: "newsletter@trusted-vendor.com"
+              to:
+                - "employee@corp.example.com"
+              mail_id: "msg-workspace-98215"
