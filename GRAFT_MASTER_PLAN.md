@@ -39,7 +39,7 @@ The design of Graft is directly grounded in nine foundational architectural work
 | **Architecture Pattern** | Hexagonal / Ports & Adapters. `src/graft/core/` is 100% engine-agnostic. Adapters (`src/graft/adapters/<engine>/`) carry the full burden of fetching, preparing, and transforming engine data for core. | Core remains completely decoupled from cloud SDKs, HTTP clients, and SIEM idiosyncrasies. New engines (Splunk, Elastic, Sentinel) plug in as discrete adapters. |
 | **Interface Design** | Granular `typing.Protocol` ports (`RuleCompilerPort`, `RuleDeployerPort`, `ManagedEnginePort`, `ReplayHarnessPort`). | Adheres to Interface Segregation Principle (ISP). Core services consume only required capabilities without rigid base-class inheritance. |
 | **Domain Modeling** | Standard library `@dataclass(frozen=True)` for domain entities in `src/graft/core/models/`. | Pure, lightweight, immutable, and zero external framework overhead in core. |
-| **Schema Inheritance** | Base schema template (`schemas/base_rule.schema.json`) extended per engine (`schemas/secops_rule.schema.json`) via JSON Schema `$ref` and `allOf`. | Standardizes core blocks (`metadata`, `runbook`, `logic`) while allowing engine-specific variations for `deployment` and `tests`. Every YAML file in the repo has a dedicated schema. |
+| **Schema Inheritance** | Base schema template (`schemas/base_rule.schema.json`) extended per engine (`schemas/secops_custom.schema.json`) via JSON Schema `$ref` and `allOf`. | Standardizes core blocks (`metadata`, `runbook`, `logic`) while allowing engine-specific variations for `deployment` and `tests`. Every YAML file in the repo has a dedicated schema. |
 | **Repository Taxonomy** | Universal agnostic structure: `rules/<engine>/custom/` (organization-authored 5-block envelope rules) and `rules/<engine>/managed.yaml` (vendor-managed content state). | Replaces vendor-specific jargon ("curated") or misleading terms ("default") with an enterprise standard applicable to SecOps, Splunk ESCU, and Elastic Prebuilt Rules. |
 | **Managed State Format** | Single consolidated manifest (`rules/secops/managed.yaml`) capturing all Google Curated Rule Sets (`PRECISE` and `BROAD` deployments: `enabled`, `alerting`) and exclusions. | Google SecOps manages curated rules at the RuleSet level with only 2 deployments per set. A single declarative manifest eliminates hundreds of fragmented files, optimizes Git diffs, and prevents merge conflicts. |
 | **Managed Sync Model** | GitOps Plan/Apply semantics (`diff`, `apply`, `pull`). | Treats Git as single source of truth. Prevents accidental destruction of emergency console modifications while highlighting upstream Google releases. |
@@ -106,7 +106,7 @@ graft/
 │       └── staging-replay-testing.md  # Replay Harness & Triage
 ├── schemas/
 │   ├── base_rule.schema.json          # Engine-agnostic 5-block base envelope schema
-│   ├── secops_rule.schema.json        # Google SecOps extension (UDM test vectors, deployment)
+│   ├── secops_custom.schema.json      # Google SecOps custom rule extension (UDM test vectors, deployment)
 │   ├── secops_managed.schema.json     # Consolidated SecOps managed detections schema
 │   └── exclusion.schema.json          # Curated exclusion schema
 ├── src/
@@ -178,8 +178,8 @@ To guarantee state preservation, eliminate hallucination, and prevent context sa
 | Phase | Title | Status | Commit Hash | Completed At | Next Step Prompt |
 | :---: | :--- | :---: | :---: | :---: | :--- |
 | **0** | Stack & Tooling Bootstrap | `[x]` | `9179ca3` | 2026-09-17 11:24 UTC | Section 6.1 |
-| **1** | Hexagonal Domain & Engine Ports | `[x]` | — | 2026-09-17 11:37 UTC | Section 6.3 |
-| **2** | Schema Inheritance, Envelope & Linters | `[ ]` | — | — | Section 6.3 |
+| **1** | Hexagonal Domain & Engine Ports | `[x]` | `54c7812` | 2026-09-17 11:37 UTC | Section 6.2 |
+| **2** | Schema Inheritance, Envelope & Linters | `[x]` | `e33e6d4` | 2026-09-17 14:39 UTC | Section 6.4 |
 | **3** | SecOps REST Client & Compiler Adapter | `[ ]` | — | — | Section 6.4 |
 | **4** | Consolidated Managed Engine & GitOps Sync | `[ ]` | — | — | Section 6.5 |
 | **5** | Unified `graft` CLI Dispatcher | `[ ]` | — | — | Section 6.6 |
@@ -319,8 +319,8 @@ Stop when Phase 1 exit criteria are satisfied.
 #### 1. Scope, Architectural Goals & Technical Boundaries
 - Author the base Draft 2020-12 JSON Schema in `schemas/base_rule.schema.json`:
   - Defines common blocks: `metadata` (`id`, `name`, `description`, `status`, `priority`, `authors`, `mitre` mapping tactic slug to technique IDs `^T\d{4}(\.\d{3})?$`, `tags`, `references`), `logic` (string), and `runbook` (`context`, `triage`, `response`).
-- Author engine-extended schema in `schemas/secops_rule.schema.json`:
-  - Inherits `base_rule.schema.json` using `allOf: [{"$ref": "base_rule.schema.json"}, ...]` and defines Google SecOps-specific `deployment` (`enabled`, `alerting`) and `tests` (array of test vectors with `id`, `description`, `events`, `expect: { alerts: <int> }`).
+- Author engine-extended schema in `schemas/secops_custom.schema.json`:
+  - Inherits `base_rule.schema.json` using `allOf: [{"$ref": "base_rule.schema.json"}, ...]` and defines Google SecOps-specific `deployment` (`enabled`, `alerting`, `run_frequency`).
 - Author managed detections schema in `schemas/secops_managed.schema.json` to validate the consolidated `rules/secops/managed.yaml` manifest.
 - Implement `src/graft/core/loader.py`: Safe parsing of YAML rule envelopes into `RuleEnvelope` domain objects.
 - Implement `src/graft/core/validation/schema_validator.py`: Wrapper around `jsonschema` supporting schema inheritance and clear error reporting with line/path attribution.
@@ -347,7 +347,7 @@ Dependencies to install (approved): `pyyaml`, `jsonschema`.
 Objectives:
 1. Check repository baseline: `git status`, `git log -n 3`, `uv run pytest`.
 2. Write failing TDD tests first in `tests/unit/core/test_loader.py`, `tests/unit/core/test_schema_validation.py`, and `tests/unit/core/test_mitre_validation.py`.
-3. Author base template `schemas/base_rule.schema.json` and engine extension `schemas/secops_rule.schema.json` using JSON Schema `$ref` and `allOf`.
+3. Author base template `schemas/base_rule.schema.json` and engine extension `schemas/secops_custom.schema.json` using JSON Schema `$ref` and `allOf`.
 4. Author `schemas/secops_managed.schema.json` for consolidated managed manifest validation.
 5. Bundle pre-indexed MITRE ATT&CK Enterprise data in `src/graft/data/mitre_attack.json`.
 6. Implement `src/graft/core/loader.py` for safe YAML loading.

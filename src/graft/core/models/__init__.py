@@ -11,7 +11,6 @@ from graft.core.models.rule import (
     RuleMetadata,
     Runbook,
     TestEvent,
-    TestExpectation,
     TestVector,
 )
 
@@ -27,6 +26,5 @@ __all__ = [
     "RuleMetadata",
     "Runbook",
     "TestEvent",
-    "TestExpectation",
     "TestVector",
 ]

@@ -1,0 +1,29 @@
+rulesets:
+  - id: "rs-cloud-threats"
+    name: "Cloud Threat Detections"
+    category: "CLOUD"
+    deployments:
+      - type: "PRECISE"
+        enabled: true
+        alerting: true
+      - type: "BROAD"
+        enabled: false
+        alerting: false
+
+  - id: "rs-linux-threats"
+    name: "Linux Threat Detections"
+    category: "ENDPOINT"
+    deployments:
+      - type: "PRECISE"
+        enabled: true
+        alerting: true
+      - type: "BROAD"
+        enabled: false
+        alerting: false
+
+exclusions:
+  - id: "ex-backup-service-account"
+    rule_id: "ru_cloud_iam_privilege_escalation"
+    ruleset_id: "rs-cloud-threats"
+    expression: '$e.principal.user.userid != "svc_automation_backup@company.iam.gserviceaccount.com"'
+    description: "Exclude scheduled automation backup service account from IAM privilege alerts."

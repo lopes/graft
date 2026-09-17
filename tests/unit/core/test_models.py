@@ -15,7 +15,6 @@ from graft.core.models.rule import (
     RuleMetadata,
     Runbook,
     TestEvent,
-    TestExpectation,
     TestVector,
 )
 
@@ -68,7 +67,7 @@ def test_rule_envelope_structure() -> None:
         mitre={"execution": ("T1059.001",)},
         tags=("powershell",),
     )
-    deployment = BaseDeploymentConfig(enabled=True, alerting=True)
+    deployment = BaseDeploymentConfig(enabled=True, alerting=True, run_frequency="live")
     runbook = Runbook(
         context="PowerShell execution with base64 encoded arguments.",
         triage="1. Decode command.\n2. Check parent process.\n3. If admin script, verify hash.",
@@ -76,22 +75,15 @@ def test_rule_envelope_structure() -> None:
     )
     event = TestEvent(
         timestamp="2026-09-17T11:00:00Z",
-        data={"target": {"process": {"command_line": "powershell -enc"}}},
+        payload={"target": {"process": {"command_line": "powershell -enc"}}},
     )
     test_vec = TestVector(
         id="match_encoded_command",
         description="Simulates encoded command invocation",
         events=(event,),
-        expect=TestExpectation(alerts=1),
+        expect=1,
     )
-    rule_logic = (
-        "rule powershell_encoded {\n"
-        "  events:\n"
-        '    $e.target.process.command_line = "powershell -enc"\n'
-        "  condition:\n"
-        "    $e\n"
-        "}"
-    )
+    rule_logic = 'events:\n  $e.target.process.command_line = "powershell -enc"\ncondition:\n  $e\n'
     envelope = RuleEnvelope(
         metadata=meta,
         logic=rule_logic,
@@ -104,10 +96,11 @@ def test_rule_envelope_structure() -> None:
     assert envelope.metadata.status == "production"
     assert envelope.metadata.priority == "high"
     assert envelope.deployment.enabled is True
+    assert envelope.deployment.run_frequency == "live"
     assert envelope.runbook.triage.startswith("1. Decode")
     assert len(envelope.tests) == 1
     assert envelope.tests[0].id == "match_encoded_command"
-    assert envelope.tests[0].expect.alerts == 1
+    assert envelope.tests[0].expect == 1
     with pytest.raises(FrozenInstanceError):
         envelope.logic = "new logic"  # type: ignore[misc]
 

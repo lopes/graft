@@ -12,14 +12,13 @@ class RuleMetadata:
     mitre: dict[str, tuple[str, ...]] = field(default_factory=dict)
     tags: tuple[str, ...] = ()
     references: tuple[str, ...] = ()
-    created_at: str | None = None
-    updated_at: str | None = None
 
 
 @dataclass(frozen=True)
 class BaseDeploymentConfig:
     enabled: bool = True
     alerting: bool = True
+    run_frequency: str = "unspecified"
 
 
 @dataclass(frozen=True)
@@ -33,13 +32,7 @@ class Runbook:
 class TestEvent:
     __test__ = False
     timestamp: str
-    data: dict[str, object] = field(default_factory=dict)
-
-
-@dataclass(frozen=True)
-class TestExpectation:
-    __test__ = False
-    alerts: int = 1
+    payload: dict[str, object] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -47,8 +40,8 @@ class TestVector:
     __test__ = False
     id: str
     description: str = ""
+    expect: int = 1
     events: tuple[TestEvent, ...] = ()
-    expect: TestExpectation = field(default_factory=TestExpectation)
 
 
 @dataclass(frozen=True)

@@ -9,7 +9,10 @@ description = "Extensible Detection-as-Code platform for Google SecOps and moder
 readme = "README.md"
 requires-python = ">=3.13"
 license = "Apache-2.0"
-dependencies = []
+dependencies = [
+    "jsonschema>=4.23.0",
+    "pyyaml>=6.0.2",
+]
 
 [dependency-groups]
 dev = [
@@ -53,6 +56,13 @@ warn_redundant_casts = true
 warn_unused_ignores = true
 warn_no_return = true
 warn_unreachable = true
+
+[[tool.mypy.overrides]]
+module = [
+    "yaml",
+    "jsonschema",
+]
+ignore_missing_imports = true
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

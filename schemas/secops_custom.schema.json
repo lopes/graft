@@ -1,0 +1,41 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "secops_custom.schema.json",
+  "title": "Google SecOps Custom Rule Extension Schema",
+  "allOf": [
+    {
+      "$ref": "base_rule.schema.json"
+    },
+    {
+      "type": "object",
+      "properties": {
+        "deployment": {
+          "type": "object",
+          "required": [
+            "enabled",
+            "alerting",
+            "run_frequency"
+          ],
+          "properties": {
+            "enabled": {
+              "type": "boolean"
+            },
+            "alerting": {
+              "type": "boolean"
+            },
+            "run_frequency": {
+              "type": "string",
+              "enum": [
+                "unspecified",
+                "live",
+                "hourly",
+                "daily"
+              ]
+            }
+          },
+          "additionalProperties": false
+        }
+      }
+    }
+  ]
+}
