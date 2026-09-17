@@ -7,10 +7,11 @@ from graft.core.models.managed import (
 )
 from graft.core.models.rule import (
     BaseDeploymentConfig,
-    InvestigationGuide,
     RuleEnvelope,
     RuleMetadata,
+    Runbook,
     TestEvent,
+    TestExpectation,
     TestVector,
 )
 
@@ -18,13 +19,14 @@ __all__ = [
     "BaseDeploymentConfig",
     "CompilationDiagnostic",
     "CompilationResult",
-    "InvestigationGuide",
     "ManagedDeployment",
     "ManagedExclusion",
     "ManagedRuleSet",
     "ManagedState",
     "RuleEnvelope",
     "RuleMetadata",
+    "Runbook",
     "TestEvent",
+    "TestExpectation",
     "TestVector",
 ]

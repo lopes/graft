@@ -15,7 +15,7 @@ Graft rejects common industry anti-patterns: fragmented detection logic stored d
 
 ### Grounding Literature & Core Theses
 The design of Graft is directly grounded in nine foundational architectural works:
-1. **Joe Lopes — *Detection-as-Code, Then What?***: Detection logic alone is not a rule; it is merely one component of a 5-block envelope (`metadata`, `logic`, `deployment`, `guide`, `test`). Schema validation must be decoupled from application code. Avoid data duplication by leveraging VCS for blame and timestamps. Co-locate incident response runbooks directly within detection artifacts. Value realization comes from operational visibility (CSV/Git blame catalogs) and ATT&CK coverage matrices, not raw rule counts.
+1. **Joe Lopes — *Detection-as-Code, Then What?***: Detection logic alone is not a rule; it is merely one component of a 5-block envelope (`metadata`, `logic`, `deployment`, `runbook`, `tests`). Schema validation must be decoupled from application code. Avoid data duplication by leveraging VCS for blame and timestamps. Co-locate incident response runbooks directly within detection artifacts. Value realization comes from operational visibility (CSV/Git blame catalogs) and ATT&CK coverage matrices, not raw rule counts.
 2. **NVISO DaC Part 1 (Introduction & Lifecycle)**: Standardizes the detection engineering lifecycle into iterative software sprints: requirements, development, verification, deployment, monitoring, and tuning.
 3. **NVISO DaC Part 2 (Repository Structure & Branching)**: Establishes a monorepo topology with strict directory separation between core tooling, rule envelopes, schemas, and fixtures. Enforces trunk-based development with short-lived feature branches.
 4. **NVISO DaC Part 3 (Validation & Quality Gates)**: Defines a multi-tier testing pyramid: static schema validation, offline syntax checking, STIX taxonomy verification, and automated dynamic replay testing.
@@ -39,7 +39,7 @@ The design of Graft is directly grounded in nine foundational architectural work
 | **Architecture Pattern** | Hexagonal / Ports & Adapters. `src/graft/core/` is 100% engine-agnostic. Adapters (`src/graft/adapters/<engine>/`) carry the full burden of fetching, preparing, and transforming engine data for core. | Core remains completely decoupled from cloud SDKs, HTTP clients, and SIEM idiosyncrasies. New engines (Splunk, Elastic, Sentinel) plug in as discrete adapters. |
 | **Interface Design** | Granular `typing.Protocol` ports (`RuleCompilerPort`, `RuleDeployerPort`, `ManagedEnginePort`, `ReplayHarnessPort`). | Adheres to Interface Segregation Principle (ISP). Core services consume only required capabilities without rigid base-class inheritance. |
 | **Domain Modeling** | Standard library `@dataclass(frozen=True)` for domain entities in `src/graft/core/models/`. | Pure, lightweight, immutable, and zero external framework overhead in core. |
-| **Schema Inheritance** | Base schema template (`schemas/base_rule.schema.json`) extended per engine (`schemas/secops_rule.schema.json`) via JSON Schema `$ref` and `allOf`. | Standardizes core blocks (`metadata`, `guide`, `logic`) while allowing engine-specific variations for `deployment` and `test`. Every YAML file in the repo has a dedicated schema. |
+| **Schema Inheritance** | Base schema template (`schemas/base_rule.schema.json`) extended per engine (`schemas/secops_rule.schema.json`) via JSON Schema `$ref` and `allOf`. | Standardizes core blocks (`metadata`, `runbook`, `logic`) while allowing engine-specific variations for `deployment` and `tests`. Every YAML file in the repo has a dedicated schema. |
 | **Repository Taxonomy** | Universal agnostic structure: `rules/<engine>/custom/` (organization-authored 5-block envelope rules) and `rules/<engine>/managed.yaml` (vendor-managed content state). | Replaces vendor-specific jargon ("curated") or misleading terms ("default") with an enterprise standard applicable to SecOps, Splunk ESCU, and Elastic Prebuilt Rules. |
 | **Managed State Format** | Single consolidated manifest (`rules/secops/managed.yaml`) capturing all Google Curated Rule Sets (`PRECISE` and `BROAD` deployments: `enabled`, `alerting`) and exclusions. | Google SecOps manages curated rules at the RuleSet level with only 2 deployments per set. A single declarative manifest eliminates hundreds of fragmented files, optimizes Git diffs, and prevents merge conflicts. |
 | **Managed Sync Model** | GitOps Plan/Apply semantics (`diff`, `apply`, `pull`). | Treats Git as single source of truth. Prevents accidental destruction of emergency console modifications while highlighting upstream Google releases. |
@@ -116,9 +116,9 @@ graft/
 │       │   ├── __init__.py
 │       │   ├── models/                # Frozen Dataclass Domain Entities
 │       │   │   ├── __init__.py
-│       │   │   ├── envelope.py        # RuleEnvelope, Metadata, Guide, TestVector
-│       │   │   ├── managed.py         # ManagedRuleSet, ManagedDeployment, ManagedState
-│       │   │   └── common.py          # Enums, Result containers
+│       │   │   ├── rule.py            # RuleEnvelope, RuleMetadata, Runbook, TestVector, TestExpectation
+│       │   │   ├── managed.py         # ManagedRuleSet, ManagedDeployment, ManagedExclusion, ManagedState
+│       │   │   └── compiler.py        # CompilationResult, CompilationDiagnostic
 │       │   ├── ports/                 # Typing Protocols (Hexagonal Interfaces)
 │       │   │   ├── __init__.py
 │       │   │   ├── compiler.py        # RuleCompilerPort
@@ -194,7 +194,8 @@ To guarantee state preservation, eliminate hallucination, and prevent context sa
 1. **Read `GRAFT_MASTER_PLAN.md`:** Check the Progress Tracker above. Identify the first phase marked `[ ]`.
 2. **Read `AGENTS.md`:** Re-ground in operating directives, stdlib constraints, commenting rules, and TDD discipline.
 3. **Inspect Repository Baseline:** Run `git status`, `git log -n 3`, and `uv run pytest` to ensure a clean, green baseline before writing code.
-4. **Execute Only the Target Phase:** Never implement code out of phase. Maintain strict Red-Green-Refactor TDD.
+4. **Design Alignment & Scrutiny:** Present detailed structural designs, schema field names, API signatures, and data contracts to the user for review and critique. Discuss naming, trade-offs, and ergonomics, and obtain alignment before writing any implementation code.
+5. **Execute Target Phase via TDD:** Implement the agreed design using strict Red-Green-Refactor TDD. Never implement code belonging to future phases.
 
 ### End-of-Session Routine (Handoff to Next Session)
 1. **Verify All Quality Gates:**
@@ -271,12 +272,12 @@ Do not write application code yet. Stop when Phase 0 exit criteria are satisfied
 #### 1. Scope, Architectural Goals & Technical Boundaries
 - Establish the core directory layout (`src/graft/core/`, `src/graft/adapters/secops/`, `src/graft/cli/`).
 - Implement core domain models in `src/graft/core/models/` using immutable standard library `@dataclass(frozen=True)`:
-  - `RuleEnvelope`: Base 5-block container.
-  - `RuleMetadata`: Authors, description, MITRE mappings (`dict[str, list[str]]`), references.
-  - `BaseDeploymentConfig`: Extensible deployment parameters.
-  - `InvestigationGuide`: Context, triage runbook, response playbooks.
-  - `TestVector` & `TestEvent`: Synthetic events and assertion expectations (`match: bool`, outcome variables).
-  - `ManagedRuleSet`, `ManagedDeployment`, `ManagedState`: Domain representations for vendor-managed rule sets (`PRECISE` and `BROAD` deployments: `enabled`, `alerting`).
+  - `RuleEnvelope`: Base 5-block container (`metadata`, `logic`, `deployment`, `runbook`, `tests`).
+  - `RuleMetadata`: `id` (UUID), `name` (technical SIEM identifier), `description`, `status` (`testing`, `production`, `deprecated`), `priority` (optional: `info`, `low`, `medium`, `high`, `critical`), `authors`, `mitre` (`dict[str, tuple[str, ...]]`), `tags`, `references`.
+  - `BaseDeploymentConfig`: Extensible deployment parameters (`enabled`, `alerting`).
+  - `Runbook`: Operational triage instructions (`context`, `triage`, `response`).
+  - `TestVector`, `TestEvent`, `TestExpectation`: Deterministic synthetic test vectors with unique `id`, `description`, `events`, and assertion expectations (`expect: { alerts: <int> }`).
+  - `ManagedRuleSet`, `ManagedDeployment`, `ManagedExclusion`, `ManagedState`: Domain representations for vendor-managed rule sets (`PRECISE` and `BROAD` deployments: `enabled`, `alerting`) and declarative exclusions.
 - Implement engine port interfaces in `src/graft/core/ports/` using `typing.Protocol`:
   - `RuleCompilerPort`: `verify_syntax(rule_text: str) -> CompilationResult`.
   - `RuleDeployerPort`: Custom rule CRUD and deployment synchronization.
@@ -302,7 +303,7 @@ Objectives:
 1. Check repository baseline: `git status`, `git log -n 3`, `uv run pytest`.
 2. Create directory structure under `src/graft/core/` and `src/graft/adapters/`.
 3. Write TDD tests first in `tests/unit/core/test_models.py` and `tests/unit/core/test_ports.py`.
-4. Implement core domain entities in `src/graft/core/models/` using `@dataclass(frozen=True)` (RuleEnvelope, RuleMetadata, BaseDeploymentConfig, InvestigationGuide, TestVector, ManagedRuleSet, ManagedDeployment, ManagedState).
+4. Implement core domain entities in `src/graft/core/models/` using `@dataclass(frozen=True)` (RuleEnvelope, RuleMetadata, BaseDeploymentConfig, Runbook, TestVector, TestEvent, TestExpectation, ManagedRuleSet, ManagedDeployment, ManagedExclusion, ManagedState).
 5. Implement hexagonal ports in `src/graft/core/ports/` using `typing.Protocol` (RuleCompilerPort, RuleDeployerPort, ManagedEnginePort, ReplayHarnessPort).
 6. Ensure zero external dependencies are imported. Everything must use Python stdlib.
 7. Verify with `pytest tests/unit`, `mypy --strict`, and `ruff check`.
@@ -317,9 +318,9 @@ Stop when Phase 1 exit criteria are satisfied.
 
 #### 1. Scope, Architectural Goals & Technical Boundaries
 - Author the base Draft 2020-12 JSON Schema in `schemas/base_rule.schema.json`:
-  - Defines common blocks: `metadata` (authors, description, references, MITRE mapping `^T\d{4}(\.\d{3})?$` to `^TA\d{4}$`), `logic` (string), and `guide` (context, triage, response).
+  - Defines common blocks: `metadata` (`id`, `name`, `description`, `status`, `priority`, `authors`, `mitre` mapping tactic slug to technique IDs `^T\d{4}(\.\d{3})?$`, `tags`, `references`), `logic` (string), and `runbook` (`context`, `triage`, `response`).
 - Author engine-extended schema in `schemas/secops_rule.schema.json`:
-  - Inherits `base_rule.schema.json` using `allOf: [{"$ref": "base_rule.schema.json"}, ...]` and defines Google SecOps-specific `deployment` (`live`, `alerting`, `frequency`) and `test` (inline synthetic UDM events).
+  - Inherits `base_rule.schema.json` using `allOf: [{"$ref": "base_rule.schema.json"}, ...]` and defines Google SecOps-specific `deployment` (`enabled`, `alerting`) and `tests` (array of test vectors with `id`, `description`, `events`, `expect: { alerts: <int> }`).
 - Author managed detections schema in `schemas/secops_managed.schema.json` to validate the consolidated `rules/secops/managed.yaml` manifest.
 - Implement `src/graft/core/loader.py`: Safe parsing of YAML rule envelopes into `RuleEnvelope` domain objects.
 - Implement `src/graft/core/validation/schema_validator.py`: Wrapper around `jsonschema` supporting schema inheritance and clear error reporting with line/path attribution.

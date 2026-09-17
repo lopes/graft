@@ -6,7 +6,7 @@ from graft.core.models.rule import RuleEnvelope, TestVector
 
 @dataclass(frozen=True)
 class ReplayResult:
-    vector_name: str
+    test_id: str
     passed: bool
     message: str = ""
     matched_events_count: int = 0

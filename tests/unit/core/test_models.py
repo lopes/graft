@@ -11,80 +11,78 @@ from graft.core.models.managed import (
 )
 from graft.core.models.rule import (
     BaseDeploymentConfig,
-    InvestigationGuide,
     RuleEnvelope,
     RuleMetadata,
+    Runbook,
     TestEvent,
+    TestExpectation,
     TestVector,
 )
 
 
 def test_rule_metadata_immutability() -> None:
     meta = RuleMetadata(
-        id="RULE-001",
-        name="Suspicious Execution",
+        id="c4e9b8f2-89b1-4f81-9b16-928d54128f73",
+        name="powershell_encoded_launch",
         description="Detects suspicious execution patterns",
-        severity="HIGH",
+        status="production",
+        priority="high",
         authors=("Detection Team",),
-        mitre_attack={"execution": ("T1059.001",)},
+        mitre={"execution": ("T1059.001",)},
         tags=("windows", "powershell"),
         references=("https://attack.mitre.org/techniques/T1059/001/",),
     )
     with pytest.raises(FrozenInstanceError):
-        meta.name = "Modified Name"  # type: ignore[misc]
+        meta.name = "modified_name"  # type: ignore[misc]
 
 
-def test_rule_metadata_equality() -> None:
+def test_rule_metadata_equality_and_defaults() -> None:
     meta1 = RuleMetadata(
-        id="RULE-001",
-        name="Rule 1",
+        id="c4e9b8f2-89b1-4f81-9b16-928d54128f73",
+        name="rule_test",
         description="Desc",
-        severity="LOW",
+        status="testing",
         authors=("Author",),
-        mitre_attack={},
-        tags=(),
-        references=(),
     )
     meta2 = RuleMetadata(
-        id="RULE-001",
-        name="Rule 1",
+        id="c4e9b8f2-89b1-4f81-9b16-928d54128f73",
+        name="rule_test",
         description="Desc",
-        severity="LOW",
+        status="testing",
         authors=("Author",),
-        mitre_attack={},
-        tags=(),
-        references=(),
     )
     assert meta1 == meta2
+    assert meta1.priority is None
+    assert meta1.mitre == {}
+    assert meta1.tags == ()
 
 
 def test_rule_envelope_structure() -> None:
     meta = RuleMetadata(
-        id="RULE-001",
-        name="Suspicious PowerShell",
+        id="c4e9b8f2-89b1-4f81-9b16-928d54128f73",
+        name="powershell_encoded",
         description="Detects suspicious PowerShell command lines",
-        severity="HIGH",
+        status="production",
+        priority="high",
         authors=("SecOps",),
-        mitre_attack={"execution": ("T1059.001",)},
+        mitre={"execution": ("T1059.001",)},
         tags=("powershell",),
-        references=(),
     )
     deployment = BaseDeploymentConfig(enabled=True, alerting=True)
-    guide = InvestigationGuide(
-        context="PowerShell execution with encoded arguments.",
-        triage_runbook="Check parent process and decoded command.",
-        false_positives=("Admin management scripts",),
-        response_playbooks=("Isolate host",),
+    runbook = Runbook(
+        context="PowerShell execution with base64 encoded arguments.",
+        triage="1. Decode command.\n2. Check parent process.\n3. If admin script, verify hash.",
+        response="1. Isolate host.\n2. Revoke user sessions.",
     )
     event = TestEvent(
         timestamp="2026-09-17T11:00:00Z",
         data={"target": {"process": {"command_line": "powershell -enc"}}},
     )
     test_vec = TestVector(
-        name="Match on encoded PowerShell",
+        id="match_encoded_command",
         description="Simulates encoded command invocation",
         events=(event,),
-        expected_match=True,
+        expect=TestExpectation(alerts=1),
     )
     rule_logic = (
         "rule powershell_encoded {\n"
@@ -98,14 +96,18 @@ def test_rule_envelope_structure() -> None:
         metadata=meta,
         logic=rule_logic,
         deployment=deployment,
-        guide=guide,
-        test=(test_vec,),
+        runbook=runbook,
+        tests=(test_vec,),
     )
 
-    assert envelope.metadata.id == "RULE-001"
+    assert envelope.metadata.id == "c4e9b8f2-89b1-4f81-9b16-928d54128f73"
+    assert envelope.metadata.status == "production"
+    assert envelope.metadata.priority == "high"
     assert envelope.deployment.enabled is True
-    assert len(envelope.test) == 1
-    assert envelope.test[0].events[0].timestamp == "2026-09-17T11:00:00Z"
+    assert envelope.runbook.triage.startswith("1. Decode")
+    assert len(envelope.tests) == 1
+    assert envelope.tests[0].id == "match_encoded_command"
+    assert envelope.tests[0].expect.alerts == 1
     with pytest.raises(FrozenInstanceError):
         envelope.logic = "new logic"  # type: ignore[misc]
 

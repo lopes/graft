@@ -28,7 +28,7 @@
   - **`src/graft/adapters/` (Driven Adapters):** Concrete engine implementations (e.g., `src/graft/adapters/secops/`). **Adapters carry the entire burden** of translating external SIEM APIs, authenticating, compiling queries, and handling synthetic replay vectors. Core never adapts to an engine; engines adapt to Core.
   - **`src/graft/cli/` (Driving Adapter):** Standard library `argparse` CLI routing commands to core services and engine adapters.
 - **Ruleset Taxonomy:**
-  - `rules/<engine>/custom/`: 5-block envelope YAML files (`metadata`, `logic`, `deployment`, `guide`, `test`) authored and owned by the organization.
+  - `rules/<engine>/custom/`: 5-block envelope YAML files (`metadata`, `logic`, `deployment`, `runbook`, `tests`) authored and owned by the organization.
   - `rules/<engine>/managed.yaml`: Single consolidated manifest tracking vendor-managed content state (e.g., Google Curated Rule Sets: `PRECISE` vs `BROAD` deployments, `enabled`, `alerting`) and active exclusions.
 - **Environment Topologies:**
   - All SecOps credentials and tenant coordinates are split into Staging and Production according to `docs/adapters/secops.md`.
@@ -132,7 +132,8 @@ Every phase is conducted in an independent session. Follow this strict protocol:
 1. **Read `GRAFT_MASTER_PLAN.md`:** Check the Progress Tracker to identify what phases are completed (`[x]`) and what phase is active (`[ ]`).
 2. **Read `AGENTS.md`:** Review technical constraints, commenting rules, Mermaid standards, and stdlib boundaries.
 3. **Inspect Baseline:** Run `git status`, `git log -n 3`, and `uv run pytest` to ensure you are starting from a clean, passing baseline.
-4. **Execute Only Current Phase:** Implement the exact objectives defined in `GRAFT_MASTER_PLAN.md` for that phase using TDD.
+4. **Design Alignment & Scrutiny:** Present detailed structural designs, schema field names, API signatures, and data contracts to the user for review and critique. Discuss naming, trade-offs, and ergonomics, and obtain alignment before writing any implementation code.
+5. **Execute Only Current Phase via TDD:** Implement the agreed design using strict Red-Green-Refactor TDD. Never implement code belonging to future phases.
 
 ### End-of-Session Routine (Handoff to Next Session)
 1. **Verify Quality Gates:** Run `uv run ruff check .`, `uv run ruff format --check .`, `uv run mypy --strict src tests`, and `uv run pytest`.

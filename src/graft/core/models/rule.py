@@ -6,9 +6,10 @@ class RuleMetadata:
     id: str
     name: str
     description: str
-    severity: str
+    status: str
+    priority: str | None = None
     authors: tuple[str, ...] = ()
-    mitre_attack: dict[str, tuple[str, ...]] = field(default_factory=dict)
+    mitre: dict[str, tuple[str, ...]] = field(default_factory=dict)
     tags: tuple[str, ...] = ()
     references: tuple[str, ...] = ()
     created_at: str | None = None
@@ -22,11 +23,10 @@ class BaseDeploymentConfig:
 
 
 @dataclass(frozen=True)
-class InvestigationGuide:
+class Runbook:
     context: str = ""
-    triage_runbook: str = ""
-    false_positives: tuple[str, ...] = ()
-    response_playbooks: tuple[str, ...] = ()
+    triage: str = ""
+    response: str = ""
 
 
 @dataclass(frozen=True)
@@ -37,13 +37,18 @@ class TestEvent:
 
 
 @dataclass(frozen=True)
+class TestExpectation:
+    __test__ = False
+    alerts: int = 1
+
+
+@dataclass(frozen=True)
 class TestVector:
     __test__ = False
-    name: str
+    id: str
     description: str = ""
     events: tuple[TestEvent, ...] = ()
-    expected_match: bool = True
-    expected_variables: dict[str, object] = field(default_factory=dict)
+    expect: TestExpectation = field(default_factory=TestExpectation)
 
 
 @dataclass(frozen=True)
@@ -51,5 +56,5 @@ class RuleEnvelope:
     metadata: RuleMetadata
     logic: str
     deployment: BaseDeploymentConfig
-    guide: InvestigationGuide
-    test: tuple[TestVector, ...] = ()
+    runbook: Runbook
+    tests: tuple[TestVector, ...] = ()
