@@ -49,10 +49,75 @@ def test_secops_config_from_env_prod(monkeypatch: pytest.MonkeyPatch) -> None:
     assert config.service_account_email is None
 
 
+def test_secops_config_engine_namespaced_staging_and_prod(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("GRAFT_SECOPS_STAGING_PROJECT", "secops-stage-proj")
+    monkeypatch.setenv("GRAFT_SECOPS_STAGING_LOCATION", "europe-west3")
+    monkeypatch.setenv("GRAFT_SECOPS_STAGING_INSTANCE_ID", "secops-stage-uuid")
+    monkeypatch.setenv("GRAFT_SECOPS_STAGING_SA_EMAIL", "sa@secops-stage.iam.gserviceaccount.com")
+
+    config = SecOpsConfig.from_env("staging")
+    assert config.project == "secops-stage-proj"
+    assert config.location == "europe-west3"
+    assert config.instance_id == "secops-stage-uuid"
+    assert config.service_account_email == "sa@secops-stage.iam.gserviceaccount.com"
+
+
+def test_secops_config_engine_namespaced_single_tenant(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("GRAFT_SECOPS_STAGING_PROJECT", raising=False)
+    monkeypatch.delenv("GRAFT_SECOPS_PROD_PROJECT", raising=False)
+    monkeypatch.delenv("GRAFT_STAGING_PROJECT", raising=False)
+    monkeypatch.delenv("GRAFT_PROD_PROJECT", raising=False)
+    monkeypatch.setenv("GRAFT_SECOPS_PROJECT", "secops-lab-proj")
+    monkeypatch.setenv("GRAFT_SECOPS_LOCATION", "us")
+    monkeypatch.setenv("GRAFT_SECOPS_INSTANCE_ID", "secops-lab-uuid")
+
+    staging_cfg = SecOpsConfig.from_env("staging")
+    prod_cfg = SecOpsConfig.from_env("prod")
+    assert staging_cfg.project == "secops-lab-proj"
+    assert staging_cfg.is_same_instance(prod_cfg)
+
+
+def test_secops_config_single_tenant_generic_vars(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("GRAFT_SECOPS_STAGING_PROJECT", raising=False)
+    monkeypatch.delenv("GRAFT_SECOPS_PROD_PROJECT", raising=False)
+    monkeypatch.delenv("GRAFT_SECOPS_PROJECT", raising=False)
+    monkeypatch.delenv("GRAFT_STAGING_PROJECT", raising=False)
+    monkeypatch.delenv("GRAFT_PROD_PROJECT", raising=False)
+    monkeypatch.setenv("GRAFT_PROJECT", "lab-proj")
+    monkeypatch.setenv("GRAFT_LOCATION", "us")
+    monkeypatch.setenv("GRAFT_INSTANCE_ID", "lab-instance-uuid")
+    monkeypatch.setenv("GRAFT_SA_EMAIL", "lab-sa@lab-proj.iam.gserviceaccount.com")
+
+    staging_cfg = SecOpsConfig.from_env("staging")
+    prod_cfg = SecOpsConfig.from_env("prod")
+
+    assert staging_cfg.project == "lab-proj"
+    assert staging_cfg.instance_id == "lab-instance-uuid"
+    assert staging_cfg.is_same_instance(prod_cfg)
+
+
+def test_secops_config_staging_fallback_to_prod(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("GRAFT_STAGING_PROJECT", raising=False)
+    monkeypatch.delenv("GRAFT_PROJECT", raising=False)
+    monkeypatch.setenv("GRAFT_PROD_PROJECT", "single-prod-proj")
+    monkeypatch.setenv("GRAFT_PROD_LOCATION", "us")
+    monkeypatch.setenv("GRAFT_PROD_INSTANCE_ID", "single-prod-instance")
+
+    staging_cfg = SecOpsConfig.from_env("staging")
+    assert staging_cfg.project == "single-prod-proj"
+    assert staging_cfg.instance_id == "single-prod-instance"
+
+
 def test_secops_config_from_env_missing_raises(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("GRAFT_STAGING_PROJECT", raising=False)
     monkeypatch.delenv("GRAFT_STAGING_LOCATION", raising=False)
     monkeypatch.delenv("GRAFT_STAGING_INSTANCE_ID", raising=False)
+    monkeypatch.delenv("GRAFT_PROD_PROJECT", raising=False)
+    monkeypatch.delenv("GRAFT_PROJECT", raising=False)
 
-    with pytest.raises(KeyError, match="GRAFT_STAGING_PROJECT"):
+    with pytest.raises(KeyError, match="Missing required SecOps environment variables"):
         SecOpsConfig.from_env("staging")

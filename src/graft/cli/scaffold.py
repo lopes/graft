@@ -251,6 +251,24 @@ def test_{name}_compiler_stub() -> None:
     test_file.write_text(test_content, encoding="utf-8")
     created_files["test"] = test_file
 
+    # 6. Append engine config section to .env.example and .env if present
+    section_tag = f"# ENGINE: {name.upper()}"
+    section_stub = f"""
+
+# ==============================================================================
+# ENGINE: {name.upper()}
+# ==============================================================================
+# Configuration and credentials for {name}
+# GRAFT_{name.upper()}_API_KEY=
+# GRAFT_{name.upper()}_BASE_URL=
+"""
+    for env_filename in (".env.example", ".env"):
+        env_path = root / env_filename
+        if env_path.exists():
+            content = env_path.read_text(encoding="utf-8")
+            if section_tag not in content:
+                env_path.write_text(content.rstrip() + section_stub, encoding="utf-8")
+
     return created_files
 
 

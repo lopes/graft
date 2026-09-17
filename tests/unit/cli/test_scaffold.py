@@ -11,6 +11,9 @@ from graft.core.loader import load_rule_from_yaml
 
 
 def test_scaffold_engine_creates_structure_and_files(tmp_path: Path) -> None:
+    env_example = tmp_path / ".env.example"
+    env_example.write_text("# Base .env.example\n", encoding="utf-8")
+
     scaffold_engine("sentinel", project_root=tmp_path)
 
     # 1. Engine code in src/graft/engines/sentinel
@@ -38,6 +41,9 @@ def test_scaffold_engine_creates_structure_and_files(tmp_path: Path) -> None:
     # 5. Tests skeleton in tests/engines/sentinel/test_compiler.py
     test_file = tmp_path / "tests" / "engines" / "sentinel" / "test_compiler.py"
     assert test_file.exists()
+
+    # 6. .env.example updated with engine section
+    assert "# ENGINE: SENTINEL" in env_example.read_text(encoding="utf-8")
 
 
 def test_scaffold_engine_invalid_name(tmp_path: Path) -> None:

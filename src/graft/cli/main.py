@@ -8,6 +8,7 @@ from graft.cli.commands_core import execute_export, execute_lint, execute_update
 from graft.cli.engines import discover_and_register_engines
 from graft.cli.engines.secops import handle_secops_command
 from graft.cli.scaffold import ScaffoldError, scaffold_engine, scaffold_rule
+from graft.core.env import load_env_file
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -72,6 +73,7 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main(argv: Sequence[str] | None = None) -> int:
+    load_env_file()
     args_list = sys.argv[1:] if argv is None else list(argv)
     parser = build_parser()
 
