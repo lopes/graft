@@ -1,5 +1,10 @@
 from graft.core.models.compiler import CompilationResult
-from graft.core.models.managed import ManagedDeployment, ManagedRuleSet, ManagedState
+from graft.core.models.managed import (
+    ManagedDeployment,
+    ManagedExclusion,
+    ManagedRuleSet,
+    ManagedState,
+)
 from graft.core.models.rule import (
     BaseDeploymentConfig,
     RuleEnvelope,
@@ -62,8 +67,22 @@ class MockManagedEngine:
         self.state = target_state
 
     def set_ruleset_deployment(
-        self, ruleset_id: str, deployment_type: str, enabled: bool, alerting: bool
+        self,
+        ruleset_id: str,
+        deployment_type: str,
+        enabled: bool,
+        alerting: bool,
+        category: str | None = None,
     ) -> None:
+        pass
+
+    def create_exclusion(self, exclusion: ManagedExclusion) -> str:
+        return exclusion.id
+
+    def update_exclusion(self, exclusion: ManagedExclusion) -> None:
+        pass
+
+    def delete_exclusion(self, exclusion_id: str) -> None:
         pass
 
 

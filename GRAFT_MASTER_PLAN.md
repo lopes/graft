@@ -180,8 +180,8 @@ To guarantee state preservation, eliminate hallucination, and prevent context sa
 | **0** | Stack & Tooling Bootstrap | `[x]` | `9179ca3` | 2026-09-17 11:24 UTC | Section 6.1 |
 | **1** | Hexagonal Domain & Engine Ports | `[x]` | `54c7812` | 2026-09-17 11:37 UTC | Section 6.2 |
 | **2** | Schema Inheritance, Envelope & Linters | `[x]` | `e33e6d4` | 2026-09-17 14:39 UTC | Section 6.4 |
-| **3** | SecOps REST Client & Compiler Adapter | `[x]` | Pending | 2026-09-17 15:18 UTC | Section 6.5 |
-| **4** | Consolidated Managed Engine & GitOps Sync | `[ ]` | — | — | Section 6.5 |
+| **3** | SecOps REST Client & Compiler Adapter | `[x]` | `608ca22` | 2026-09-17 15:18 UTC | Section 6.5 |
+| **4** | Consolidated Managed Engine & GitOps Sync | `[x]` | `037e1f6` | 2026-09-17 15:40 UTC | Section 6.6 |
 | **5** | Unified `graft` CLI Dispatcher | `[ ]` | — | — | Section 6.6 |
 | **6** | Staging Replay Harness (Graceful Degradation) | `[ ]` | — | — | Section 6.7 |
 | **7** | Visibility & Value Tooling | `[ ]` | — | — | Section 6.8 |
