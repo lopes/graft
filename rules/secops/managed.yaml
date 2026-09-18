@@ -1056,8 +1056,8 @@ categories:
         name: Malware Signals - Suspicious Execution
         deployments:
           - type: PRECISE
-            enabled: true
-            alerting: true
+            enabled: false
+            alerting: false
           - type: BROAD
             enabled: false
             alerting: false
