@@ -252,6 +252,34 @@ def test_apply_orchestration_and_audit_logging(caplog: pytest.LogCaptureFixture)
     assert any("Created exclusion 'ex-new'" in msg for msg in log_messages)
 
 
+def test_apply_passes_category_id_when_available() -> None:
+    current_rs = ManagedRuleSet(
+        id="rs-1",
+        name="Test RS",
+        category="Linux Threats",
+        category_id="cat-uuid-1",
+        deployments=(ManagedDeployment(type="PRECISE", enabled=False, alerting=False),),
+    )
+    desired_rs = ManagedRuleSet(
+        id="rs-1",
+        name="Test RS",
+        category="Linux Threats",
+        category_id="cat-uuid-1",
+        deployments=(ManagedDeployment(type="PRECISE", enabled=True, alerting=True),),
+    )
+    current = ManagedState(rulesets=(current_rs,))
+    desired = ManagedState(rulesets=(desired_rs,))
+
+    engine = RecordingMockManagedEngine(initial_state=current)
+    reconciler = GitOpsReconciler()
+    diff = reconciler.apply(desired=desired, port=engine)
+
+    assert diff.has_changes is True
+    assert len(diff.deployment_diffs) == 1
+    assert diff.deployment_diffs[0].category_id == "cat-uuid-1"
+    assert engine.deployment_calls[0] == ("rs-1", "PRECISE", True, True, "cat-uuid-1")
+
+
 def test_pull_mirrors_live_tenant_state(caplog: pytest.LogCaptureFixture) -> None:
     live_rs = ManagedRuleSet(
         id="rs-new-upstream",

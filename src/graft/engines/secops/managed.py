@@ -16,6 +16,31 @@ class SecOpsManagedAdapter(ManagedEnginePort):
     def __init__(self, client: SecOpsClient) -> None:
         self._client = client
         self._category_cache: dict[str, str] = {}
+        self._category_name_to_id: dict[str, str] = {}
+        self._category_id_to_name: dict[str, str] = {}
+
+    def _populate_category_caches(self) -> None:
+        try:
+            cat_resp = self._client.request(
+                "GET",
+                "curatedRuleSetCategories",
+                api_version="v1alpha",
+            )
+            raw_cats = cat_resp.get("curatedRuleSetCategories", [])
+            if isinstance(raw_cats, list):
+                for cat in raw_cats:
+                    if isinstance(cat, dict):
+                        cat_res = str(cat.get("name", ""))
+                        cat_disp = str(cat.get("displayName", ""))
+                        cat_uuid = cat_res.split("/")[-1] if "/" in cat_res else cat_res
+                        if cat_uuid:
+                            if cat_disp:
+                                self._category_name_to_id[cat_disp] = cat_uuid
+                                self._category_name_to_id[cat_disp.lower()] = cat_uuid
+                                self._category_id_to_name[cat_uuid] = cat_disp
+                            self._category_name_to_id[cat_uuid] = cat_uuid
+        except Exception as exc:
+            logger.debug("Failed resolving category names: %s", exc)
 
     def fetch_managed_state(self) -> ManagedState:
         logger.info("Fetching curated rulesets from Google SecOps API")
@@ -82,25 +107,7 @@ class SecOpsManagedAdapter(ManagedEnginePort):
             if not dep_page_token:
                 break
 
-        # Resolve category UUID to category display name
-        category_names: dict[str, str] = {}
-        try:
-            cat_resp = self._client.request(
-                "GET",
-                "curatedRuleSetCategories",
-                api_version="v1alpha",
-            )
-            raw_cats = cat_resp.get("curatedRuleSetCategories", [])
-            if isinstance(raw_cats, list):
-                for cat in raw_cats:
-                    if isinstance(cat, dict):
-                        cat_res = str(cat.get("name", ""))
-                        cat_disp = str(cat.get("displayName", ""))
-                        cat_uuid = cat_res.split("/")[-1] if "/" in cat_res else cat_res
-                        if cat_uuid and cat_disp:
-                            category_names[cat_uuid] = cat_disp
-        except Exception as exc:
-            logger.debug("Failed resolving category names: %s", exc)
+        self._populate_category_caches()
 
         rulesets: list[ManagedRuleSet] = []
         for raw in raw_rulesets:
@@ -121,7 +128,7 @@ class SecOpsManagedAdapter(ManagedEnginePort):
                 ruleset_id = parts[-1]
 
             category_uuid = category
-            category_name = category_names.get(category_uuid, category_uuid)
+            category_name = self._category_id_to_name.get(category_uuid, category_uuid)
             self._category_cache[ruleset_id] = category_uuid
 
             # Check if deployments were fetched in bulk
@@ -241,7 +248,26 @@ class SecOpsManagedAdapter(ManagedEnginePort):
         alerting: bool,
         category: str | None = None,
     ) -> None:
-        cat = category or self._category_cache.get(ruleset_id, "default")
+        cat: str | None = None
+        if ruleset_id in self._category_cache:
+            cat = self._category_cache[ruleset_id]
+        elif category and category in self._category_name_to_id:
+            cat = self._category_name_to_id[category]
+        elif category and category.lower() in self._category_name_to_id:
+            cat = self._category_name_to_id[category.lower()]
+        elif category and " " not in category and category != "default":
+            cat = category
+        else:
+            if category and " " in category:
+                self._populate_category_caches()
+                if category in self._category_name_to_id:
+                    cat = self._category_name_to_id[category]
+                elif category.lower() in self._category_name_to_id:
+                    cat = self._category_name_to_id[category.lower()]
+
+            if not cat or " " in cat:
+                cat = "-"
+
         path = (
             f"curatedRuleSetCategories/{cat}/curatedRuleSets/{ruleset_id}/curatedRuleSetDeployments/"
             f"{deployment_type.lower()}"
@@ -268,7 +294,7 @@ class SecOpsManagedAdapter(ManagedEnginePort):
             "type": "DETECTION_EXCLUSION",
         }
         if exclusion.ruleset_id:
-            cat = self._category_cache.get(exclusion.ruleset_id, "default")
+            cat = self._category_cache.get(exclusion.ruleset_id, "-")
             curated_res = (
                 f"projects/{self._client._config.project}/locations/{self._client._config.location}/"
                 f"instances/{self._client._config.instance_id}/curatedRuleSetCategories/{cat}/"
@@ -294,7 +320,7 @@ class SecOpsManagedAdapter(ManagedEnginePort):
             "query": exclusion.expression,
         }
         if exclusion.ruleset_id:
-            cat = self._category_cache.get(exclusion.ruleset_id, "default")
+            cat = self._category_cache.get(exclusion.ruleset_id, "-")
             curated_res = (
                 f"projects/{self._client._config.project}/locations/{self._client._config.location}/"
                 f"instances/{self._client._config.instance_id}/curatedRuleSetCategories/{cat}/"

@@ -349,3 +349,159 @@ def test_fetch_managed_state_bulk_deployments(
     assert len(rs.deployments) == 2
     assert rs.deployments[0] == ManagedDeployment(type="PRECISE", enabled=True, alerting=True)
     assert rs.deployments[1] == ManagedDeployment(type="BROAD", enabled=False, alerting=False)
+
+
+def test_set_ruleset_deployment_resolves_category_from_cache_when_display_name_passed(
+    mock_client: MockSecOpsClient, adapter: SecOpsManagedAdapter
+) -> None:
+    cat_uuid = "a5366ed8-3746-2423-a972-98535279f96a"
+    rs_uuid = "1c4ab1f6-d801-d6a9-1177-3ec3dd5bcbe9"
+    mock_client.set_response(
+        "GET",
+        "curatedRuleSetCategories",
+        {
+            "curatedRuleSetCategories": [
+                {
+                    "name": f"{INSTANCE_BASE}/curatedRuleSetCategories/{cat_uuid}",
+                    "displayName": "Linux Threats",
+                }
+            ]
+        },
+    )
+    mock_client.set_response(
+        "GET",
+        "curatedRuleSetCategories/-/curatedRuleSets",
+        {
+            "curatedRuleSets": [
+                {
+                    "name": (
+                        f"{INSTANCE_BASE}/curatedRuleSetCategories/{cat_uuid}/"
+                        f"curatedRuleSets/{rs_uuid}"
+                    ),
+                    "displayName": "Malware Signals - Suspicious Execution",
+                }
+            ]
+        },
+    )
+    mock_client.set_response(
+        "GET",
+        "curatedRuleSetCategories/-/curatedRuleSets/-/curatedRuleSetDeployments",
+        {"curatedRuleSetDeployments": []},
+    )
+    mock_client.set_response("GET", "findingsRefinements", {"findingsRefinements": []})
+
+    adapter.fetch_managed_state()
+    mock_client.calls.clear()
+
+    # Pass display name with spaces in category parameter
+    adapter.set_ruleset_deployment(
+        ruleset_id=rs_uuid,
+        deployment_type="PRECISE",
+        enabled=True,
+        alerting=True,
+        category="Linux Threats",
+    )
+
+    assert len(mock_client.calls) == 1
+    call = mock_client.calls[0]
+    assert call["method"] == "PATCH"
+    # Path must use the resolved category UUID, never the display name with spaces
+    assert "Linux Threats" not in call["path"]
+    assert " " not in call["path"]
+    expected_path = (
+        f"curatedRuleSetCategories/{cat_uuid}/curatedRuleSets/{rs_uuid}/"
+        "curatedRuleSetDeployments/precise"
+    )
+    assert call["path"] == expected_path
+
+
+def test_set_ruleset_deployment_resolves_display_name_via_lazy_category_fetch(
+    mock_client: MockSecOpsClient, adapter: SecOpsManagedAdapter
+) -> None:
+    cat_uuid = "a5366ed8-3746-2423-a972-98535279f96a"
+    rs_uuid = "1c4ab1f6-d801-d6a9-1177-3ec3dd5bcbe9"
+    mock_client.set_response(
+        "GET",
+        "curatedRuleSetCategories",
+        {
+            "curatedRuleSetCategories": [
+                {
+                    "name": f"{INSTANCE_BASE}/curatedRuleSetCategories/{cat_uuid}",
+                    "displayName": "Linux Threats",
+                }
+            ]
+        },
+    )
+
+    # Without calling fetch_managed_state first, pass display name with spaces
+    adapter.set_ruleset_deployment(
+        ruleset_id=rs_uuid,
+        deployment_type="PRECISE",
+        enabled=True,
+        alerting=True,
+        category="Linux Threats",
+    )
+
+    # Should have lazily queried curatedRuleSetCategories, then sent PATCH
+    patch_calls = [c for c in mock_client.calls if c["method"] == "PATCH"]
+    assert len(patch_calls) == 1
+    call = patch_calls[0]
+    assert "Linux Threats" not in call["path"]
+    assert " " not in call["path"]
+    expected_path = (
+        f"curatedRuleSetCategories/{cat_uuid}/curatedRuleSets/{rs_uuid}/"
+        "curatedRuleSetDeployments/precise"
+    )
+    assert call["path"] == expected_path
+
+
+def test_set_ruleset_deployment_with_direct_category_uuid(
+    mock_client: MockSecOpsClient, adapter: SecOpsManagedAdapter
+) -> None:
+    cat_uuid = "a5366ed8-3746-2423-a972-98535279f96a"
+    rs_uuid = "1c4ab1f6-d801-d6a9-1177-3ec3dd5bcbe9"
+    adapter.set_ruleset_deployment(
+        ruleset_id=rs_uuid,
+        deployment_type="PRECISE",
+        enabled=True,
+        alerting=True,
+        category=cat_uuid,
+    )
+
+    assert len(mock_client.calls) == 1
+    call = mock_client.calls[0]
+    assert call["method"] == "PATCH"
+    expected_path = (
+        f"curatedRuleSetCategories/{cat_uuid}/curatedRuleSets/{rs_uuid}/"
+        "curatedRuleSetDeployments/precise"
+    )
+    assert call["path"] == expected_path
+
+
+def test_set_ruleset_deployment_unresolvable_category_with_spaces_falls_back_to_wildcard(
+    mock_client: MockSecOpsClient, adapter: SecOpsManagedAdapter
+) -> None:
+    rs_uuid = "1c4ab1f6-d801-d6a9-1177-3ec3dd5bcbe9"
+    mock_client.set_response(
+        "GET",
+        "curatedRuleSetCategories",
+        {"curatedRuleSetCategories": []},
+    )
+
+    adapter.set_ruleset_deployment(
+        ruleset_id=rs_uuid,
+        deployment_type="PRECISE",
+        enabled=True,
+        alerting=True,
+        category="Completely Unknown Category",
+    )
+
+    patch_calls = [c for c in mock_client.calls if c["method"] == "PATCH"]
+    assert len(patch_calls) == 1
+    call = patch_calls[0]
+    assert "Completely Unknown Category" not in call["path"]
+    assert " " not in call["path"]
+    expected_path = (
+        f"curatedRuleSetCategories/-/curatedRuleSets/{rs_uuid}/curatedRuleSetDeployments/precise"
+    )
+    assert call["path"] == expected_path

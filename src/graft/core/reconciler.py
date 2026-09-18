@@ -34,6 +34,7 @@ class DeploymentDiff:
     desired_enabled: bool
     current_alerting: bool
     desired_alerting: bool
+    category_id: str = ""
 
     @property
     def has_changes(self) -> bool:
@@ -179,6 +180,7 @@ class GitOpsReconciler:
                     desired_enabled=des_dep.enabled,
                     current_alerting=curr_alerting,
                     desired_alerting=des_dep.alerting,
+                    category_id=desired_rs.category_id or curr_rs.category_id,
                 )
                 if diff_entry.has_changes:
                     deployment_diffs.append(diff_entry)
@@ -247,7 +249,7 @@ class GitOpsReconciler:
                     deployment_type=dep.deployment_type,
                     enabled=dep.desired_enabled,
                     alerting=dep.desired_alerting,
-                    category=dep.category,
+                    category=dep.category_id or dep.category,
                 )
 
         # Apply deletions
