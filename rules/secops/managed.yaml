@@ -1826,4 +1826,8 @@ categories:
           - type: BROAD
             enabled: false
             alerting: false
-exclusions: []
+exclusions:
+  - id: test-exclusion-ci-pipeline
+    description: "Graft CI Test Exclusion - Suspicious Execution"
+    ruleset_id: 1c4ab1f6-d801-d6a9-1177-3ec3dd5bcbe9
+    expression: 'principal.hostname = "test-exclusion-host.corp.internal"'
