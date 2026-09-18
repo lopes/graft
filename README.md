@@ -9,8 +9,12 @@
 [![Code Style: ruff](https://img.shields.io/badge/code%20style-ruff-000000.svg)](https://github.com/astral-sh/ruff)
 [![Type Checked: mypy](https://img.shields.io/badge/type_checked-mypy-informational)](http://mypy-lang.org/)
 
-> [!CAUTION]
-> **Active Engineering & Work in Progress:** Graft is currently under active architecture and phased development. APIs, rule envelope schemas, and CLI subcommands are evolving according to the phased roadmap in [GRAFT_MASTER_PLAN.md](GRAFT_MASTER_PLAN.md).
+> [!WARNING]
+> **Public Repository Notice & Operational Boundaries:**
+> - **Public Lab Environment:** This public repository (`lopes/graft`) is strictly connected to an isolated lab/demo environment for open-source development and experimentation. It is never connected to production tenants.
+> - **Production Repositories Must Be Private:** Any detection engineering team or operator adopting or forking Graft for production use **must maintain their repository in private version control** under strict organizational access controls. While the Graft engine is open-source, version-controlling live production deployment states (`enabled`, `alerting`) or operational exclusions (`findingsRefinements`) in a public repository will leak defensive postures, monitoring coverage blind spots, and internal entity identities (hostnames, IP ranges, usernames, service accounts).
+> - **Curated Content Is Public:** The vendor-managed detection catalog metadata tracked in `rules/secops/managed.yaml` (category names, ruleset titles, descriptions, and catalog UUIDs) represents standard vendor content that is **publicly published** in official Google Cloud documentation. See [Google SecOps Curated Detections](https://docs.cloud.google.com/chronicle/docs/detection/curated-detections) and [Review Curated Detection Categories](https://docs.cloud.google.com/chronicle/docs/detection/cloud-threats-category).
+> - **Active Engineering:** Graft is under active phased development. Specifications and CLI subcommands are evolving according to [GRAFT_MASTER_PLAN.md](GRAFT_MASTER_PLAN.md).
 
 ---
 
