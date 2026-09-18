@@ -1826,4 +1826,8 @@ categories:
           - type: BROAD
             enabled: false
             alerting: false
-exclusions: []
+exclusions:
+  - id: pr-test-exclusion
+    description: "PR Validation Gate Test - Hostname exclusion"
+    ruleset_id: 1c4ab1f6-d801-d6a9-1177-3ec3dd5bcbe9
+    expression: 'principal.hostname = "pr-test-sandbox.corp.internal"'
