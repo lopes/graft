@@ -185,34 +185,41 @@ class GitOpsReconciler:
                 if diff_entry.has_changes:
                     deployment_diffs.append(diff_entry)
 
-        curr_excl_map = {e.id: e for e in current.exclusions}
-        des_excl_map = {e.id: e for e in desired.exclusions}
+        curr_by_id = {e.id: e for e in current.exclusions}
+        curr_by_desc = {e.description: e for e in current.exclusions if e.description}
 
-        exclusions_to_create: list[ManagedExclusion] = [
-            e for e_id, e in des_excl_map.items() if e_id not in curr_excl_map
-        ]
-        exclusions_to_delete: list[ManagedExclusion] = [
-            e for e_id, e in curr_excl_map.items() if e_id not in des_excl_map
-        ]
-
+        matched_curr_ids: set[str] = set()
+        exclusions_to_create: list[ManagedExclusion] = []
         exclusions_to_update: list[ExclusionDiff] = []
-        for e_id, des_excl in des_excl_map.items():
-            if e_id not in curr_excl_map:
-                continue
-            curr_excl = curr_excl_map[e_id]
-            e_diff = ExclusionDiff(
-                id=e_id,
-                current_expression=curr_excl.expression,
-                desired_expression=des_excl.expression,
-                current_description=curr_excl.description,
-                desired_description=des_excl.description,
-                current_rule_id=curr_excl.rule_id,
-                desired_rule_id=des_excl.rule_id,
-                current_ruleset_id=curr_excl.ruleset_id,
-                desired_ruleset_id=des_excl.ruleset_id,
-            )
-            if e_diff.has_changes:
-                exclusions_to_update.append(e_diff)
+
+        for des_excl in desired.exclusions:
+            curr_match: ManagedExclusion | None = None
+            if des_excl.id in curr_by_id:
+                curr_match = curr_by_id[des_excl.id]
+            elif des_excl.description and des_excl.description in curr_by_desc:
+                curr_match = curr_by_desc[des_excl.description]
+
+            if curr_match is None:
+                exclusions_to_create.append(des_excl)
+            else:
+                matched_curr_ids.add(curr_match.id)
+                e_diff = ExclusionDiff(
+                    id=curr_match.id,
+                    current_expression=curr_match.expression,
+                    desired_expression=des_excl.expression,
+                    current_description=curr_match.description,
+                    desired_description=des_excl.description,
+                    current_rule_id=curr_match.rule_id,
+                    desired_rule_id=des_excl.rule_id,
+                    current_ruleset_id=curr_match.ruleset_id,
+                    desired_ruleset_id=des_excl.ruleset_id,
+                )
+                if e_diff.has_changes:
+                    exclusions_to_update.append(e_diff)
+
+        exclusions_to_delete: list[ManagedExclusion] = [
+            e for e in current.exclusions if e.id not in matched_curr_ids
+        ]
 
         return ReconciliationDiff(
             deployment_diffs=tuple(deployment_diffs),
@@ -258,11 +265,21 @@ class GitOpsReconciler:
             port.delete_exclusion(excl.id)
 
         # Apply updates
-        des_excl_map = {e.id: e for e in desired.exclusions}
         for u_diff in reconcile_diff.exclusions_to_update:
-            if u_diff.has_changes and u_diff.id in des_excl_map:
-                logger.info("Updated exclusion '%s' in tenant", u_diff.id)
-                port.update_exclusion(des_excl_map[u_diff.id])
+            if u_diff.has_changes:
+                des_match = next(
+                    (
+                        e
+                        for e in desired.exclusions
+                        if e.id == u_diff.id
+                        or (e.description and e.description == u_diff.desired_description)
+                    ),
+                    None,
+                )
+                if des_match is not None:
+                    target_excl = dataclasses.replace(des_match, id=u_diff.id)
+                    logger.info("Updated exclusion '%s' in tenant", u_diff.id)
+                    port.update_exclusion(target_excl)
 
         # Apply creations
         for excl in reconcile_diff.exclusions_to_create:

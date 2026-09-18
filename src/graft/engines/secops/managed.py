@@ -1,4 +1,5 @@
 import logging
+from typing import cast
 
 from graft.core.models.managed import (
     ManagedDeployment,
@@ -205,6 +206,41 @@ class SecOpsManagedAdapter(ManagedEnginePort):
             if not ex_page_token:
                 break
 
+        # Attempt bulk fetch of refinement deployments
+        deployments_by_refinement: dict[str, dict[str, object]] = {}
+        dep_ref_page_token: str | None = None
+        while True:
+            dep_ref_params: dict[str, str] = {"pageSize": "200"}
+            if dep_ref_page_token:
+                dep_ref_params["pageToken"] = dep_ref_page_token
+            try:
+                dep_ref_resp = self._client.request(
+                    "GET",
+                    ":listAllFindingsRefinementDeployments",
+                    params=dep_ref_params,
+                    api_version="v1alpha",
+                )
+            except Exception as exc:
+                logger.debug("Bulk list findings refinement deployments not available: %s", exc)
+                break
+
+            raw_ref_deps = dep_ref_resp.get("allFindingsRefinementDeployments") or dep_ref_resp.get(
+                "findingsRefinementDeployments", []
+            )
+            if isinstance(raw_ref_deps, list) and raw_ref_deps:
+                for d in raw_ref_deps:
+                    if isinstance(d, dict):
+                        d_name = str(d.get("name", ""))
+                        parts = d_name.split("/")
+                        if "findingsRefinements" in parts:
+                            f_idx = parts.index("findingsRefinements") + 1
+                            if f_idx < len(parts):
+                                deployments_by_refinement[parts[f_idx]] = d
+            next_ref_dep_token = dep_ref_resp.get("nextPageToken")
+            dep_ref_page_token = str(next_ref_dep_token) if next_ref_dep_token else None
+            if not dep_ref_page_token:
+                break
+
         exclusions: list[ManagedExclusion] = []
         for raw_ex in raw_exclusions:
             name_res = str(raw_ex.get("name", ""))
@@ -212,18 +248,47 @@ class SecOpsManagedAdapter(ManagedEnginePort):
             desc = str(raw_ex.get("displayName", ""))
             query = str(raw_ex.get("query", ""))
 
-            applied_rules = raw_ex.get("appliedDetectionRules")
-            rule_id: str | None = None
-            if isinstance(applied_rules, list) and applied_rules:
-                rule_id = str(applied_rules[0])
+            dep_data = deployments_by_refinement.get(excl_id)
+            if dep_data is None:
+                try:
+                    dep_resp = self._client.request(
+                        "GET", f"findingsRefinements/{excl_id}/deployment", api_version="v1alpha"
+                    )
+                    if isinstance(dep_resp, dict):
+                        dep_data = dep_resp
+                except Exception as exc:
+                    logger.debug("Failed fetching deployment for refinement '%s': %s", excl_id, exc)
 
-            applied_curated = raw_ex.get("appliedCuratedRuleSets")
+            if dep_data and dep_data.get("archived") is True:
+                continue
+
+            rule_id: str | None = None
             ruleset_id_ex: str | None = None
-            if isinstance(applied_curated, list) and applied_curated:
-                first_curated = str(applied_curated[0])
-                ruleset_id_ex = (
-                    first_curated.split("/")[-1] if "/" in first_curated else first_curated
-                )
+
+            if dep_data and isinstance(dep_data.get("detectionExclusionApplication"), dict):
+                app = cast(dict[str, object], dep_data["detectionExclusionApplication"])
+                curated_sets = app.get("curatedRuleSets")
+                if isinstance(curated_sets, list) and curated_sets:
+                    first_curated = str(curated_sets[0])
+                    ruleset_id_ex = (
+                        first_curated.split("/")[-1] if "/" in first_curated else first_curated
+                    )
+                rules_list = app.get("rules")
+                if isinstance(rules_list, list) and rules_list:
+                    first_rule = str(rules_list[0])
+                    rule_id = first_rule.split("/")[-1] if "/" in first_rule else first_rule
+
+            if not rule_id:
+                applied_rules = raw_ex.get("appliedDetectionRules")
+                if isinstance(applied_rules, list) and applied_rules:
+                    rule_id = str(applied_rules[0])
+            if not ruleset_id_ex:
+                applied_curated = raw_ex.get("appliedCuratedRuleSets")
+                if isinstance(applied_curated, list) and applied_curated:
+                    first_curated = str(applied_curated[0])
+                    ruleset_id_ex = (
+                        first_curated.split("/")[-1] if "/" in first_curated else first_curated
+                    )
 
             exclusions.append(
                 ManagedExclusion(
@@ -293,6 +358,21 @@ class SecOpsManagedAdapter(ManagedEnginePort):
             "query": exclusion.expression,
             "type": "DETECTION_EXCLUSION",
         }
+        logger.info("Creating findings refinement '%s' (%s)", exclusion.id, exclusion.description)
+        resp = self._client.request(
+            "POST",
+            "findingsRefinements",
+            body=body,
+            api_version="v1alpha",
+        )
+        name_res = str(resp.get("name", ""))
+        created_id = name_res.split("/")[-1] if "/" in name_res else exclusion.id
+
+        dep_body: dict[str, object] = {
+            "enabled": True,
+            "archived": False,
+        }
+        app: dict[str, list[str]] = {}
         if exclusion.ruleset_id:
             cat = self._category_cache.get(exclusion.ruleset_id, "-")
             curated_res = (
@@ -300,25 +380,45 @@ class SecOpsManagedAdapter(ManagedEnginePort):
                 f"instances/{self._client._config.instance_id}/curatedRuleSetCategories/{cat}/"
                 f"curatedRuleSets/{exclusion.ruleset_id}"
             )
-            body["appliedCuratedRuleSets"] = [curated_res]
+            app["curatedRuleSets"] = [curated_res]
         if exclusion.rule_id:
-            body["appliedDetectionRules"] = [exclusion.rule_id]
+            rule_res = (
+                f"projects/{self._client._config.project}/locations/{self._client._config.location}/"
+                f"instances/{self._client._config.instance_id}/rules/{exclusion.rule_id}"
+            )
+            app["rules"] = [rule_res]
+        if app:
+            dep_body["detectionExclusionApplication"] = app
 
-        logger.info("Creating findings refinement exclusion '%s'", exclusion.id)
+        logger.info("Configuring findings refinement deployment for '%s'", created_id)
         self._client.request(
-            "POST",
-            "findingsRefinements",
-            body=body,
-            params={"findings_refinement_id": exclusion.id},
+            "PATCH",
+            f"findingsRefinements/{created_id}/deployment",
+            body=dep_body,
+            params={"updateMask": "enabled,archived,detectionExclusionApplication"},
             api_version="v1alpha",
         )
-        return exclusion.id
+        return created_id
 
     def update_exclusion(self, exclusion: ManagedExclusion) -> None:
         body: dict[str, object] = {
             "displayName": exclusion.description,
             "query": exclusion.expression,
         }
+        logger.info("Updating findings refinement '%s'", exclusion.id)
+        self._client.request(
+            "PATCH",
+            f"findingsRefinements/{exclusion.id}",
+            body=body,
+            params={"updateMask": "displayName,query"},
+            api_version="v1alpha",
+        )
+
+        dep_body: dict[str, object] = {
+            "enabled": True,
+            "archived": False,
+        }
+        app: dict[str, list[str]] = {}
         if exclusion.ruleset_id:
             cat = self._category_cache.get(exclusion.ruleset_id, "-")
             curated_res = (
@@ -326,26 +426,35 @@ class SecOpsManagedAdapter(ManagedEnginePort):
                 f"instances/{self._client._config.instance_id}/curatedRuleSetCategories/{cat}/"
                 f"curatedRuleSets/{exclusion.ruleset_id}"
             )
-            body["appliedCuratedRuleSets"] = [curated_res]
+            app["curatedRuleSets"] = [curated_res]
         if exclusion.rule_id:
-            body["appliedDetectionRules"] = [exclusion.rule_id]
+            rule_res = (
+                f"projects/{self._client._config.project}/locations/{self._client._config.location}/"
+                f"instances/{self._client._config.instance_id}/rules/{exclusion.rule_id}"
+            )
+            app["rules"] = [rule_res]
+        if app:
+            dep_body["detectionExclusionApplication"] = app
 
-        logger.info("Updating findings refinement exclusion '%s'", exclusion.id)
+        logger.info("Updating findings refinement deployment for '%s'", exclusion.id)
         self._client.request(
             "PATCH",
-            f"findingsRefinements/{exclusion.id}",
-            body=body,
-            params={
-                "update_mask": "displayName,query,appliedCuratedRuleSets,appliedDetectionRules"
-            },
+            f"findingsRefinements/{exclusion.id}/deployment",
+            body=dep_body,
+            params={"updateMask": "enabled,archived,detectionExclusionApplication"},
             api_version="v1alpha",
         )
 
     def delete_exclusion(self, exclusion_id: str) -> None:
-        logger.info("Deleting findings refinement exclusion '%s'", exclusion_id)
+        logger.info(
+            "Retiring findings refinement exclusion '%s' by disabling and archiving deployment",
+            exclusion_id,
+        )
         self._client.request(
-            "DELETE",
-            f"findingsRefinements/{exclusion_id}",
+            "PATCH",
+            f"findingsRefinements/{exclusion_id}/deployment",
+            body={"enabled": False, "archived": True},
+            params={"updateMask": "enabled,archived"},
             api_version="v1alpha",
         )
 

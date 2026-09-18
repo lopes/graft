@@ -134,11 +134,38 @@ def test_fetch_managed_state_success(
                     "name": f"{INSTANCE_BASE}/findingsRefinements/ex-backup-service-account",
                     "displayName": "Exclude scheduled backup",
                     "query": '$e.principal.user.userid != "svc_backup"',
-                    "appliedCuratedRuleSets": [
-                        f"{INSTANCE_BASE}/curatedRuleSetCategories/cloud/curatedRuleSets/rs-cloud-threats"
-                    ],
-                    "appliedDetectionRules": ["ru_cloud_iam_privilege_escalation"],
-                }
+                },
+                {
+                    "name": f"{INSTANCE_BASE}/findingsRefinements/ex-archived-rule",
+                    "displayName": "Archived exclusion",
+                    "query": '$e.principal.user.userid = "retired"',
+                },
+            ]
+        },
+    )
+    dep_name_1 = f"{INSTANCE_BASE}/findingsRefinements/ex-backup-service-account/deployment"
+    dep_name_2 = f"{INSTANCE_BASE}/findingsRefinements/ex-archived-rule/deployment"
+    curated_rs = f"{INSTANCE_BASE}/curatedRuleSetCategories/cloud/curatedRuleSets/rs-cloud-threats"
+    mock_client.set_response(
+        "GET",
+        ":listAllFindingsRefinementDeployments",
+        {
+            "allFindingsRefinementDeployments": [
+                {
+                    "name": dep_name_1,
+                    "enabled": True,
+                    "archived": False,
+                    "detectionExclusionApplication": {
+                        "curatedRuleSets": [curated_rs],
+                        "rules": [f"{INSTANCE_BASE}/rules/ru_cloud_iam_privilege_escalation"],
+                    },
+                },
+                {
+                    "name": dep_name_2,
+                    "enabled": False,
+                    "archived": True,
+                    "detectionExclusionApplication": {},
+                },
             ]
         },
     )
@@ -154,6 +181,7 @@ def test_fetch_managed_state_success(
     assert rs1.deployments[0] == ManagedDeployment(type="PRECISE", enabled=True, alerting=True)
     assert rs1.deployments[1] == ManagedDeployment(type="BROAD", enabled=False, alerting=False)
 
+    # Only active, non-archived exclusions should be returned
     assert len(state.exclusions) == 1
     ex = state.exclusions[0]
     assert ex.id == "ex-backup-service-account"
@@ -187,6 +215,15 @@ def test_set_ruleset_deployment(
 
 
 def test_create_exclusion(mock_client: MockSecOpsClient, adapter: SecOpsManagedAdapter) -> None:
+    mock_client.set_response(
+        "POST",
+        "findingsRefinements",
+        {
+            "name": f"{INSTANCE_BASE}/findingsRefinements/fr_server_generated_uuid",
+            "displayName": "Ignore test IP",
+            "query": '$e.principal.ip != "10.0.0.1"',
+        },
+    )
     exclusion = ManagedExclusion(
         id="ex-new",
         rule_id="ru_iam",
@@ -196,17 +233,30 @@ def test_create_exclusion(mock_client: MockSecOpsClient, adapter: SecOpsManagedA
     )
     result_id = adapter.create_exclusion(exclusion)
 
-    assert result_id == "ex-new"
-    assert len(mock_client.calls) == 1
-    call = mock_client.calls[0]
-    assert call["method"] == "POST"
-    assert call["path"] == "findingsRefinements"
-    assert call["params"] == {"findings_refinement_id": "ex-new"}
-    assert call["body"] is not None
-    assert call["body"]["displayName"] == "Ignore test IP"
-    assert call["body"]["query"] == '$e.principal.ip != "10.0.0.1"'
-    assert call["body"]["appliedDetectionRules"] == ["ru_iam"]
-    assert "rs-cloud-threats" in str(call["body"]["appliedCuratedRuleSets"])
+    assert result_id == "fr_server_generated_uuid"
+    assert len(mock_client.calls) == 2
+
+    # Call 1: create refinement
+    call1 = mock_client.calls[0]
+    assert call1["method"] == "POST"
+    assert call1["path"] == "findingsRefinements"
+    assert call1["params"] is None
+    assert call1["body"] is not None
+    assert call1["body"]["displayName"] == "Ignore test IP"
+    assert call1["body"]["query"] == '$e.principal.ip != "10.0.0.1"'
+    assert call1["body"]["type"] == "DETECTION_EXCLUSION"
+
+    # Call 2: patch refinement deployment
+    call2 = mock_client.calls[1]
+    assert call2["method"] == "PATCH"
+    assert call2["path"] == "findingsRefinements/fr_server_generated_uuid/deployment"
+    assert call2["params"] == {"updateMask": "enabled,archived,detectionExclusionApplication"}
+    assert call2["body"] is not None
+    assert call2["body"]["enabled"] is True
+    assert call2["body"]["archived"] is False
+    app = call2["body"]["detectionExclusionApplication"]
+    assert "rs-cloud-threats" in str(app["curatedRuleSets"])
+    assert "ru_iam" in str(app["rules"])
 
 
 def test_update_exclusion(mock_client: MockSecOpsClient, adapter: SecOpsManagedAdapter) -> None:
@@ -219,16 +269,27 @@ def test_update_exclusion(mock_client: MockSecOpsClient, adapter: SecOpsManagedA
     )
     adapter.update_exclusion(exclusion)
 
-    assert len(mock_client.calls) == 1
-    call = mock_client.calls[0]
-    assert call["method"] == "PATCH"
-    assert call["path"] == "findingsRefinements/ex-existing"
-    assert call["params"] == {
-        "update_mask": "displayName,query,appliedCuratedRuleSets,appliedDetectionRules"
-    }
-    assert call["body"] is not None
-    assert call["body"]["displayName"] == "Updated IP"
-    assert call["body"]["query"] == '$e.principal.ip != "10.0.0.2"'
+    assert len(mock_client.calls) == 2
+
+    # Call 1: patch refinement
+    call1 = mock_client.calls[0]
+    assert call1["method"] == "PATCH"
+    assert call1["path"] == "findingsRefinements/ex-existing"
+    assert call1["params"] == {"updateMask": "displayName,query"}
+    assert call1["body"] is not None
+    assert call1["body"]["displayName"] == "Updated IP"
+    assert call1["body"]["query"] == '$e.principal.ip != "10.0.0.2"'
+
+    # Call 2: patch deployment
+    call2 = mock_client.calls[1]
+    assert call2["method"] == "PATCH"
+    assert call2["path"] == "findingsRefinements/ex-existing/deployment"
+    assert call2["params"] == {"updateMask": "enabled,archived,detectionExclusionApplication"}
+    assert call2["body"] is not None
+    assert call2["body"]["enabled"] is True
+    assert call2["body"]["archived"] is False
+    app = call2["body"]["detectionExclusionApplication"]
+    assert "rs-cloud-threats" in str(app["curatedRuleSets"])
 
 
 def test_delete_exclusion(mock_client: MockSecOpsClient, adapter: SecOpsManagedAdapter) -> None:
@@ -236,8 +297,11 @@ def test_delete_exclusion(mock_client: MockSecOpsClient, adapter: SecOpsManagedA
 
     assert len(mock_client.calls) == 1
     call = mock_client.calls[0]
-    assert call["method"] == "DELETE"
-    assert call["path"] == "findingsRefinements/ex-old"
+    # Delete in SecOps archives the refinement deployment
+    assert call["method"] == "PATCH"
+    assert call["path"] == "findingsRefinements/ex-old/deployment"
+    assert call["params"] == {"updateMask": "enabled,archived"}
+    assert call["body"] == {"enabled": False, "archived": True}
 
 
 def test_apply_managed_state_orchestration(

@@ -185,6 +185,69 @@ def test_diff_exclusions_lifecycle() -> None:
     assert u_diff.has_changes is True
 
 
+def test_diff_exclusions_match_by_description_when_id_differs() -> None:
+    ex_tenant = ManagedExclusion(
+        id="fr_1234",
+        rule_id=None,
+        ruleset_id="rs-1",
+        expression='$e.principal.user.userid != "svc1"',
+        description="Exclude service account",
+    )
+    ex_git = ManagedExclusion(
+        id="my_exclusion",
+        rule_id=None,
+        ruleset_id="rs-1",
+        expression='$e.principal.user.userid != "svc1"',
+        description="Exclude service account",
+    )
+
+    current = ManagedState(rulesets=(), exclusions=(ex_tenant,))
+    desired = ManagedState(rulesets=(), exclusions=(ex_git,))
+
+    reconciler = GitOpsReconciler()
+    diff = reconciler.diff(current=current, desired=desired)
+
+    assert diff.has_changes is False
+    assert len(diff.exclusions_to_create) == 0
+    assert len(diff.exclusions_to_delete) == 0
+    assert len(diff.exclusions_to_update) == 0
+
+
+def test_diff_exclusions_update_matches_by_description_uses_tenant_id() -> None:
+    ex_tenant = ManagedExclusion(
+        id="fr_1234",
+        rule_id=None,
+        ruleset_id="rs-1",
+        expression='$e.principal.user.userid != "svc1"',
+        description="Exclude service account",
+    )
+    ex_git = ManagedExclusion(
+        id="my_exclusion",
+        rule_id=None,
+        ruleset_id="rs-1",
+        expression='$e.principal.user.userid != "svc1_updated"',
+        description="Exclude service account",
+    )
+
+    current = ManagedState(rulesets=(), exclusions=(ex_tenant,))
+    desired = ManagedState(rulesets=(), exclusions=(ex_git,))
+
+    reconciler = GitOpsReconciler()
+    diff = reconciler.diff(current=current, desired=desired)
+
+    assert diff.has_changes is True
+    assert len(diff.exclusions_to_update) == 1
+    u_diff = diff.exclusions_to_update[0]
+    assert u_diff.id == "fr_1234"
+    assert u_diff.desired_expression == '$e.principal.user.userid != "svc1_updated"'
+
+    engine = RecordingMockManagedEngine(initial_state=current)
+    reconciler.apply(desired=desired, port=engine)
+    assert len(engine.updated_exclusions) == 1
+    assert engine.updated_exclusions[0].id == "fr_1234"
+    assert engine.updated_exclusions[0].expression == '$e.principal.user.userid != "svc1_updated"'
+
+
 def test_diff_untracked_and_retired_rulesets() -> None:
     rs_live_only = ManagedRuleSet(
         id="rs-live",
