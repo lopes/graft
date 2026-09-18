@@ -28,11 +28,13 @@ graft <engine> [subcommands...]
 ```
 
 For example, the Google SecOps engine mounts:
-- `graft secops verify`: Compiles YARA-L logic pre-merge via `:verifyRuleText`.
-- `graft secops test`: Executes quarantined synthetic UDM replay tests.
-- `graft secops managed diff`: Compares desired `managed.yaml` against live Curated Rule Sets.
-- `graft secops managed apply`: Applies desired managed configuration to the tenant.
-- `graft secops managed pull`: Serializes live tenant state to local YAML manifest.
+- `graft secops new <name>`: Bootstrap a new SecOps YARA-L rule envelope.
+- `graft secops verify [paths...]`: Lint locally and dry-run YARA-L syntax via Chronicle `:verifyRuleText`.
+- `graft secops test [paths...]`: Execute synthetic UDM replay tests in isolated staging quarantine.
+- `graft secops diff`: Compute delta between Git and SecOps tenant (supports `--target custom|managed|all` and `--all` for full catalog drift).
+- `graft secops apply`: Apply desired Git state to SecOps tenant (supports `--target custom|managed|all` and `--all` for full convergence).
+- `graft secops pull`: Pull detection rules and managed state from SecOps tenant to local repository.
+- `graft secops managed {diff,apply,pull}`: Granular commands for Google Curated Rule Sets and exclusions.
 
 ---
 

@@ -75,7 +75,25 @@ When Graft detects that staging and production resolve to the same instance path
 
 ---
 
-## 4. Graceful Degradation in Local & CI Environments
+## 4. CLI Invocations & Selective Testing
+
+```bash
+# Run replay tests across all custom rules
+graft secops test
+
+# Test only rules modified in the current Git branch or working tree (ideal for fast PRs)
+graft secops test --changed-only
+
+# Target a specific rule file
+graft secops test rules/secops/custom/workspace_nrd_possible_phishing.yaml
+
+# Enforce hard failure if staging credentials are not configured (required in CI/CD)
+graft secops test --require-staging
+```
+
+---
+
+## 5. Graceful Degradation in Local & CI Environments
 
 Developers without Google Cloud credentials or working offline must not be blocked from running local test suites. Graft enforces a strict graceful degradation contract:
 

@@ -21,7 +21,7 @@ flowchart LR
 View an immediate ASCII breakdown of covered techniques, associated tactics, and rule counts:
 
 ```bash
-graft export matrix --format=table
+graft export matrix --format table
 ```
 
 **Example Output:**
@@ -41,7 +41,9 @@ T1566.002       Spearphishing Link               1       workspace_nrd_possible_
 Generate JSON layers adhering to the MITRE ATT&CK Navigator specification (version 4.5) with coverage scores, color gradients, and rule annotations:
 
 ```bash
-graft export matrix --format=navigator --out layers/graft_coverage.json
+graft export matrix --format navigator --out layers/graft_coverage.json
+# or directly via the navigator alias:
+graft export navigator --out layers/graft_coverage.json
 ```
 
 Import `layers/graft_coverage.json` directly into the [MITRE ATT&CK Navigator Web App](https://mitre-attack.github.io/attack-navigator/) to visualize detection coverage heatmaps, identify visibility gaps, and present metrics to stakeholders.
