@@ -299,32 +299,32 @@ Because local developer workstations cannot generate GitHub-signed OIDC assertio
 ### 2. Local Workstation: Direct GCP Authentication
 Without 3rd-party client libraries, local authentication must be done directly against GCP via one of two options:
 
-#### Option 1: Google Cloud CLI (`gcloud`) Service Account Impersonation
+#### Option 1: Google Cloud CLI (`gcloud`) Service Account Impersonation (Recommended Best Practice)
 When `google-cloud-cli` is installed locally, Graft's `SecOpsAuthResolver` executes:
 ```bash
 gcloud auth print-access-token --impersonate-service-account=<SA_EMAIL>
 ```
-- **Prerequisites:** `google-cloud-cli` installed (`sudo apt install -y google-cloud-cli`) and authenticated (`gcloud auth login`).
-- **IAM Requirement:** Your Google user account must have `roles/iam.serviceAccountTokenCreator` on the automation service account (configured in Section 2, Step 4).
-- **Advantage:** Automated and maintenance-free; fresh 1-hour access tokens are minted on demand.
+- **How It Works:** When you authenticate once with `gcloud auth login`, GCP issues a long-lived **refresh token** stored securely in your local user profile (`~/.config/gcloud/`).
+- **Is It Permanent?** Yes. Unlike access tokens, `gcloud`'s underlying refresh token does not expire after an hour; it remains persistent across terminal sessions (subject only to corporate SSO/Cloud Identity reauth policies, typically 14 to 30 days, or manual revocation). Whenever Graft executes a command, `gcloud` automatically uses the refresh token to call the GCP IAM Credentials API (`generateAccessToken`), minting fresh, short-lived 1-hour access tokens in the background on demand.
+- **Why It Is Best Practice:**
+  - **Zero Manual Overhead:** You never have to copy-paste tokens or edit `.env` files every hour.
+  - **Enhanced Security:** No raw OAuth bearer tokens are saved in plaintext on disk or shell history.
+  - **Auditable & Revocable:** Impersonation events are logged in GCP Cloud Audit Logs, and access can be revoked instantly in IAM.
+- **Practicality Caveat:** While architecturally best-practice, Option 1 requires `gcloud` installed locally on the developer workstation and requires the user to hold `roles/iam.serviceAccountTokenCreator` on the automation service account. On locked-down corporate workstations, minimal Docker containers, or environments where installing external CLIs is restricted, this can be cumbersome.
 
-#### Option 2: Explicit GCP Bearer Token (`GRAFT_SECOPS_TOKEN` or `GRAFT_GCP_TOKEN`)
-If `gcloud` is not installed on your local machine (e.g. corporate machines without `google-cloud-cli` or containerized environments), you can pass an impersonated token directly via the environment:
+#### Option 2: Explicit GCP Bearer Token (`GRAFT_SECOPS_TOKEN` or `GRAFT_GCP_TOKEN`) (Fast Fallback)
+If `gcloud` is not installed on your local machine (e.g. minimal environments, remote jumpboxes, or quick ad-hoc operations), you can pass an impersonated token directly via the environment or `.env` file:
 ```bash
 export GRAFT_SECOPS_TOKEN="<access_token>"
-# or
-export GRAFT_GCP_TOKEN="<access_token>"
-```
-Or define it inside your local `.env` file:
-```bash
+# or inside .env:
 GRAFT_SECOPS_TOKEN="<access_token>"
 ```
 - **How to Generate:** Run the impersonation command in Google Cloud Shell or any machine with `gcloud` access:
   ```bash
   gcloud auth print-access-token --impersonate-service-account="${SA_EMAIL}"
   ```
-- **Advantage:** Zero local CLI dependencies or packages needed on your workstation.
-- **Lifetime:** Standard GCP access tokens are valid for 1 hour (3,600 seconds).
+- **Ephemerality Warning:** Raw OAuth 2.0 access tokens (`ya29...`) are **strictly ephemeral** and expire after **1 hour (3,600 seconds)**. Once expired, API requests will immediately fail with `401 Unauthorized` (`Request had invalid authentication credentials`). You must re-run `gcloud auth print-access-token` and paste the new token into `.env`.
+- **When to Use:** Ideal for rapid verification, temporary operator sessions, or lightweight environments where installing the full Google Cloud SDK is impractical.
 
 ### 3. Token Grammar Reference
 To avoid credential ambiguity across multiple platforms and engines, Graft enforces consistent token naming conventions:
