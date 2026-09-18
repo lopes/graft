@@ -19,15 +19,71 @@ class SecOpsManagedAdapter(ManagedEnginePort):
 
     def fetch_managed_state(self) -> ManagedState:
         logger.info("Fetching curated rulesets from Google SecOps API")
-        response = self._client.request("GET", "curatedRuleSetCategories/-/curatedRuleSets")
-        raw_rulesets = response.get("curatedRuleSets", [])
-        if not isinstance(raw_rulesets, list):
-            raw_rulesets = []
+        raw_rulesets: list[dict[str, object]] = []
+        page_token: str | None = None
+        while True:
+            params: dict[str, str] = {"pageSize": "100"}
+            if page_token:
+                params["pageToken"] = page_token
+            response = self._client.request(
+                "GET",
+                "curatedRuleSetCategories/-/curatedRuleSets",
+                params=params,
+                api_version="v1alpha",
+            )
+            items = response.get("curatedRuleSets", [])
+            if isinstance(items, list):
+                for item in items:
+                    if isinstance(item, dict):
+                        raw_rulesets.append(item)
+            next_token = response.get("nextPageToken")
+            page_token = str(next_token) if next_token else None
+            if not page_token:
+                break
+
+        # Attempt to fetch all deployments in bulk across all rulesets
+        deployments_by_ruleset: dict[str, list[ManagedDeployment]] = {}
+        dep_page_token: str | None = None
+        while True:
+            dep_params: dict[str, str] = {"pageSize": "200"}
+            if dep_page_token:
+                dep_params["pageToken"] = dep_page_token
+            dep_resp = self._client.request(
+                "GET",
+                "curatedRuleSetCategories/-/curatedRuleSets/-/curatedRuleSetDeployments",
+                params=dep_params,
+                api_version="v1alpha",
+            )
+            raw_deps = dep_resp.get("curatedRuleSetDeployments", [])
+            if isinstance(raw_deps, list) and raw_deps:
+                for dep in raw_deps:
+                    if not isinstance(dep, dict):
+                        continue
+                    dep_name = str(dep.get("name", ""))
+                    parts = dep_name.split("/")
+                    if "curatedRuleSets" in parts and "curatedRuleSetDeployments" in parts:
+                        rs_id = parts[parts.index("curatedRuleSets") + 1]
+                    else:
+                        continue
+                    precision_raw = str(dep.get("precision", "")).upper()
+                    if precision_raw:
+                        dep_type = precision_raw
+                    else:
+                        dep_type = "PRECISE" if dep_name.lower().endswith("/precise") else "BROAD"
+                    deployments_by_ruleset.setdefault(rs_id, []).append(
+                        ManagedDeployment(
+                            type=dep_type,
+                            enabled=bool(dep.get("enabled", False)),
+                            alerting=bool(dep.get("alerting", False)),
+                        )
+                    )
+            next_dep_token = dep_resp.get("nextPageToken")
+            dep_page_token = str(next_dep_token) if next_dep_token else None
+            if not dep_page_token:
+                break
 
         rulesets: list[ManagedRuleSet] = []
         for raw in raw_rulesets:
-            if not isinstance(raw, dict):
-                continue
             name_resource = str(raw.get("name", ""))
             display_name = str(raw.get("displayName", ""))
 
@@ -46,34 +102,45 @@ class SecOpsManagedAdapter(ManagedEnginePort):
 
             self._category_cache[ruleset_id] = category
 
-            # Fetch deployments for this curated ruleset
-            deployments_path = (
-                f"curatedRuleSetCategories/{category}/curatedRuleSets/"
-                f"{ruleset_id}/curatedRuleSetDeployments"
-            )
-            deployments_resp = self._client.request("GET", deployments_path)
-            raw_deployments = deployments_resp.get("curatedRuleSetDeployments", [])
-
-            deployments: list[ManagedDeployment] = []
-            if isinstance(raw_deployments, list):
-                for dep in raw_deployments:
-                    if not isinstance(dep, dict):
-                        continue
-                    dep_name = str(dep.get("name", ""))
-                    dep_type = "PRECISE" if dep_name.lower().endswith("/precise") else "BROAD"
-                    deployments.append(
-                        ManagedDeployment(
-                            type=dep_type,
-                            enabled=bool(dep.get("enabled", False)),
-                            alerting=bool(dep.get("alerting", False)),
+            # Check if deployments were fetched in bulk
+            deployments = list(deployments_by_ruleset.get(ruleset_id, []))
+            if not deployments:
+                # Fallback: per-ruleset fetch (e.g. In mock environments)
+                deployments_path = (
+                    f"curatedRuleSetCategories/{category}/curatedRuleSets/"
+                    f"{ruleset_id}/curatedRuleSetDeployments"
+                )
+                deployments_resp = self._client.request(
+                    "GET", deployments_path, api_version="v1alpha"
+                )
+                raw_deployments = deployments_resp.get("curatedRuleSetDeployments", [])
+                if isinstance(raw_deployments, list):
+                    for dep in raw_deployments:
+                        if not isinstance(dep, dict):
+                            continue
+                        dep_name = str(dep.get("name", ""))
+                        precision_raw = str(dep.get("precision", "")).upper()
+                        if precision_raw:
+                            dep_type = precision_raw
+                        else:
+                            dep_type = (
+                                "PRECISE" if dep_name.lower().endswith("/precise") else "BROAD"
+                            )
+                        deployments.append(
+                            ManagedDeployment(
+                                type=dep_type,
+                                enabled=bool(dep.get("enabled", False)),
+                                alerting=bool(dep.get("alerting", False)),
+                            )
                         )
-                    )
 
             if not deployments:
                 deployments = [
                     ManagedDeployment(type="PRECISE", enabled=False, alerting=False),
                     ManagedDeployment(type="BROAD", enabled=False, alerting=False),
                 ]
+
+            deployments.sort(key=lambda d: 0 if d.type == "PRECISE" else 1)
 
             rulesets.append(
                 ManagedRuleSet(
@@ -86,41 +153,57 @@ class SecOpsManagedAdapter(ManagedEnginePort):
 
         # Fetch exclusions (findingsRefinements)
         logger.info("Fetching findings refinements from Google SecOps API")
-        excl_resp = self._client.request("GET", "findingsRefinements")
-        raw_exclusions = excl_resp.get("findingsRefinements", [])
+        raw_exclusions: list[dict[str, object]] = []
+        ex_page_token: str | None = None
+        while True:
+            ex_params: dict[str, str] = {}
+            if ex_page_token:
+                ex_params["pageToken"] = ex_page_token
+            excl_resp = self._client.request(
+                "GET",
+                "findingsRefinements",
+                params=ex_params if ex_params else None,
+                api_version="v1alpha",
+            )
+            items = excl_resp.get("findingsRefinements", [])
+            if isinstance(items, list):
+                for it in items:
+                    if isinstance(it, dict):
+                        raw_exclusions.append(it)
+            next_ex_token = excl_resp.get("nextPageToken")
+            ex_page_token = str(next_ex_token) if next_ex_token else None
+            if not ex_page_token:
+                break
+
         exclusions: list[ManagedExclusion] = []
+        for raw_ex in raw_exclusions:
+            name_res = str(raw_ex.get("name", ""))
+            excl_id = name_res.split("/")[-1] if "/" in name_res else name_res
+            desc = str(raw_ex.get("displayName", ""))
+            query = str(raw_ex.get("query", ""))
 
-        if isinstance(raw_exclusions, list):
-            for raw_ex in raw_exclusions:
-                if not isinstance(raw_ex, dict):
-                    continue
-                name_res = str(raw_ex.get("name", ""))
-                excl_id = name_res.split("/")[-1] if "/" in name_res else name_res
-                desc = str(raw_ex.get("displayName", ""))
-                query = str(raw_ex.get("query", ""))
+            applied_rules = raw_ex.get("appliedDetectionRules")
+            rule_id: str | None = None
+            if isinstance(applied_rules, list) and applied_rules:
+                rule_id = str(applied_rules[0])
 
-                applied_rules = raw_ex.get("appliedDetectionRules")
-                rule_id: str | None = None
-                if isinstance(applied_rules, list) and applied_rules:
-                    rule_id = str(applied_rules[0])
-
-                applied_curated = raw_ex.get("appliedCuratedRuleSets")
-                ruleset_id_ex: str | None = None
-                if isinstance(applied_curated, list) and applied_curated:
-                    first_curated = str(applied_curated[0])
-                    ruleset_id_ex = (
-                        first_curated.split("/")[-1] if "/" in first_curated else first_curated
-                    )
-
-                exclusions.append(
-                    ManagedExclusion(
-                        id=excl_id,
-                        rule_id=rule_id,
-                        ruleset_id=ruleset_id_ex,
-                        expression=query,
-                        description=desc,
-                    )
+            applied_curated = raw_ex.get("appliedCuratedRuleSets")
+            ruleset_id_ex: str | None = None
+            if isinstance(applied_curated, list) and applied_curated:
+                first_curated = str(applied_curated[0])
+                ruleset_id_ex = (
+                    first_curated.split("/")[-1] if "/" in first_curated else first_curated
                 )
+
+            exclusions.append(
+                ManagedExclusion(
+                    id=excl_id,
+                    rule_id=rule_id,
+                    ruleset_id=ruleset_id_ex,
+                    expression=query,
+                    description=desc,
+                )
+            )
 
         return ManagedState(
             rulesets=tuple(rulesets),
@@ -152,6 +235,7 @@ class SecOpsManagedAdapter(ManagedEnginePort):
             path,
             body={"enabled": enabled, "alerting": alerting},
             params={"update_mask": "enabled,alerting"},
+            api_version="v1alpha",
         )
 
     def create_exclusion(self, exclusion: ManagedExclusion) -> str:
@@ -177,6 +261,7 @@ class SecOpsManagedAdapter(ManagedEnginePort):
             "findingsRefinements",
             body=body,
             params={"findings_refinement_id": exclusion.id},
+            api_version="v1alpha",
         )
         return exclusion.id
 
@@ -204,11 +289,16 @@ class SecOpsManagedAdapter(ManagedEnginePort):
             params={
                 "update_mask": "displayName,query,appliedCuratedRuleSets,appliedDetectionRules"
             },
+            api_version="v1alpha",
         )
 
     def delete_exclusion(self, exclusion_id: str) -> None:
         logger.info("Deleting findings refinement exclusion '%s'", exclusion_id)
-        self._client.request("DELETE", f"findingsRefinements/{exclusion_id}")
+        self._client.request(
+            "DELETE",
+            f"findingsRefinements/{exclusion_id}",
+            api_version="v1alpha",
+        )
 
     def apply_managed_state(self, target_state: ManagedState) -> None:
         # Import lazily or at top level from core

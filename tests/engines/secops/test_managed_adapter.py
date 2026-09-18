@@ -37,6 +37,7 @@ class MockSecOpsClient(SecOpsClient):
         path: str,
         body: Mapping[str, object] | None = None,
         params: Mapping[str, str] | None = None,
+        api_version: str | None = None,
     ) -> dict[str, object]:
         self.calls.append(
             {
@@ -44,6 +45,7 @@ class MockSecOpsClient(SecOpsClient):
                 "path": path,
                 "body": dict(body) if body is not None else None,
                 "params": dict(params) if params is not None else None,
+                "api_version": api_version,
             }
         )
         key = f"{method.upper()} {path}"
@@ -291,3 +293,59 @@ def test_apply_managed_state_orchestration(
     assert len(patch_calls) == 1
     assert patch_calls[0]["path"] == expected_path
     assert patch_calls[0]["body"] == {"enabled": True, "alerting": True}
+
+
+def test_fetch_managed_state_bulk_deployments(
+    mock_client: MockSecOpsClient, adapter: SecOpsManagedAdapter
+) -> None:
+    mock_client.set_response(
+        "GET",
+        "curatedRuleSetCategories/-/curatedRuleSets",
+        {
+            "curatedRuleSets": [
+                {
+                    "name": (
+                        f"{INSTANCE_BASE}/curatedRuleSetCategories/cloud/curatedRuleSets/"
+                        "rs-bulk-test"
+                    ),
+                    "displayName": "Bulk Test Ruleset",
+                }
+            ]
+        },
+    )
+    mock_client.set_response(
+        "GET",
+        "curatedRuleSetCategories/-/curatedRuleSets/-/curatedRuleSetDeployments",
+        {
+            "curatedRuleSetDeployments": [
+                {
+                    "name": (
+                        f"{INSTANCE_BASE}/curatedRuleSetCategories/cloud/curatedRuleSets/"
+                        "rs-bulk-test/curatedRuleSetDeployments/precise"
+                    ),
+                    "precision": "PRECISE",
+                    "enabled": True,
+                    "alerting": True,
+                },
+                {
+                    "name": (
+                        f"{INSTANCE_BASE}/curatedRuleSetCategories/cloud/curatedRuleSets/"
+                        "rs-bulk-test/curatedRuleSetDeployments/broad"
+                    ),
+                    "precision": "BROAD",
+                    "enabled": False,
+                    "alerting": False,
+                },
+            ]
+        },
+    )
+    mock_client.set_response("GET", "findingsRefinements", {"findingsRefinements": []})
+
+    state = adapter.fetch_managed_state()
+
+    assert len(state.rulesets) == 1
+    rs = state.rulesets[0]
+    assert rs.id == "rs-bulk-test"
+    assert len(rs.deployments) == 2
+    assert rs.deployments[0] == ManagedDeployment(type="PRECISE", enabled=True, alerting=True)
+    assert rs.deployments[1] == ManagedDeployment(type="BROAD", enabled=False, alerting=False)

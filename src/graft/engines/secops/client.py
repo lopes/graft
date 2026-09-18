@@ -41,17 +41,27 @@ class SecOpsClient:
         self._base_delay_seconds = base_delay_seconds
         self._timeout_seconds = timeout_seconds
 
-    def _resolve_url(self, path: str, params: Mapping[str, str] | None = None) -> str:
+    def _resolve_url(
+        self,
+        path: str,
+        params: Mapping[str, str] | None = None,
+        api_version: str | None = None,
+    ) -> str:
+        base_url = (
+            f"https://{self._config.location}-chronicle.googleapis.com/{api_version}"
+            if api_version
+            else self._config.base_url
+        )
         if path.startswith("http://") or path.startswith("https://"):
             url = path
         elif path.startswith(":"):
-            url = f"{self._config.base_url}/{self._config.instance_path}{path}"
+            url = f"{base_url}/{self._config.instance_path}{path}"
         elif path.startswith("/"):
-            url = f"{self._config.base_url}{path}"
+            url = f"{base_url}{path}"
         elif path.startswith("projects/"):
-            url = f"{self._config.base_url}/{path}"
+            url = f"{base_url}/{path}"
         else:
-            url = f"{self._config.base_url}/{self._config.instance_path}/{path}"
+            url = f"{base_url}/{self._config.instance_path}/{path}"
 
         if params:
             query = urllib.parse.urlencode(dict(params))
@@ -66,8 +76,9 @@ class SecOpsClient:
         path: str,
         body: Mapping[str, object] | None = None,
         params: Mapping[str, str] | None = None,
+        api_version: str | None = None,
     ) -> dict[str, object]:
-        url = self._resolve_url(path, params)
+        url = self._resolve_url(path, params, api_version=api_version)
         if not (url.startswith("https://") or url.startswith("http://")):
             raise ValueError(f"Invalid URL scheme: {url}")
 
