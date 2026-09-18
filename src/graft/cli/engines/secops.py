@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import dataclasses
 import json
 import logging
 import sys
@@ -9,9 +10,13 @@ from typing import Literal
 
 from graft.cli.scaffold import scaffold_rule
 from graft.core.loader import load_rule_from_yaml
-from graft.core.reconciler import GitOpsReconciler
+from graft.core.models.managed import ManagedState
+from graft.core.models.rule import RuleEnvelope
+from graft.core.reconciler import CustomRuleReconciler, GitOpsReconciler
 from graft.engines.secops.client import SecOpsClient
+from graft.engines.secops.compiler import synthesize_yaral_rule
 from graft.engines.secops.config import SecOpsConfig
+from graft.engines.secops.deployer import SecOpsDeployerAdapter
 from graft.engines.secops.managed import SecOpsManagedAdapter
 from graft.engines.secops.managed_loader import (
     dump_managed_manifest_to_yaml,
@@ -20,6 +25,37 @@ from graft.engines.secops.managed_loader import (
 from graft.engines.secops.replay import SecOpsReplayAdapter
 
 logger = logging.getLogger("graft.cli.secops")
+
+
+def _load_custom_rules(custom_dir: Path = Path("rules/secops/custom")) -> tuple[RuleEnvelope, ...]:
+    rules: list[RuleEnvelope] = []
+    if custom_dir.is_dir():
+        for rule_path in sorted(custom_dir.rglob("*.yaml")):
+            try:
+                rule = load_rule_from_yaml(rule_path, schema_name="secops_custom")
+                rules.append(rule)
+            except Exception as exc:
+                logger.warning("Failed loading custom rule %s: %s", rule_path, exc)
+    return tuple(rules)
+
+
+def secops_rule_content_matches(desired: RuleEnvelope, remote: RuleEnvelope) -> bool:
+    remote_text = remote.logic.strip().replace("\r\n", "\n")
+    desired_text = desired.logic.strip().replace("\r\n", "\n")
+    if remote_text == desired_text:
+        return True
+
+    synth_desired, _ = synthesize_yaral_rule(desired)
+    if remote_text == synth_desired.strip().replace("\r\n", "\n"):
+        return True
+
+    synth_with_remote_id, _ = synthesize_yaral_rule(
+        dataclasses.replace(
+            desired,
+            metadata=dataclasses.replace(desired.metadata, id=remote.metadata.id),
+        )
+    )
+    return remote_text == synth_with_remote_id.strip().replace("\r\n", "\n")
 
 
 def register_engine(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
@@ -310,24 +346,125 @@ def handle_secops_command(args: argparse.Namespace, json_output: bool = False) -
             return 0
 
     if cmd == "diff":
-        # Top-level secops diff delegates to managed diff if target in (managed, all)
-        return handle_secops_command(
-            argparse.Namespace(
-                engine_command="managed",
-                managed_command="diff",
-                env=env_target,
-            ),
-            json_output=json_output,
-        )
+        target_scope = getattr(args, "target", "all")
+        run_custom = target_scope in ("custom", "all")
+        run_managed = target_scope in ("managed", "all")
+
+        try:
+            config = SecOpsConfig.from_env(target=target_profile)
+        except Exception:
+            config = SecOpsConfig(project="mock", location="us", instance_id="mock")
+
+        client = SecOpsClient(config=config)
+        custom_has_changes = False
+        managed_has_changes = False
+        output_payload: dict[str, object] = {}
+
+        if run_custom:
+            custom_rules = _load_custom_rules()
+            deployer = SecOpsDeployerAdapter(client=client)
+            custom_reconciler = CustomRuleReconciler()
+            current_rules = deployer.list_rules()
+            custom_diff = custom_reconciler.diff(
+                current=current_rules,
+                desired=custom_rules,
+                content_comparator=secops_rule_content_matches,
+            )
+            custom_has_changes = custom_diff.has_changes
+            if json_output:
+                output_payload["custom"] = {
+                    "has_changes": custom_diff.has_changes,
+                    "rules_to_create": [r.metadata.name for r in custom_diff.rules_to_create],
+                    "rules_to_update": [r.metadata.name for r in custom_diff.rules_to_update],
+                    "untracked_rules": [r.metadata.name for r in custom_diff.untracked_rules],
+                }
+            else:
+                sys.stdout.write("=== Custom Rules Diff ===\n")
+                sys.stdout.write(custom_diff.render_summary() + "\n\n")
+
+        if run_managed:
+            manifest_path = Path("rules/secops/managed.yaml")
+            desired_managed = (
+                load_managed_manifest_from_yaml(manifest_path)
+                if manifest_path.exists()
+                else ManagedState(rulesets=())
+            )
+            managed_adapter = SecOpsManagedAdapter(client=client)
+            managed_reconciler = GitOpsReconciler()
+            current_managed = managed_adapter.fetch_managed_state()
+            managed_diff = managed_reconciler.diff(current=current_managed, desired=desired_managed)
+            managed_has_changes = managed_diff.has_changes
+            if json_output:
+                output_payload["managed"] = {
+                    "has_changes": managed_diff.has_changes,
+                }
+            else:
+                sys.stdout.write("=== Managed Content Diff ===\n")
+                sys.stdout.write(managed_diff.render_summary() + "\n")
+
+        has_changes = custom_has_changes or managed_has_changes
+        if json_output:
+            output_payload["has_changes"] = has_changes
+            sys.stdout.write(json.dumps(output_payload, indent=2) + "\n")
+
+        return 2 if has_changes else 0
 
     if cmd == "apply":
-        return handle_secops_command(
-            argparse.Namespace(
-                engine_command="managed",
-                managed_command="apply",
-                env=env_target,
-            ),
-            json_output=json_output,
-        )
+        target_scope = getattr(args, "target", "all")
+        run_custom = target_scope in ("custom", "all")
+        run_managed = target_scope in ("managed", "all")
+
+        try:
+            config = SecOpsConfig.from_env(target=target_profile)
+        except Exception:
+            config = SecOpsConfig(project="mock", location="us", instance_id="mock")
+
+        client = SecOpsClient(config=config)
+        output_payload = {}
+
+        if run_custom:
+            custom_rules = _load_custom_rules()
+            deployer = SecOpsDeployerAdapter(client=client)
+            custom_reconciler = CustomRuleReconciler()
+            custom_diff = custom_reconciler.apply(
+                desired=custom_rules,
+                port=deployer,
+                content_comparator=secops_rule_content_matches,
+            )
+            if json_output:
+                output_payload["custom"] = {
+                    "applied": True,
+                    "has_changes": custom_diff.has_changes,
+                    "created": len(custom_diff.rules_to_create),
+                    "updated": len(custom_diff.rules_to_update),
+                }
+            else:
+                sys.stdout.write(
+                    f"Applied custom rules: {len(custom_diff.rules_to_create)} created, "
+                    f"{len(custom_diff.rules_to_update)} updated.\n"
+                )
+
+        if run_managed:
+            manifest_path = Path("rules/secops/managed.yaml")
+            desired_managed = (
+                load_managed_manifest_from_yaml(manifest_path)
+                if manifest_path.exists()
+                else ManagedState(rulesets=())
+            )
+            managed_adapter = SecOpsManagedAdapter(client=client)
+            managed_reconciler = GitOpsReconciler()
+            managed_diff = managed_reconciler.apply(desired=desired_managed, port=managed_adapter)
+            if json_output:
+                output_payload["managed"] = {
+                    "applied": True,
+                    "has_changes": managed_diff.has_changes,
+                }
+            else:
+                sys.stdout.write("Applied managed state to SecOps tenant.\n")
+
+        if json_output:
+            sys.stdout.write(json.dumps(output_payload, indent=2) + "\n")
+
+        return 0
 
     return 0

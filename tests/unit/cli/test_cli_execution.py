@@ -240,3 +240,77 @@ def test_main_secops_managed_diff_returns_0_when_in_sync() -> None:
 
         exit_code = main(["secops", "managed", "diff", "--env", "staging"])
         assert exit_code == 0
+
+
+def test_main_secops_diff_custom_target_returns_2_when_drift() -> None:
+    with (
+        patch("graft.cli.engines.secops.SecOpsClient"),
+        patch("graft.cli.engines.secops.SecOpsDeployerAdapter") as mock_deployer_cls,
+    ):
+        mock_deployer = MagicMock()
+        mock_deployer.list_rules.return_value = ()
+        mock_deployer_cls.return_value = mock_deployer
+
+        exit_code = main(["secops", "diff", "--target", "custom", "--env", "staging"])
+        assert exit_code == 2
+
+
+def test_main_secops_diff_custom_target_returns_0_when_in_sync() -> None:
+    with (
+        patch("graft.cli.engines.secops.SecOpsClient"),
+        patch("graft.cli.engines.secops.SecOpsDeployerAdapter") as mock_deployer_cls,
+    ):
+        from graft.core.loader import load_rule_from_yaml
+
+        local_rules = [
+            load_rule_from_yaml(p, schema_name="secops_custom")
+            for p in sorted(Path("rules/secops/custom").rglob("*.yaml"))
+        ]
+        mock_deployer = MagicMock()
+        mock_deployer.list_rules.return_value = tuple(local_rules)
+        mock_deployer_cls.return_value = mock_deployer
+
+        exit_code = main(["secops", "diff", "--target", "custom", "--env", "staging"])
+        assert exit_code == 0
+
+
+def test_main_secops_apply_all_targets() -> None:
+    with (
+        patch("graft.cli.engines.secops.SecOpsClient"),
+        patch("graft.cli.engines.secops.SecOpsDeployerAdapter") as mock_deployer_cls,
+        patch("graft.cli.engines.secops.SecOpsManagedAdapter") as mock_managed_cls,
+    ):
+        mock_deployer = MagicMock()
+        mock_deployer.list_rules.return_value = ()
+        mock_deployer_cls.return_value = mock_deployer
+
+        mock_managed = MagicMock()
+        mock_managed.fetch_managed_state.return_value = ManagedState(rulesets=())
+        mock_managed_cls.return_value = mock_managed
+
+        exit_code = main(["secops", "apply", "--env", "staging"])
+        assert exit_code == 0
+        assert mock_deployer.create_rule.call_count > 0
+        assert mock_managed.fetch_managed_state.call_count == 1
+
+
+def test_main_secops_diff_all_targets_drift() -> None:
+    with (
+        patch("graft.cli.engines.secops.SecOpsClient"),
+        patch("graft.cli.engines.secops.SecOpsDeployerAdapter") as mock_deployer_cls,
+        patch("graft.cli.engines.secops.SecOpsManagedAdapter") as mock_managed_cls,
+    ):
+        mock_deployer = MagicMock()
+        mock_deployer.list_rules.return_value = ()
+        mock_deployer_cls.return_value = mock_deployer
+
+        from graft.engines.secops.managed_loader import load_managed_manifest_from_yaml
+
+        mock_managed = MagicMock()
+        mock_managed.fetch_managed_state.return_value = load_managed_manifest_from_yaml(
+            "rules/secops/managed.yaml"
+        )
+        mock_managed_cls.return_value = mock_managed
+
+        exit_code = main(["secops", "diff", "--env", "staging"])
+        assert exit_code == 2

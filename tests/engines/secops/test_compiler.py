@@ -135,3 +135,35 @@ def test_verify_rule_envelope_line_offset_translation(
     assert diag.message == "undefined variable $x"
     assert "synthesized_rule_text" in result.raw_response
     assert result.raw_response["header_offset"] == header_offset
+
+
+def test_secops_rule_content_matches(sample_rule: RuleEnvelope) -> None:
+    import dataclasses
+
+    from graft.cli.engines.secops import secops_rule_content_matches
+
+    # Direct identical logic
+    assert secops_rule_content_matches(sample_rule, sample_rule) is True
+
+    # Remote rule with synthesized text
+    synth_text, _ = synthesize_yaral_rule(sample_rule)
+    remote_synth = dataclasses.replace(sample_rule, logic=synth_text)
+    assert secops_rule_content_matches(sample_rule, remote_synth) is True
+
+    # Remote rule with synthesized text using remote rule ID
+    remote_rule_id = "ru_remote_999"
+    remote_with_id = dataclasses.replace(
+        sample_rule,
+        metadata=dataclasses.replace(sample_rule.metadata, id=remote_rule_id),
+    )
+    synth_text_remote_id, _ = synthesize_yaral_rule(remote_with_id)
+    remote_synth_id = dataclasses.replace(
+        sample_rule,
+        metadata=dataclasses.replace(sample_rule.metadata, id=remote_rule_id),
+        logic=synth_text_remote_id,
+    )
+    assert secops_rule_content_matches(sample_rule, remote_synth_id) is True
+
+    # Different logic should return False
+    different = dataclasses.replace(sample_rule, logic="events:\n  $e\ncondition:\n  $e")
+    assert secops_rule_content_matches(sample_rule, different) is False
