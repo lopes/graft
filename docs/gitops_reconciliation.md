@@ -73,61 +73,109 @@ rulesets:
 
 ---
 
-## 4. Command Reference & CLI Workflows
+## 4. Reconciliation Modes: Scoped (Mode B) vs. Full Catalog (Mode A)
+
+Graft provides two execution modes to balance rapid pull request evaluation with comprehensive tenant self-healing:
+
+| Parameter | Mode B: Scoped Reconciliation (Default) | Mode A: Full Reconciliation (`--all` / `--full`) |
+| :--- | :--- | :--- |
+| **Flag** | *(No flag, default)* | `--all` or `--full` |
+| **Evaluation Scope** | Detection files modified in Git branch / working tree | Every detection rule and ruleset in the entire repository |
+| **Use Case** | Local development, feature branches, PR validation gates | Merge to `main`, scheduled cron drift detection |
+| **Drift Behavior** | Ignores untouched drifted tenant rules | Identifies out-of-band console edits across entire catalog |
+| **Convergence** | Reconciles only touched files | Overwrites console edits and restores Git desired state |
+
+---
+
+## 5. Command Reference & CLI Workflows
 
 ### 1. Unified Drift Detection (`graft secops diff`)
-Evaluates drift across custom rules and managed content against the live tenant:
+
+Compares repository detection state against the live SecOps tenant:
 
 ```bash
-# Compare everything (custom rules + managed manifest)
-graft secops diff --env=production
+# Mode B (Scoped): Compare only detection files modified in your branch
+graft secops diff --env production
 
-# Compare custom rules only
-graft secops diff --target=custom --env=production
+# Mode A (Full): Scan entire tenant catalog for out-of-band console drift
+graft secops diff --all --env production
 
-# Compare managed manifest only
-graft secops diff --target=managed --env=production
+# Target only custom rules
+graft secops diff --target custom --env production
+
+# Target only vendor-managed curated content
+graft secops diff --target managed --env production
 ```
 
-- **Exit Code 0:** Synchronized. No drift between Git and the tenant.
-- **Exit Code 2:** Drift detected. Summary of additions, updates, or untracked rules printed to stdout.
-- **Exit Code 1:** Error encountered (network, authentication, or parsing failure).
+#### Exit Codes
+- **`0` (Synchronized):** No drift detected. Git matches the live tenant.
+- **`2` (Drift Detected):** Differences exist between Git and the tenant (additions, updates, or untracked rules).
+- **`1` (Error):** Execution failed (authentication, network, or invalid configuration).
 
-In CI/CD pull request gates, exit code `2` can be used to notify reviewers of required tenant mutations before merging.
+#### Example Drift Output:
+```text
+=== Evaluating Managed Content Drift (Google SecOps) ===
+[*] Managed Ruleset deployment changes:
+  [~] Cloud IAM Privilege Escalation (ur_cloud_iam_privilege_escalation)
+      PRECISE: alerting False -> True
+[+] Curated Exclusions to create:
+  [+] Exclude Scheduled Backup SA (ruleset: ur_cloud_iam_privilege_escalation)
+
+=== Evaluating Custom Rules Drift (Google SecOps) ===
+[+] Custom rule to create: gcp_storage_iam_public_access_granted
+[~] Custom rule to update: workspace_nrd_possible_phishing (ID: b1d72370-5fa3-4cb8-a579-22a468d6f101)
+[?] Untracked custom rule on tenant: legacy_console_rule (ID: ru_89a74bc1-...)
+```
 
 ### 2. Unified State Synchronization (`graft secops apply`)
+
 Applies the desired repository state directly to the Google SecOps tenant:
 
 ```bash
-# Apply everything (custom rules + managed manifest)
-graft secops apply --env=production
+# Mode B (Scoped): Apply only detection files modified in your branch
+graft secops apply --env production
+
+# Mode A (Full): Enforce full catalog convergence, healing all console drift
+graft secops apply --all --env production
 
 # Apply custom rules only
-graft secops apply --target=custom --env=production
+graft secops apply --target custom --env production
 
 # Apply managed manifest only
-graft secops apply --target=managed --env=production
+graft secops apply --target managed --env production
 ```
 
+#### Zero-Cost No-Op Guarantee
+Graft computes an in-memory diff before issuing mutations. If an existing rule's logic and deployment toggles already match Git, Graft skips API write requests, preventing unnecessary rule revision churn in Chronicle.
+
 ### 3. Dedicated Managed Commands (`graft secops managed`)
-For granular vendor-managed content operations:
 
-- **Diff:** `graft secops managed diff --env=production`
-- **Apply:** `graft secops managed apply --env=production`
-- **Pull (Reverse Sync):** Pulls live tenant curated rulesets and active exclusions into the local manifest:
-  ```bash
-  graft secops managed pull --env=production --out rules/secops/managed.yaml
-  ```
+Granular operations for vendor-curated rule sets and exclusions:
 
-### 4. Unified Reverse Sync & Ingestion (`graft secops pull`)
-For initial brownfield bootstrapping or complete catalog reverse-synchronization:
+```bash
+# Compare local managed.yaml against tenant Curated Rule Sets
+graft secops managed diff --env production
+
+# Apply managed.yaml deployments and exclusions to tenant
+graft secops managed apply --env production
+
+# Pull live Curated Rule Sets and exclusions into managed.yaml
+graft secops managed pull --env production --out rules/secops/managed.yaml
+```
+
+### 4. Reverse Synchronization & Brownfield Ingestion (`graft secops pull`)
+
+Extracts the live detection posture from the SIEM tenant into the local repository:
 
 ```bash
 # Pull both custom rules and vendor-managed manifest from tenant
-graft secops pull --env=production
+graft secops pull --env production
 
-# Or target custom rules only
-graft secops pull --target=custom --env=production --out-dir rules/secops/custom
+# Pull custom rules only into a custom directory
+graft secops pull --target custom --env production --out-dir rules/secops/custom
+
+# Overwrite existing rule files (default prompts for confirmation)
+graft secops pull --target custom --env production --force
 ```
 
 For the complete lifecycle guide covering Day 0 discovery, baseline enrichment, and declaring Git as the permanent Source of Truth, see **[Engine Adoption & Lifecycle Guide](adoption.md)**.

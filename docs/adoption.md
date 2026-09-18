@@ -81,6 +81,9 @@ uv run graft secops pull --target custom --env production --out-dir rules/secops
 
 # Pull vendor-managed curated content manifest only
 uv run graft secops pull --target managed --env production --out-manifest rules/secops/managed.yaml
+
+# Force overwrite existing local files without confirmation prompts
+uv run graft secops pull --env production --force
 ```
 
 ### 2. How Managed Content Is Ingested

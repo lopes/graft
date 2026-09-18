@@ -215,13 +215,24 @@ tests:
 ## 4. Scaffolding & Offline Validation
 
 ### Scaffolding a New Rule
-Use `graft new rule` to generate an empty rule file conforming to the engine's schema:
+
+Use `graft secops new` or `graft new rule` to bootstrap a complete 5-block envelope with schema defaults and unique UUID:
 
 ```bash
+# SecOps engine shortcut (recommended):
+graft secops new gcp_cloud_storage_public_bucket
+
+# Engine-agnostic dispatcher:
 graft new rule gcp_cloud_storage_public_bucket --engine secops
+
+# Specify a custom target path:
+graft secops new gcp_cloud_storage_public_bucket --out rules/secops/custom/tier1/storage.yaml
 ```
 
+The generated file includes pre-populated runbook sections, deployment defaults (`enabled: false`, `alerting: false`, `run_frequency: "live"`), and a template test fixture.
+
 ### Validating Rules Offline
+
 Graft's linter validates JSON Schema constraints and verifies MITRE techniques against the bundled ATT&CK matrix in milliseconds without network calls:
 
 ```bash
@@ -231,13 +242,32 @@ graft lint rules/secops/custom/workspace_nrd_possible_phishing.yaml
 # Lint entire repository
 graft lint
 
-# Output structured JSON for CI
+# Fail immediately on first error
+graft lint --fail-fast
+
+# Output structured JSON diagnostics for CI/CD pipelines
 graft --json lint
+```
+
+#### Example Linter Output:
+```text
+[PASS] rules/secops/custom/workspace_nrd_possible_phishing.yaml
+[PASS] rules/secops/custom/gcp_iam_service_account_key_create.yaml
+[PASS] rules/secops/managed.yaml
+Checked 4 rules across 1 engines. All rules passed validation.
+```
+
+When schema constraints or invalid MITRE tactics/techniques are detected:
+```text
+[FAIL] rules/secops/custom/broken_rule.yaml:
+  - Schema Error: 'run_frequency' is a required property in 'deployment'
+  - MITRE Error: Unknown technique 'T9999.001' under tactic 'initial_access'
+Linting failed with 2 error(s).
 ```
 
 ### Optional: Git Pre-Commit Hook
 
-To automatically catch schema violations, ill-formed YAML, bad MITRE ATT&CK mappings, and code formatting errors before creating commits, enable the repository's native pre-commit hook:
+To catch schema violations, invalid YAML, unknown MITRE ATT&CK techniques, and code formatting errors before creating commits, enable the repository's native pre-commit hook:
 
 ```bash
 git config core.hooksPath .githooks
