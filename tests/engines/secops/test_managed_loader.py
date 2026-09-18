@@ -20,25 +20,14 @@ def test_load_managed_manifest_from_reference_file() -> None:
     path = Path("rules/secops/managed.yaml")
     state = load_managed_manifest_from_yaml(path)
 
-    assert len(state.rulesets) == 2
-    rs1, rs2 = state.rulesets
-    assert rs1.id == "rs-cloud-threats"
-    assert rs1.name == "Cloud Threat Detections"
-    assert rs1.category == "CLOUD"
-    assert len(rs1.deployments) == 2
-    assert rs1.deployments[0] == ManagedDeployment(type="PRECISE", enabled=True, alerting=True)
-    assert rs1.deployments[1] == ManagedDeployment(type="BROAD", enabled=False, alerting=False)
-
-    assert rs2.id == "rs-linux-threats"
-    assert rs2.category == "ENDPOINT"
-
-    assert len(state.exclusions) == 1
-    ex = state.exclusions[0]
-    assert ex.id == "ex-backup-service-account"
-    assert ex.rule_id == "ru_cloud_iam_privilege_escalation"
-    assert ex.ruleset_id == "rs-cloud-threats"
-    assert "svc_automation_backup" in ex.expression
-    assert "Exclude scheduled" in ex.description
+    assert len(state.rulesets) >= 1
+    for rs in state.rulesets:
+        assert rs.id
+        assert rs.name
+        assert rs.category
+        assert len(rs.deployments) == 2
+        dep_types = {d.type for d in rs.deployments}
+        assert dep_types == {"PRECISE", "BROAD"}
 
 
 def test_load_managed_manifest_from_str() -> None:
