@@ -1,7 +1,38 @@
+import re
+import uuid
+
 from graft.core.models.compiler import CompilationDiagnostic, CompilationResult
-from graft.core.models.rule import RuleEnvelope
+from graft.core.models.rule import RuleEnvelope, RuleMetadata
 from graft.core.ports.compiler import RuleCompilerPort
 from graft.engines.secops.client import SecOpsClient
+
+_UUID_REGEX = re.compile(
+    r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+)
+_RULE_HEADER_REGEX = re.compile(r"^\s*rule\s+([a-zA-Z0-9_]+)\s*\{", re.MULTILINE)
+_SECTION_HEADER_REGEX = re.compile(r"^\s*(events|match|condition):", re.MULTILINE)
+
+
+def _sanitize_slug(raw: str) -> str:
+    cleaned = re.sub(r"[^a-zA-Z0-9_]+", "_", raw).strip("_").lower()
+    return cleaned or "unnamed_rule"
+
+
+def _extract_uuid(candidate: str, fallback: str) -> str:
+    cleaned_cand = candidate.strip().strip('"').strip("'")
+    if cleaned_cand.startswith("ru_"):
+        cleaned_cand = cleaned_cand[3:]
+    if _UUID_REGEX.match(cleaned_cand):
+        return cleaned_cand
+
+    cleaned_fb = fallback.strip()
+    if cleaned_fb.startswith("ru_"):
+        cleaned_fb = cleaned_fb[3:]
+    if _UUID_REGEX.match(cleaned_fb):
+        return cleaned_fb
+
+    seed = candidate.strip() or fallback.strip() or "rule"
+    return str(uuid.uuid5(uuid.NAMESPACE_DNS, seed))
 
 
 def synthesize_yaral_rule(rule: RuleEnvelope) -> tuple[str, int]:
@@ -19,6 +50,85 @@ def synthesize_yaral_rule(rule: RuleEnvelope) -> tuple[str, int]:
     header_offset = len(header_lines)
     rule_text = "\n".join(header_lines) + "\n" + rule.logic.strip() + "\n}\n"
     return rule_text, header_offset
+
+
+def deconstruct_yaral_rule(
+    rule_text: str,
+    fallback_id: str = "",
+    fallback_name: str = "",
+) -> tuple[RuleMetadata, str]:
+    rule_match = _RULE_HEADER_REGEX.search(rule_text)
+    if not rule_match:
+        rule_name = _sanitize_slug(fallback_name)
+        rule_id = _extract_uuid(fallback_id, fallback_name)
+        metadata = RuleMetadata(
+            id=rule_id,
+            name=rule_name,
+            description=f"Imported detection rule for {rule_name}"[:128],
+            status="production",
+            authors=(),
+            mitre={},
+        )
+        return metadata, rule_text.strip()
+
+    rule_name = _sanitize_slug(rule_match.group(1))
+    meta_dict: dict[str, str] = {}
+    authors: list[str] = []
+
+    meta_start = re.search(r"^\s*meta:\s*$", rule_text, re.MULTILINE)
+    body_start_pos = 0
+
+    if meta_start:
+        start_idx = meta_start.end()
+        next_sec = _SECTION_HEADER_REGEX.search(rule_text, pos=start_idx)
+        if next_sec:
+            meta_content = rule_text[start_idx : next_sec.start()]
+            body_start_pos = next_sec.start()
+        else:
+            end_brace = rule_text.rfind("}")
+            meta_content = (
+                rule_text[start_idx:end_brace] if end_brace != -1 else rule_text[start_idx:]
+            )
+            body_start_pos = end_brace if end_brace != -1 else len(rule_text)
+
+        for line in meta_content.splitlines():
+            stripped = line.strip()
+            if not stripped or stripped.startswith("//") or stripped.startswith("#"):
+                continue
+            kv = re.match(r"^([a-zA-Z0-9_]+)\s*=\s*(.*)$", stripped)
+            if kv:
+                k = kv.group(1).lower()
+                val = kv.group(2).strip().strip('"').strip("'")
+                meta_dict[k] = val
+                if k in ("author", "authors"):
+                    authors.append(val)
+    else:
+        first_sec = _SECTION_HEADER_REGEX.search(rule_text, pos=rule_match.end())
+        body_start_pos = first_sec.start() if first_sec else rule_match.end()
+
+    last_brace = rule_text.rfind("}")
+    if last_brace > body_start_pos:
+        logic_body = rule_text[body_start_pos:last_brace].strip()
+    else:
+        logic_body = rule_text[body_start_pos:].strip()
+
+    meta_id = _extract_uuid(meta_dict.get("id", ""), fallback_id or rule_name)
+    desc = meta_dict.get("description", f"Imported detection rule for {rule_name}")
+    if len(desc) > 128:
+        desc = desc[:125] + "..."
+    status = meta_dict.get("status", "production").lower()
+    if status not in ("testing", "production", "deprecated"):
+        status = "production"
+
+    metadata = RuleMetadata(
+        id=meta_id,
+        name=rule_name,
+        description=desc,
+        status=status,
+        authors=tuple(authors),
+        mitre={},
+    )
+    return metadata, logic_body
 
 
 def _parse_int_field(value: object, default: int = 1) -> int:

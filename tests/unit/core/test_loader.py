@@ -2,7 +2,12 @@ from pathlib import Path
 
 import pytest
 
-from graft.core.loader import RuleLoadError, load_rule_from_str, load_rule_from_yaml
+from graft.core.loader import (
+    RuleLoadError,
+    dump_rule_to_yaml,
+    load_rule_from_str,
+    load_rule_from_yaml,
+)
 from graft.core.models.rule import RuleEnvelope
 
 
@@ -154,3 +159,26 @@ def test_load_reference_example_rule() -> None:
     assert envelope.metadata.name == "workspace_nrd_possible_phishing"
     assert envelope.deployment.run_frequency == "live"
     assert len(envelope.tests) == 2
+
+
+def test_dump_rule_and_roundtrip(valid_yaml_content: str, tmp_path: Path) -> None:
+    original = load_rule_from_str(valid_yaml_content)
+    dump_target = tmp_path / "dumped_rule.yaml"
+
+    dump_rule_to_yaml(original, dump_target)
+    assert dump_target.is_file()
+
+    reloaded = load_rule_from_yaml(dump_target)
+    assert reloaded.metadata.id == original.metadata.id
+    assert reloaded.metadata.name == original.metadata.name
+    assert reloaded.metadata.description == original.metadata.description
+    assert reloaded.metadata.status == original.metadata.status
+    assert reloaded.metadata.priority == original.metadata.priority
+    assert reloaded.metadata.mitre == original.metadata.mitre
+    assert reloaded.deployment.enabled == original.deployment.enabled
+    assert reloaded.deployment.alerting == original.deployment.alerting
+    assert reloaded.deployment.run_frequency == original.deployment.run_frequency
+    assert reloaded.runbook == original.runbook
+    assert reloaded.logic.strip() == original.logic.strip()
+    assert len(reloaded.tests) == len(original.tests)
+    assert reloaded.tests[0].id == original.tests[0].id

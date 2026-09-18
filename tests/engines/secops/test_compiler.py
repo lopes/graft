@@ -5,7 +5,11 @@ import pytest
 from graft.core.models.compiler import CompilationDiagnostic, CompilationResult
 from graft.core.models.rule import BaseDeploymentConfig, RuleEnvelope, RuleMetadata, Runbook
 from graft.engines.secops.client import SecOpsClient
-from graft.engines.secops.compiler import SecOpsCompilerAdapter, synthesize_yaral_rule
+from graft.engines.secops.compiler import (
+    SecOpsCompilerAdapter,
+    deconstruct_yaral_rule,
+    synthesize_yaral_rule,
+)
 
 
 @pytest.fixture
@@ -167,3 +171,66 @@ def test_secops_rule_content_matches(sample_rule: RuleEnvelope) -> None:
     # Different logic should return False
     different = dataclasses.replace(sample_rule, logic="events:\n  $e\ncondition:\n  $e")
     assert secops_rule_content_matches(sample_rule, different) is False
+
+
+def test_deconstruct_synthesized_yaral_rule(sample_rule: RuleEnvelope) -> None:
+    synth_text, _ = synthesize_yaral_rule(sample_rule)
+    metadata, logic = deconstruct_yaral_rule(
+        synth_text,
+        fallback_id=sample_rule.metadata.id,
+        fallback_name=sample_rule.metadata.name,
+    )
+
+    assert metadata.id == sample_rule.metadata.id
+    assert metadata.name == sample_rule.metadata.name
+    assert metadata.description == sample_rule.metadata.description
+    assert metadata.status == sample_rule.metadata.status
+    assert logic.strip() == sample_rule.logic.strip()
+
+
+def test_deconstruct_custom_yaral_rule_with_ru_prefix() -> None:
+    raw_yaral = """rule Suspicious_Login_Rule {
+  meta:
+    author = "SecOps Team"
+    description = "Detects unusual login behavior"
+    severity = "HIGH"
+  events:
+    $e.metadata.event_type = "USER_LOGIN"
+  condition:
+    $e
+}"""
+    metadata, logic = deconstruct_yaral_rule(
+        raw_yaral,
+        fallback_id="ru_b1d72370-5fa3-4cb8-a579-22a468d6f101",
+        fallback_name="Suspicious Login Rule",
+    )
+
+    assert metadata.id == "b1d72370-5fa3-4cb8-a579-22a468d6f101"
+    assert metadata.name == "suspicious_login_rule"
+    assert metadata.description == "Detects unusual login behavior"
+    assert metadata.status == "production"
+    assert "SecOps Team" in metadata.authors
+    assert "events:" in logic
+    assert "condition:" in logic
+    assert "meta:" not in logic
+    assert not logic.startswith("rule ")
+
+
+def test_deconstruct_raw_logic_without_rule_block() -> None:
+    raw_logic = """events:
+  $e.metadata.event_type = "USER_LOGIN"
+condition:
+  $e"""
+    metadata, logic = deconstruct_yaral_rule(
+        raw_logic,
+        fallback_id="ru_non_uuid_123",
+        fallback_name="Raw User Login Rule",
+    )
+
+    import uuid
+
+    # Deterministic UUID generated from non-UUID fallback
+    expected_uuid = str(uuid.uuid5(uuid.NAMESPACE_DNS, "ru_non_uuid_123"))
+    assert metadata.id == expected_uuid
+    assert metadata.name == "raw_user_login_rule"
+    assert logic.strip() == raw_logic.strip()

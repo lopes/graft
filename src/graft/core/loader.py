@@ -127,3 +127,55 @@ def load_rule_from_yaml(
         raise RuleLoadError(f"Rule file not found: {file_path}")
     content = file_path.read_text(encoding="utf-8")
     return load_rule_from_str(content, schema_name=schema_name, validate_mitre=validate_mitre)
+
+
+def rule_to_dict(rule: RuleEnvelope) -> dict[str, Any]:
+    metadata_dict: dict[str, Any] = {
+        "id": rule.metadata.id,
+        "name": rule.metadata.name,
+        "description": rule.metadata.description,
+        "status": rule.metadata.status,
+    }
+    if rule.metadata.priority is not None:
+        metadata_dict["priority"] = rule.metadata.priority
+    if rule.metadata.authors:
+        metadata_dict["authors"] = list(rule.metadata.authors)
+    if rule.metadata.mitre:
+        metadata_dict["mitre"] = {k: list(v) for k, v in rule.metadata.mitre.items()}
+    if rule.metadata.tags:
+        metadata_dict["tags"] = list(rule.metadata.tags)
+    if rule.metadata.references:
+        metadata_dict["references"] = list(rule.metadata.references)
+
+    doc: dict[str, Any] = {
+        "metadata": metadata_dict,
+        "logic": rule.logic,
+        "deployment": {
+            "enabled": rule.deployment.enabled,
+            "alerting": rule.deployment.alerting,
+            "run_frequency": rule.deployment.run_frequency,
+        },
+        "runbook": {
+            "context": rule.runbook.context,
+            "triage": rule.runbook.triage,
+            "response": rule.runbook.response,
+        },
+        "tests": [
+            {
+                "id": t.id,
+                "description": t.description,
+                "expect": t.expect,
+                "events": [{"timestamp": ev.timestamp, "payload": ev.payload} for ev in t.events],
+            }
+            for t in rule.tests
+        ],
+    }
+    return doc
+
+
+def dump_rule_to_yaml(rule: RuleEnvelope, path: Path | str) -> None:
+    doc = rule_to_dict(rule)
+    dumped = yaml.safe_dump(doc, sort_keys=False, indent=2)
+    dest_path = Path(path)
+    dest_path.parent.mkdir(parents=True, exist_ok=True)
+    dest_path.write_text(dumped, encoding="utf-8")

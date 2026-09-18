@@ -10,13 +10,21 @@ from typing import Literal
 
 from graft.cli.scaffold import scaffold_rule
 from graft.core.git import get_changed_files
-from graft.core.loader import load_rule_from_yaml
+from graft.core.loader import dump_rule_to_yaml, load_rule_from_yaml
 from graft.core.models.managed import ManagedState
-from graft.core.models.rule import RuleEnvelope
+from graft.core.models.rule import (
+    BaseDeploymentConfig,
+    RuleEnvelope,
+    Runbook,
+)
 from graft.core.reconciler import CustomRuleReconciler, GitOpsReconciler
 from graft.engines.secops.auth import SecOpsAuthError, SecOpsAuthResolver
 from graft.engines.secops.client import SecOpsApiError, SecOpsClient
-from graft.engines.secops.compiler import SecOpsCompilerAdapter, synthesize_yaral_rule
+from graft.engines.secops.compiler import (
+    SecOpsCompilerAdapter,
+    deconstruct_yaral_rule,
+    synthesize_yaral_rule,
+)
 from graft.engines.secops.config import SecOpsConfig
 from graft.engines.secops.deployer import SecOpsDeployerAdapter
 from graft.engines.secops.managed import SecOpsManagedAdapter
@@ -177,6 +185,39 @@ def register_engine(subparsers: argparse._SubParsersAction[argparse.ArgumentPars
     )
     m_pull.add_argument(
         "--out", default="rules/secops/managed.yaml", help="Destination path for manifest"
+    )
+
+    # 7. pull
+    pull_p = cmd_subparsers.add_parser(
+        "pull",
+        help="Pull detection rules and managed state from SecOps tenant to local repository",
+    )
+    pull_p.add_argument(
+        "--env",
+        choices=["staging", "production"],
+        default="production",
+        help="Target environment",
+    )
+    pull_p.add_argument(
+        "--target",
+        choices=["all", "custom", "managed"],
+        default="all",
+        help="Scope of pull (custom rules, managed manifest, or all)",
+    )
+    pull_p.add_argument(
+        "--out-dir",
+        default="rules/secops/custom",
+        help="Destination directory for custom rule YAML files",
+    )
+    pull_p.add_argument(
+        "--out-manifest",
+        default="rules/secops/managed.yaml",
+        help="Destination path for managed manifest",
+    )
+    pull_p.add_argument(
+        "--force",
+        action="store_true",
+        help="Overwrite existing rule files if they already exist",
     )
 
 
@@ -705,6 +746,106 @@ def handle_secops_command(args: argparse.Namespace, json_output: bool = False) -
 
         if json_output:
             sys.stdout.write(json.dumps(output_payload, indent=2) + "\n")
+
+        return 0
+
+    if cmd == "pull":
+        target_scope = getattr(args, "target", "all")
+        run_custom = target_scope in ("custom", "all")
+        run_managed = target_scope in ("managed", "all")
+        force = getattr(args, "force", False)
+
+        try:
+            config = SecOpsConfig.from_env(target=target_profile)
+        except Exception:
+            config = SecOpsConfig(project="mock", location="us", instance_id="mock")
+
+        client = SecOpsClient(config=config)
+        pull_payload: dict[str, object] = {}
+
+        if run_managed:
+            out_manifest = Path(getattr(args, "out_manifest", "rules/secops/managed.yaml"))
+            out_manifest.parent.mkdir(parents=True, exist_ok=True)
+            managed_adapter = SecOpsManagedAdapter(client=client)
+            reconciler = GitOpsReconciler()
+            pulled_state = reconciler.pull(port=managed_adapter)
+            dump_managed_manifest_to_yaml(pulled_state, path=out_manifest)
+            pull_payload["managed"] = {
+                "pulled": True,
+                "destination": str(out_manifest),
+                "rulesets": len(pulled_state.rulesets),
+                "exclusions": len(pulled_state.exclusions),
+            }
+            if not json_output:
+                sys.stdout.write(
+                    f"Pulled managed state: {len(pulled_state.rulesets)} rulesets, "
+                    f"{len(pulled_state.exclusions)} exclusions written to {out_manifest}\n"
+                )
+
+        if run_custom:
+            out_dir = Path(getattr(args, "out_dir", "rules/secops/custom"))
+            out_dir.mkdir(parents=True, exist_ok=True)
+            deployer = SecOpsDeployerAdapter(client=client)
+            remote_rules = deployer.list_rules()
+            imported_files: list[dict[str, str]] = []
+            skipped_files: list[str] = []
+
+            for r in remote_rules:
+                metadata, logic = deconstruct_yaral_rule(
+                    rule_text=r.logic,
+                    fallback_id=r.metadata.id,
+                    fallback_name=r.metadata.name,
+                )
+                deployment = BaseDeploymentConfig(
+                    enabled=r.deployment.enabled,
+                    alerting=r.deployment.alerting,
+                    run_frequency="live",
+                )
+                runbook = Runbook(
+                    context=f"Imported from Google SecOps tenant for detection {metadata.name}.",
+                    triage=(
+                        "1. Review alert details and principal entities.\n"
+                        "2. Correlate with adjacent telemetry."
+                    ),
+                    response=(
+                        "1. Follow organizational incident response playbooks.\n"
+                        "2. Remediate or isolate impacted credentials/hosts."
+                    ),
+                )
+                envelope = RuleEnvelope(
+                    metadata=metadata,
+                    logic=logic,
+                    deployment=deployment,
+                    runbook=runbook,
+                    tests=(),
+                )
+
+                rule_file = out_dir / f"{metadata.name}.yaml"
+                if rule_file.exists() and not force:
+                    skipped_files.append(str(rule_file))
+                    continue
+
+                dump_rule_to_yaml(envelope, rule_file)
+                imported_files.append({"name": metadata.name, "file": str(rule_file)})
+
+            pull_payload["custom"] = {
+                "pulled": True,
+                "count": len(imported_files),
+                "skipped": len(skipped_files),
+                "destination_dir": str(out_dir),
+                "rules": imported_files,
+            }
+            if not json_output:
+                msg = f"Pulled {len(imported_files)} custom rules to {out_dir}\n"
+                if skipped_files:
+                    msg += (
+                        f"  (Skipped {len(skipped_files)} existing files; "
+                        "use --force to overwrite)\n"
+                    )
+                sys.stdout.write(msg)
+
+        if json_output:
+            sys.stdout.write(json.dumps(pull_payload, indent=2) + "\n")
 
         return 0
 
