@@ -1,0 +1,43 @@
+#!/usr/bin/env bash
+# ==============================================================================
+# Graft: Git Pre-Commit Quality Gate Hook
+# ==============================================================================
+# Fast, sub-second local verification before commits are created.
+# To enable this hook in your clone:
+#   git config core.hooksPath .githooks
+# ==============================================================================
+
+set -eo pipefail
+
+echo "==> [Graft Pre-Commit] Running fast offline quality gates..."
+
+# 1. Code Formatting
+echo "--> Checking code formatting (ruff format)..."
+uv run ruff format --check . || {
+    echo "[ERROR] Code formatting checks failed. Run: uv run ruff format ."
+    exit 1
+}
+
+# 2. Code Linting
+echo "--> Checking code quality & imports (ruff check)..."
+uv run ruff check . || {
+    echo "[ERROR] Ruff lint checks failed. Run: uv run ruff check --fix ."
+    exit 1
+}
+
+# 3. Detection Rule & Manifest Schema Validation (Draft 2020-12 + MITRE STIX)
+echo "--> Validating detection rules & managed manifests (graft lint)..."
+uv run graft lint || {
+    echo "[ERROR] Graft rule linting failed. Check schema errors above."
+    exit 1
+}
+
+# 4. Fast Unit Test Suite (<1s)
+echo "--> Executing mock-isolated unit tests (pytest tests/unit)..."
+uv run pytest tests/unit -q || {
+    echo "[ERROR] Unit test suite failed."
+    exit 1
+}
+
+echo "==> [Graft Pre-Commit] All quality gates passed cleanly."
+exit 0

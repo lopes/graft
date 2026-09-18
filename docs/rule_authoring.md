@@ -203,3 +203,18 @@ graft lint
 # Output structured JSON for CI
 graft --json lint
 ```
+
+### Optional: Git Pre-Commit Hook
+
+To automatically catch schema violations, ill-formed YAML, bad MITRE ATT&CK mappings, and code formatting errors before creating commits, enable the repository's native pre-commit hook:
+
+```bash
+git config core.hooksPath .githooks
+```
+
+Whenever you run `git commit`, the hook executes `ruff format --check`, `ruff check`, `graft lint`, and `pytest tests/unit` in sub-second time. To disable it at any time:
+
+```bash
+git config --unset core.hooksPath
+```
+

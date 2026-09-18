@@ -83,6 +83,9 @@ uv run ruff check .
 uv run ruff format --check .
 uv run mypy --strict src tests
 uv run pytest
+
+# Optional: Enable native pre-commit hook (runs fast offline gates on git commit)
+git config core.hooksPath .githooks
 ```
 
 ### Essential CLI Commands
