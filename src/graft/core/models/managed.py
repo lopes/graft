@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 
 @dataclass(frozen=True)
@@ -14,6 +14,7 @@ class ManagedRuleSet:
     name: str
     category: str
     deployments: tuple[ManagedDeployment, ...]
+    category_id: str = field(default="", compare=False)
 
 
 @dataclass(frozen=True)

@@ -3,10 +3,96 @@
   "$id": "secops_managed.schema.json",
   "title": "Google SecOps Curated RuleSets Manifest Schema",
   "type": "object",
-  "required": [
-    "rulesets"
+  "oneOf": [
+    {
+      "required": [
+        "categories"
+      ]
+    },
+    {
+      "required": [
+        "rulesets"
+      ]
+    }
   ],
   "properties": {
+    "categories": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "name",
+          "id",
+          "rulesets"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "id": {
+            "type": "string",
+            "pattern": "^[a-z0-9_\\-]+$",
+            "minLength": 1,
+            "maxLength": 64
+          },
+          "rulesets": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "id",
+                "name",
+                "deployments"
+              ],
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "pattern": "^[a-z0-9_\\-]+$",
+                  "minLength": 1,
+                  "maxLength": 64
+                },
+                "name": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 128
+                },
+                "deployments": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "required": [
+                      "type",
+                      "enabled",
+                      "alerting"
+                    ],
+                    "properties": {
+                      "type": {
+                        "type": "string",
+                        "enum": [
+                          "PRECISE",
+                          "BROAD"
+                        ]
+                      },
+                      "enabled": {
+                        "type": "boolean"
+                      },
+                      "alerting": {
+                        "type": "boolean"
+                      }
+                    },
+                    "additionalProperties": false
+                  }
+                }
+              },
+              "additionalProperties": false
+            }
+          }
+        },
+        "additionalProperties": false
+      }
+    },
     "rulesets": {
       "type": "array",
       "items": {
@@ -31,6 +117,12 @@
           },
           "category": {
             "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "category_id": {
+            "type": "string",
+            "pattern": "^[a-z0-9_\\-]+$",
             "minLength": 1,
             "maxLength": 64
           },

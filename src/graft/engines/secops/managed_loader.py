@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import yaml
 
@@ -14,6 +14,23 @@ from graft.core.validation.schema_validator import SchemaValidator
 
 class ManagedManifestLoadError(Exception):
     pass
+
+
+def _parse_deployments(rs: dict[str, Any]) -> list[ManagedDeployment]:
+    deployments_raw = rs.get("deployments", [])
+    deployments: list[ManagedDeployment] = []
+    if isinstance(deployments_raw, list):
+        for dep in deployments_raw:
+            if not isinstance(dep, dict):
+                continue
+            deployments.append(
+                ManagedDeployment(
+                    type=str(dep.get("type", "")),
+                    enabled=bool(dep.get("enabled", False)),
+                    alerting=bool(dep.get("alerting", False)),
+                )
+            )
+    return deployments
 
 
 def load_managed_manifest_from_str(content: str) -> ManagedState:
@@ -31,31 +48,42 @@ def load_managed_manifest_from_str(content: str) -> ManagedState:
         error_lines = "\n".join(f"- {err.path}: {err.message}" for err in errors)
         raise ManagedManifestLoadError(f"Schema validation failed:\n{error_lines}")
 
-    rulesets_raw = data.get("rulesets", [])
     rulesets: list[ManagedRuleSet] = []
-    if isinstance(rulesets_raw, list):
-        for rs in rulesets_raw:
-            if not isinstance(rs, dict):
+    if "categories" in data and isinstance(data["categories"], list):
+        for cat in data["categories"]:
+            if not isinstance(cat, dict):
                 continue
-            deployments_raw = rs.get("deployments", [])
-            deployments: list[ManagedDeployment] = []
-            if isinstance(deployments_raw, list):
-                for dep in deployments_raw:
-                    if not isinstance(dep, dict):
+            cat_name = str(cat.get("name", ""))
+            cat_id = str(cat.get("id", ""))
+            raw_rulesets = cat.get("rulesets", [])
+            if isinstance(raw_rulesets, list):
+                for raw_rs in raw_rulesets:
+                    if not isinstance(raw_rs, dict):
                         continue
-                    deployments.append(
-                        ManagedDeployment(
-                            type=str(dep.get("type", "")),
-                            enabled=bool(dep.get("enabled", False)),
-                            alerting=bool(dep.get("alerting", False)),
+                    deployments = _parse_deployments(raw_rs)
+                    rulesets.append(
+                        ManagedRuleSet(
+                            id=str(raw_rs.get("id", "")),
+                            name=str(raw_rs.get("name", "")),
+                            category=cat_name,
+                            deployments=tuple(deployments),
+                            category_id=cat_id,
                         )
                     )
+    elif "rulesets" in data and isinstance(data["rulesets"], list):
+        for rs in data["rulesets"]:
+            if not isinstance(rs, dict):
+                continue
+            deployments = _parse_deployments(rs)
+            cat_val = str(rs.get("category", ""))
+            cat_id = str(rs.get("category_id", cat_val))
             rulesets.append(
                 ManagedRuleSet(
                     id=str(rs.get("id", "")),
                     name=str(rs.get("name", "")),
-                    category=str(rs.get("category", "")),
+                    category=cat_val,
                     deployments=tuple(deployments),
+                    category_id=cat_id,
                 )
             )
 
@@ -92,8 +120,24 @@ def load_managed_manifest_from_yaml(path: Path | str) -> ManagedState:
 
 
 def dump_managed_manifest_to_yaml(state: ManagedState, path: Path | str | None = None) -> str:
-    rulesets_dict: list[dict[str, object]] = []
+    categories_map: dict[str, dict[str, object]] = {}
+
     for rs in state.rulesets:
+        cat_key = rs.category or "default"
+        if cat_key not in categories_map:
+            cat_id = getattr(rs, "category_id", "")
+            if not cat_id:
+                cat_id = "".join(
+                    c if c.isalnum() or c in ("-", "_") else "_" for c in cat_key.lower()
+                )
+                if not cat_id:
+                    cat_id = "default"
+            categories_map[cat_key] = {
+                "name": cat_key,
+                "id": cat_id,
+                "rulesets": [],
+            }
+
         deployments_dict: list[dict[str, object]] = []
         for dep in rs.deployments:
             deployments_dict.append(
@@ -103,16 +147,23 @@ def dump_managed_manifest_to_yaml(state: ManagedState, path: Path | str | None =
                     "alerting": dep.alerting,
                 }
             )
-        rulesets_dict.append(
+
+        cast(list[dict[str, object]], categories_map[cat_key]["rulesets"]).append(
             {
                 "id": rs.id,
                 "name": rs.name,
-                "category": rs.category,
                 "deployments": deployments_dict,
             }
         )
 
-    doc: dict[str, object] = {"rulesets": rulesets_dict}
+    sorted_categories: list[dict[str, object]] = []
+    for cat_name in sorted(categories_map.keys()):
+        cat_data = categories_map[cat_name]
+        rs_list = cast(list[dict[str, object]], cat_data["rulesets"])
+        rs_list.sort(key=lambda r: str(r.get("name", "")))
+        sorted_categories.append(cat_data)
+
+    doc: dict[str, object] = {"categories": sorted_categories}
 
     if state.exclusions:
         exclusions_dict: list[dict[str, object]] = []
@@ -127,6 +178,8 @@ def dump_managed_manifest_to_yaml(state: ManagedState, path: Path | str | None =
                 item["description"] = ex.description
             exclusions_dict.append(item)
         doc["exclusions"] = exclusions_dict
+    else:
+        doc["exclusions"] = []
 
     dumped = str(yaml.safe_dump(doc, sort_keys=False, indent=2))
 

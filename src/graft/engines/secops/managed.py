@@ -82,6 +82,26 @@ class SecOpsManagedAdapter(ManagedEnginePort):
             if not dep_page_token:
                 break
 
+        # Resolve category UUID to category display name
+        category_names: dict[str, str] = {}
+        try:
+            cat_resp = self._client.request(
+                "GET",
+                "curatedRuleSetCategories",
+                api_version="v1alpha",
+            )
+            raw_cats = cat_resp.get("curatedRuleSetCategories", [])
+            if isinstance(raw_cats, list):
+                for cat in raw_cats:
+                    if isinstance(cat, dict):
+                        cat_res = str(cat.get("name", ""))
+                        cat_disp = str(cat.get("displayName", ""))
+                        cat_uuid = cat_res.split("/")[-1] if "/" in cat_res else cat_res
+                        if cat_uuid and cat_disp:
+                            category_names[cat_uuid] = cat_disp
+        except Exception as exc:
+            logger.debug("Failed resolving category names: %s", exc)
+
         rulesets: list[ManagedRuleSet] = []
         for raw in raw_rulesets:
             name_resource = str(raw.get("name", ""))
@@ -100,7 +120,9 @@ class SecOpsManagedAdapter(ManagedEnginePort):
             elif "/" in name_resource:
                 ruleset_id = parts[-1]
 
-            self._category_cache[ruleset_id] = category
+            category_uuid = category
+            category_name = category_names.get(category_uuid, category_uuid)
+            self._category_cache[ruleset_id] = category_uuid
 
             # Check if deployments were fetched in bulk
             deployments = list(deployments_by_ruleset.get(ruleset_id, []))
@@ -146,8 +168,9 @@ class SecOpsManagedAdapter(ManagedEnginePort):
                 ManagedRuleSet(
                     id=ruleset_id,
                     name=display_name or ruleset_id,
-                    category=category,
+                    category=category_name,
                     deployments=tuple(deployments),
+                    category_id=category_uuid,
                 )
             )
 
