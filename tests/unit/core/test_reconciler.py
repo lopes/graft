@@ -1,3 +1,4 @@
+import dataclasses
 import logging
 
 import pytest
@@ -8,8 +9,11 @@ from graft.core.models.managed import (
     ManagedRuleSet,
     ManagedState,
 )
+from graft.core.models.rule import BaseDeploymentConfig, RuleEnvelope, RuleMetadata, Runbook
 from graft.core.ports.managed import ManagedEnginePort
 from graft.core.reconciler import (
+    CustomRuleReconciler,
+    CustomRulesReconciliationDiff,
     DeploymentDiff,
     ExclusionDiff,
     GitOpsReconciler,
@@ -314,3 +318,149 @@ def test_render_summary() -> None:
     assert "[-] Exclusion to delete: ex-del" in summary
     assert "[?] Untracked upstream ruleset: rs-live" in summary
     assert "[!] Retired upstream ruleset in repo: rs-ret" in summary
+
+
+class RecordingMockRuleDeployer:
+    def __init__(self, initial_rules: tuple[RuleEnvelope, ...] = ()) -> None:
+        self.rules: dict[str, RuleEnvelope] = {r.metadata.name: r for r in initial_rules}
+        self.created_rules: list[RuleEnvelope] = []
+        self.updated_rules: list[RuleEnvelope] = []
+        self.deleted_rule_ids: list[str] = []
+
+    def list_rules(self) -> tuple[RuleEnvelope, ...]:
+        return tuple(self.rules.values())
+
+    def create_rule(self, rule: RuleEnvelope) -> str:
+        rule_id = f"ru_created_{rule.metadata.name}"
+        stored = dataclasses.replace(rule, metadata=dataclasses.replace(rule.metadata, id=rule_id))
+        self.rules[rule.metadata.name] = stored
+        self.created_rules.append(stored)
+        return rule_id
+
+    def update_rule(self, rule: RuleEnvelope) -> None:
+        self.rules[rule.metadata.name] = rule
+        self.updated_rules.append(rule)
+
+    def delete_rule(self, rule_id: str) -> None:
+        self.deleted_rule_ids.append(rule_id)
+
+    def set_rule_state(self, rule_id: str, enabled: bool, alerting: bool) -> None:
+        pass
+
+
+def _make_envelope(
+    name: str,
+    rule_id: str = "uuid-1",
+    logic: str = "events:\n  $e\ncondition:\n  $e",
+    enabled: bool = True,
+    alerting: bool = True,
+) -> RuleEnvelope:
+    return RuleEnvelope(
+        metadata=RuleMetadata(
+            id=rule_id,
+            name=name,
+            description="Test rule",
+            status="production",
+        ),
+        logic=logic,
+        deployment=BaseDeploymentConfig(enabled=enabled, alerting=alerting),
+        runbook=Runbook(),
+    )
+
+
+def test_custom_rule_diff_no_changes() -> None:
+    rule = _make_envelope("login_alert")
+    reconciler = CustomRuleReconciler()
+    diff = reconciler.diff(current=(rule,), desired=(rule,))
+
+    assert diff.has_changes is False
+    assert len(diff.rules_to_create) == 0
+    assert len(diff.rules_to_update) == 0
+    assert len(diff.untracked_rules) == 0
+
+
+def test_custom_rule_diff_new_rule_to_create() -> None:
+    desired_rule = _make_envelope("new_rule")
+    reconciler = CustomRuleReconciler()
+    diff = reconciler.diff(current=(), desired=(desired_rule,))
+
+    assert diff.has_changes is True
+    assert len(diff.rules_to_create) == 1
+    assert diff.rules_to_create[0].metadata.name == "new_rule"
+    assert len(diff.rules_to_update) == 0
+
+
+def test_custom_rule_diff_modified_logic_to_update() -> None:
+    current_rule = _make_envelope("login_alert", rule_id="ru_remote_123", logic="old logic")
+    desired_rule = _make_envelope("login_alert", rule_id="local_uuid", logic="new logic")
+
+    reconciler = CustomRuleReconciler()
+    diff = reconciler.diff(current=(current_rule,), desired=(desired_rule,))
+
+    assert diff.has_changes is True
+    assert len(diff.rules_to_create) == 0
+    assert len(diff.rules_to_update) == 1
+    # Verify the remote ID was injected
+    assert diff.rules_to_update[0].metadata.id == "ru_remote_123"
+    assert diff.rules_to_update[0].logic == "new logic"
+
+
+def test_custom_rule_diff_modified_deployment_to_update() -> None:
+    current_rule = _make_envelope("login_alert", rule_id="ru_remote_123", enabled=False)
+    desired_rule = _make_envelope("login_alert", rule_id="local_uuid", enabled=True)
+
+    reconciler = CustomRuleReconciler()
+    diff = reconciler.diff(current=(current_rule,), desired=(desired_rule,))
+
+    assert diff.has_changes is True
+    assert len(diff.rules_to_update) == 1
+    assert diff.rules_to_update[0].deployment.enabled is True
+
+
+def test_custom_rule_diff_untracked_remote_rule() -> None:
+    current_rule = _make_envelope("untracked_rule", rule_id="ru_remote_999")
+    reconciler = CustomRuleReconciler()
+    diff = reconciler.diff(current=(current_rule,), desired=())
+
+    assert diff.has_changes is False
+    assert len(diff.untracked_rules) == 1
+    assert diff.untracked_rules[0].metadata.name == "untracked_rule"
+
+
+def test_custom_rule_apply_orchestration(caplog: pytest.LogCaptureFixture) -> None:
+    current_rule = _make_envelope("existing_rule", rule_id="ru_remote_old", logic="old")
+    deployer = RecordingMockRuleDeployer(initial_rules=(current_rule,))
+
+    desired_update = _make_envelope("existing_rule", rule_id="local_uuid", logic="new")
+    desired_create = _make_envelope("fresh_rule", rule_id="local_fresh_uuid")
+
+    reconciler = CustomRuleReconciler()
+    with caplog.at_level(logging.INFO, logger="graft.reconciler"):
+        diff = reconciler.apply(desired=(desired_update, desired_create), port=deployer)
+
+    assert diff.has_changes is True
+    assert len(diff.rules_to_create) == 1
+    assert len(diff.rules_to_update) == 1
+    assert len(deployer.created_rules) == 1
+    assert len(deployer.updated_rules) == 1
+    assert deployer.updated_rules[0].metadata.id == "ru_remote_old"
+
+    log_messages = [rec.message for rec in caplog.records]
+    assert any("Created custom rule 'fresh_rule'" in msg for msg in log_messages)
+    assert any("Updated custom rule 'existing_rule'" in msg for msg in log_messages)
+
+
+def test_custom_rules_render_summary() -> None:
+    rule_create = _make_envelope("create_me")
+    rule_update = _make_envelope("update_me", rule_id="ru_123")
+    rule_untracked = _make_envelope("untracked_me", rule_id="ru_456")
+
+    diff = CustomRulesReconciliationDiff(
+        rules_to_create=(rule_create,),
+        rules_to_update=(rule_update,),
+        untracked_rules=(rule_untracked,),
+    )
+    summary = diff.render_summary()
+    assert "[+] Custom rule to create: create_me" in summary
+    assert "[~] Custom rule to update: update_me (ID: ru_123)" in summary
+    assert "[?] Untracked custom rule on tenant: untracked_me (ID: ru_456)" in summary

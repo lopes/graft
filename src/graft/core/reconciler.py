@@ -1,4 +1,6 @@
+import dataclasses
 import logging
+from collections.abc import Callable
 from dataclasses import dataclass
 
 from graft.core.models.managed import (
@@ -6,9 +8,20 @@ from graft.core.models.managed import (
     ManagedRuleSet,
     ManagedState,
 )
+from graft.core.models.rule import RuleEnvelope
+from graft.core.ports.deployer import RuleDeployerPort
 from graft.core.ports.managed import ManagedEnginePort
 
 logger = logging.getLogger("graft.reconciler")
+
+__all__ = [
+    "CustomRuleReconciler",
+    "CustomRulesReconciliationDiff",
+    "DeploymentDiff",
+    "ExclusionDiff",
+    "GitOpsReconciler",
+    "ReconciliationDiff",
+]
 
 
 @dataclass(frozen=True)
@@ -99,6 +112,38 @@ class ReconciliationDiff:
 
         for retired in self.retired_rulesets:
             lines.append(f"[!] Retired upstream ruleset in repo: {retired.id} ({retired.name})")
+
+        return "\n".join(lines)
+
+
+@dataclass(frozen=True)
+class CustomRulesReconciliationDiff:
+    rules_to_create: tuple[RuleEnvelope, ...] = ()
+    rules_to_update: tuple[RuleEnvelope, ...] = ()
+    untracked_rules: tuple[RuleEnvelope, ...] = ()
+
+    @property
+    def has_changes(self) -> bool:
+        return bool(self.rules_to_create or self.rules_to_update)
+
+    def render_summary(self) -> str:
+        lines: list[str] = []
+        for rule in self.rules_to_create:
+            lines.append(f"[+] Custom rule to create: {rule.metadata.name}")
+
+        for rule in self.rules_to_update:
+            lines.append(
+                f"[~] Custom rule to update: {rule.metadata.name} (ID: {rule.metadata.id})"
+            )
+
+        for rule in self.untracked_rules:
+            lines.append(
+                f"[?] Untracked custom rule on tenant: {rule.metadata.name} "
+                f"(ID: {rule.metadata.id})"
+            )
+
+        if not lines:
+            return "No custom rule changes detected. Custom rules are synchronized with tenant."
 
         return "\n".join(lines)
 
@@ -240,3 +285,82 @@ class GitOpsReconciler:
             len(state.exclusions),
         )
         return state
+
+
+class CustomRuleReconciler:
+    def diff(
+        self,
+        current: tuple[RuleEnvelope, ...],
+        desired: tuple[RuleEnvelope, ...],
+        content_comparator: Callable[[RuleEnvelope, RuleEnvelope], bool] | None = None,
+    ) -> CustomRulesReconciliationDiff:
+        current_map = {r.metadata.name: r for r in current}
+        desired_map = {r.metadata.name: r for r in desired}
+
+        rules_to_create: list[RuleEnvelope] = []
+        rules_to_update: list[RuleEnvelope] = []
+        untracked_rules: list[RuleEnvelope] = [
+            r for name, r in current_map.items() if name not in desired_map
+        ]
+
+        for name, des_rule in desired_map.items():
+            if name not in current_map:
+                rules_to_create.append(des_rule)
+                continue
+
+            curr_rule = current_map[name]
+            if content_comparator is not None:
+                content_equal = content_comparator(des_rule, curr_rule)
+            else:
+                content_equal = des_rule.logic == curr_rule.logic
+
+            deployment_equal = (
+                des_rule.deployment.enabled == curr_rule.deployment.enabled
+                and des_rule.deployment.alerting == curr_rule.deployment.alerting
+            )
+
+            if not content_equal or not deployment_equal:
+                updated_rule = dataclasses.replace(
+                    des_rule,
+                    metadata=dataclasses.replace(des_rule.metadata, id=curr_rule.metadata.id),
+                )
+                rules_to_update.append(updated_rule)
+
+        return CustomRulesReconciliationDiff(
+            rules_to_create=tuple(rules_to_create),
+            rules_to_update=tuple(rules_to_update),
+            untracked_rules=tuple(untracked_rules),
+        )
+
+    def apply(
+        self,
+        desired: tuple[RuleEnvelope, ...],
+        port: RuleDeployerPort,
+        content_comparator: Callable[[RuleEnvelope, RuleEnvelope], bool] | None = None,
+    ) -> CustomRulesReconciliationDiff:
+        logger.info("Starting custom rules reconciliation against target tenant")
+        current = port.list_rules()
+        reconcile_diff = self.diff(
+            current=current, desired=desired, content_comparator=content_comparator
+        )
+
+        if not reconcile_diff.has_changes:
+            logger.info(
+                "Target tenant is already aligned with desired custom rules. No actions taken."
+            )
+            return reconcile_diff
+
+        for rule in reconcile_diff.rules_to_create:
+            logger.info("Created custom rule '%s' in tenant", rule.metadata.name)
+            port.create_rule(rule)
+
+        for rule in reconcile_diff.rules_to_update:
+            logger.info("Updated custom rule '%s' in tenant", rule.metadata.name)
+            port.update_rule(rule)
+
+        logger.info(
+            "Custom rules reconciliation complete. %d creations, %d updates.",
+            len(reconcile_diff.rules_to_create),
+            len(reconcile_diff.rules_to_update),
+        )
+        return reconcile_diff
