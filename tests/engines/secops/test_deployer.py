@@ -75,6 +75,75 @@ def test_update_rule_success(mock_client: MagicMock, sample_rule: RuleEnvelope) 
     first_call = mock_client.request.call_args_list[0]
     assert first_call[0][0] == "PATCH"
     assert first_call[0][1] == f"rules/{rule_id}"
+    assert first_call[1]["params"] == {"update_mask": "text"}
+
+
+def test_list_rules_with_deployments_success(mock_client: MagicMock) -> None:
+    mock_client.request.side_effect = [
+        {
+            "rules": [
+                {
+                    "name": "projects/p/locations/l/instances/i/rules/ru_12345",
+                    "displayName": "custom_login_detection",
+                    "text": "rule custom_login_detection { condition: true }",
+                },
+            ],
+        },
+        {
+            "ruleDeployments": [
+                {
+                    "name": "projects/p/locations/l/instances/i/rules/ru_12345/deployment",
+                    "enabled": True,
+                    "alerting": True,
+                },
+            ],
+        },
+    ]
+
+    deployer = SecOpsDeployerAdapter(client=mock_client)
+    rules = deployer.list_rules()
+
+    assert len(rules) == 1
+    rule = rules[0]
+    assert rule.metadata.id == "ru_12345"
+    assert rule.metadata.name == "custom_login_detection"
+    assert rule.logic == "rule custom_login_detection { condition: true }"
+    assert rule.deployment.enabled is True
+    assert rule.deployment.alerting is True
+
+    assert mock_client.request.call_count == 2
+    first_call = mock_client.request.call_args_list[0]
+    assert first_call[0] == ("GET", "rules")
+    assert first_call[1]["params"] == {"view": "FULL"}
+
+    second_call = mock_client.request.call_args_list[1]
+    assert second_call[0] == ("GET", "rules/-/deployments")
+
+
+def test_list_rules_deployments_fallback_on_api_error(mock_client: MagicMock) -> None:
+    from graft.engines.secops.client import SecOpsApiError
+
+    mock_client.request.side_effect = [
+        {
+            "rules": [
+                {
+                    "name": "projects/p/locations/l/instances/i/rules/ru_12345",
+                    "displayName": "custom_login_detection",
+                    "text": "rule custom_login_detection { condition: true }",
+                },
+            ],
+        },
+        SecOpsApiError("Not found", 404),
+    ]
+
+    deployer = SecOpsDeployerAdapter(client=mock_client)
+    rules = deployer.list_rules()
+
+    assert len(rules) == 1
+    rule = rules[0]
+    assert rule.metadata.id == "ru_12345"
+    assert rule.deployment.enabled is False
+    assert rule.deployment.alerting is False
 
 
 def test_delete_rule_success(mock_client: MagicMock) -> None:

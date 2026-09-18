@@ -1,6 +1,6 @@
 from graft.core.models.rule import BaseDeploymentConfig, RuleEnvelope, RuleMetadata, Runbook
 from graft.core.ports.deployer import RuleDeployerPort
-from graft.engines.secops.client import SecOpsClient
+from graft.engines.secops.client import SecOpsApiError, SecOpsClient
 from graft.engines.secops.compiler import synthesize_yaral_rule
 
 
@@ -9,10 +9,30 @@ class SecOpsDeployerAdapter(RuleDeployerPort):
         self._client = client
 
     def list_rules(self) -> tuple[RuleEnvelope, ...]:
-        response = self._client.request("GET", "rules")
+        response = self._client.request("GET", "rules", params={"view": "FULL"})
         raw_rules = response.get("rules")
         if not isinstance(raw_rules, list):
             return ()
+
+        deployments_map: dict[str, tuple[bool, bool]] = {}
+        try:
+            dep_response = self._client.request("GET", "rules/-/deployments")
+            raw_deps = dep_response.get("ruleDeployments")
+            if isinstance(raw_deps, list):
+                for dep in raw_deps:
+                    if not isinstance(dep, dict):
+                        continue
+                    name_resource = str(dep.get("name", ""))
+                    dep_rule_id = (
+                        name_resource.split("/")[-2]
+                        if "/deployment" in name_resource
+                        else name_resource.split("/")[-1]
+                    )
+                    enabled = bool(dep.get("enabled", False))
+                    alerting = bool(dep.get("alerting", False))
+                    deployments_map[dep_rule_id] = (enabled, alerting)
+        except SecOpsApiError:
+            pass
 
         envelopes: list[RuleEnvelope] = []
         for raw in raw_rules:
@@ -23,6 +43,8 @@ class SecOpsDeployerAdapter(RuleDeployerPort):
             display_name = str(raw.get("displayName", rule_id))
             text = str(raw.get("text", ""))
 
+            dep_enabled, dep_alerting = deployments_map.get(rule_id, (False, False))
+
             metadata = RuleMetadata(
                 id=rule_id,
                 name=display_name,
@@ -31,7 +53,7 @@ class SecOpsDeployerAdapter(RuleDeployerPort):
                 authors=(),
                 mitre={},
             )
-            deployment = BaseDeploymentConfig(enabled=False, alerting=False)
+            deployment = BaseDeploymentConfig(enabled=dep_enabled, alerting=dep_alerting)
             runbook = Runbook(context="", triage="", response="")
             envelopes.append(
                 RuleEnvelope(
@@ -69,6 +91,7 @@ class SecOpsDeployerAdapter(RuleDeployerPort):
             "PATCH",
             f"rules/{rule_id}",
             body={"text": rule_text},
+            params={"update_mask": "text"},
         )
         self.set_rule_state(
             rule_id=rule_id,
