@@ -16,6 +16,7 @@ from graft.core.matrix import (
     render_matrix_table,
 )
 from graft.core.models.rule import RuleEnvelope
+from graft.core.validation import RuleUniquenessValidator
 from graft.engines.secops.managed_loader import (
     ManagedManifestLoadError,
     load_managed_manifest_from_yaml,
@@ -49,6 +50,34 @@ def execute_lint(
 
     results: list[dict[str, Any]] = []
     has_errors = False
+    uniqueness_validator = RuleUniquenessValidator()
+
+    schemas_dir = Path("schemas")
+    target_set = {f.resolve() for f in target_files if f.exists()}
+    root_rules = Path(rules_dir)
+    if root_rules.is_dir():
+        for other_path in sorted(root_rules.rglob("*.yaml")):
+            if (
+                other_path.name in ("managed.yaml", "managed.yml")
+                or other_path.resolve() in target_set
+            ):
+                continue
+            try:
+                parts = other_path.parts
+                engine = "secops"
+                if "rules" in parts:
+                    idx = parts.index("rules")
+                    if idx + 1 < len(parts):
+                        engine = parts[idx + 1]
+                schema = f"{engine}_custom"
+                if not (schemas_dir / f"{schema}.schema.json").exists():
+                    schema = "base_rule"
+                other_rule = load_rule_from_yaml(
+                    other_path, schema_name=schema, validate_mitre=False
+                )
+                uniqueness_validator.add_and_validate(other_rule, engine=engine, path=other_path)
+            except (RuleLoadError, ValueError, OSError):
+                continue
 
     for file_path in target_files:
         is_managed = file_path.name in ("managed.yaml", "managed.yml")
@@ -65,12 +94,30 @@ def execute_lint(
             else:
                 # Infer engine from path (e.g. rules/<engine>/custom/rule.yaml)
                 parts = file_path.parts
+                engine = "secops"
                 schema = "secops_custom"
                 if "rules" in parts:
                     idx = parts.index("rules")
                     if idx + 1 < len(parts):
-                        schema = f"{parts[idx + 1]}_custom"
-                load_rule_from_yaml(file_path, schema_name=schema)
+                        engine = parts[idx + 1]
+                        schema = f"{engine}_custom"
+                if not (schemas_dir / f"{schema}.schema.json").exists():
+                    schema = "base_rule"
+                rule = load_rule_from_yaml(file_path, schema_name=schema)
+                uniqueness_violations = uniqueness_validator.add_and_validate(
+                    rule, engine=engine, path=file_path
+                )
+                if uniqueness_violations:
+                    has_errors = True
+                    file_result["valid"] = False
+                    for v in uniqueness_violations:
+                        file_result["errors"].append(v.message)
+                        if not json_output:
+                            sys.stderr.write(f"[FAIL] {file_path}:\n  {v.message}\n")
+                    results.append(file_result)
+                    if fail_fast:
+                        break
+                    continue
 
             file_result["valid"] = True
             if not json_output:

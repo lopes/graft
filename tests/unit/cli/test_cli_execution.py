@@ -44,6 +44,110 @@ def test_main_lint_error(tmp_path: Path) -> None:
     assert exit_code == 1
 
 
+def test_main_lint_duplicate_id_across_engines_fails(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    rule1 = tmp_path / "rules" / "secops" / "custom" / "r1.yaml"
+    rule2 = tmp_path / "rules" / "crowdstrike" / "custom" / "r2.yaml"
+    rule1.parent.mkdir(parents=True)
+    rule2.parent.mkdir(parents=True)
+
+    tests_block = (
+        'tests:\n  - id: "t1"\n    description: "desc"\n    expect: 1\n    events:\n'
+        '      - timestamp: "2026-09-18T00:00:00Z"\n        payload:\n          k: "v"\n'
+    )
+    content1 = (
+        'metadata:\n  id: "11111111-2222-3333-4444-555555555555"\n  name: "rule_one"\n'
+        '  description: "Desc"\n  status: "production"\n'
+        'logic: "events:\\n  $e\\ncondition:\\n  $e"\n'
+        'deployment:\n  enabled: true\n  alerting: true\n  run_frequency: "live"\n'
+        f'runbook:\n  context: "c"\n  triage: "t"\n  response: "r"\n{tests_block}'
+    )
+    content2 = (
+        'metadata:\n  id: "11111111-2222-3333-4444-555555555555"\n  name: "rule_two"\n'
+        '  description: "Desc"\n  status: "production"\n'
+        'logic: "events:\\n  $e\\ncondition:\\n  $e"\n'
+        'deployment:\n  enabled: true\n  alerting: true\n  run_frequency: "live"\n'
+        f'runbook:\n  context: "c"\n  triage: "t"\n  response: "r"\n{tests_block}'
+    )
+    rule1.write_text(content1, encoding="utf-8")
+    rule2.write_text(content2, encoding="utf-8")
+
+    exit_code = main(["lint", str(rule1), str(rule2)])
+    assert exit_code == 1
+    captured = capsys.readouterr()
+    assert "Duplicate rule metadata.id" in captured.err
+
+
+def test_main_lint_duplicate_name_in_same_engine_fails(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    rule1 = tmp_path / "rules" / "secops" / "custom" / "r1.yaml"
+    rule2 = tmp_path / "rules" / "secops" / "custom" / "r2.yaml"
+    rule1.parent.mkdir(parents=True)
+
+    tests_block = (
+        'tests:\n  - id: "t1"\n    description: "desc"\n    expect: 1\n    events:\n'
+        '      - timestamp: "2026-09-18T00:00:00Z"\n        payload:\n          k: "v"\n'
+    )
+    content1 = (
+        'metadata:\n  id: "11111111-1111-1111-1111-111111111111"\n  name: "shared_name"\n'
+        '  description: "Desc"\n  status: "production"\n'
+        'logic: "events:\\n  $e\\ncondition:\\n  $e"\n'
+        'deployment:\n  enabled: true\n  alerting: true\n  run_frequency: "live"\n'
+        f'runbook:\n  context: "c"\n  triage: "t"\n  response: "r"\n{tests_block}'
+    )
+    content2 = (
+        'metadata:\n  id: "22222222-2222-2222-2222-222222222222"\n  name: "shared_name"\n'
+        '  description: "Desc"\n  status: "production"\n'
+        'logic: "events:\\n  $e\\ncondition:\\n  $e"\n'
+        'deployment:\n  enabled: true\n  alerting: true\n  run_frequency: "live"\n'
+        f'runbook:\n  context: "c"\n  triage: "t"\n  response: "r"\n{tests_block}'
+    )
+    rule1.write_text(content1, encoding="utf-8")
+    rule2.write_text(content2, encoding="utf-8")
+
+    exit_code = main(["lint", str(rule1), str(rule2)])
+    assert exit_code == 1
+    captured = capsys.readouterr()
+    assert "Duplicate rule metadata.name" in captured.err
+
+
+def test_main_lint_same_name_across_different_engines_passes(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    rule1 = tmp_path / "rules" / "secops" / "custom" / "r1.yaml"
+    rule2 = tmp_path / "rules" / "crowdstrike" / "custom" / "r2.yaml"
+    rule1.parent.mkdir(parents=True)
+    rule2.parent.mkdir(parents=True)
+
+    tests_block = (
+        'tests:\n  - id: "t1"\n    description: "desc"\n    expect: 1\n    events:\n'
+        '      - timestamp: "2026-09-18T00:00:00Z"\n        payload:\n          k: "v"\n'
+    )
+    content1 = (
+        'metadata:\n  id: "11111111-1111-1111-1111-111111111111"\n  name: "shared_name"\n'
+        '  description: "Desc"\n  status: "production"\n'
+        'logic: "events:\\n  $e\\ncondition:\\n  $e"\n'
+        'deployment:\n  enabled: true\n  alerting: true\n  run_frequency: "live"\n'
+        f'runbook:\n  context: "c"\n  triage: "t"\n  response: "r"\n{tests_block}'
+    )
+    content2 = (
+        'metadata:\n  id: "22222222-2222-2222-2222-222222222222"\n  name: "shared_name"\n'
+        '  description: "Desc"\n  status: "production"\n'
+        'logic: "events:\\n  $e\\ncondition:\\n  $e"\n'
+        'deployment:\n  enabled: true\n  alerting: true\n  run_frequency: "live"\n'
+        f'runbook:\n  context: "c"\n  triage: "t"\n  response: "r"\n{tests_block}'
+    )
+    rule1.write_text(content1, encoding="utf-8")
+    rule2.write_text(content2, encoding="utf-8")
+
+    exit_code = main(["lint", str(rule1), str(rule2)])
+    assert exit_code == 0
+    captured = capsys.readouterr()
+    assert "Lint complete: 2 passed" in captured.out
+
+
 def test_main_new_engine(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     base_schema_content = Path("schemas/base_rule.schema.json").read_text(encoding="utf-8")
     monkeypatch.chdir(tmp_path)

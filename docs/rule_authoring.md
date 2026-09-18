@@ -55,7 +55,38 @@ Synthetic replay test fixtures for automated validation.
 
 ---
 
-## 2. Reference Rule Example (Google Workspace)
+## 2. Rule Identification & Uniqueness Scoping
+
+To maintain data integrity across multi-engine deployments, audit catalogs, and SIEM migrations, Graft enforces a dual-tier uniqueness model:
+
+```mermaid
+flowchart TD
+    subgraph RepoScope["Graft Repository Scope (Global)"]
+        ID["<b>metadata.id (Global Uniqueness)</b><br/>Must be unique across ALL engines in the repository<br/><i>e.g. A SecOps rule ID cannot collide with a CrowdStrike rule ID</i>"]
+    end
+
+    subgraph EngineScope["Engine Scope (Per Engine)"]
+        NAME["<b>metadata.name (Engine-Scoped Uniqueness)</b><br/>Must be unique within the specific engine directory (rules/&lt;engine&gt;/custom/)<br/><i>e.g. Rules in different engines CAN share the same technical name</i>"]
+    end
+```
+
+### 1. Global Scope: `metadata.id`
+- **Constraint:** Must be a valid v4 UUID string (`^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$`) and strictly unique across the entire Graft codebase.
+- **Rationale:** The `metadata.id` represents the immutable, canonical identity of the detection concept within the enterprise. It is referenced by audit logs, compliance exports, ATT&CK Navigator heatmaps, and cross-platform SIEM migration tooling. No two rule files in the repository may share an `id`, even if they target completely different detection engines (e.g., Google SecOps vs. CrowdStrike Falcon).
+
+### 2. Engine Scope: `metadata.name`
+- **Constraint:** Must be a lowercase alphanumeric snake_case slug (`^[a-z0-9_]+$`, max 64 characters) and unique within the target engine (`rules/<engine>/custom/`).
+- **Rationale:** The `metadata.name` serves as the native SIEM identifier (such as the YARA-L rule identifier `rule <name> { ... }` in Chronicle or the detection title in other platforms). While two rules in the same engine cannot share a name (which would create an overwrite collision on the tenant), rules across different engines **can** share the same `name` (e.g. `rules/secops/custom/gcp_iam_service_account_key_create.yaml` and a corresponding `rules/crowdstrike/custom/gcp_iam_service_account_key_create.yaml`).
+
+### 3. Automated Verification
+Rule uniqueness is enforced automatically during:
+- Local rule linting (`graft lint`).
+- Git pre-commit hooks (`.githooks/pre-commit`).
+- Pull request CI/CD gates (`.github/workflows/pr-validation.yml`).
+
+---
+
+## 3. Reference Rule Example (Google Workspace)
 
 Below is an authentic reference rule implemented in [`rules/secops/custom/workspace_nrd_possible_phishing.yaml`](file:///usr/local/google/home/joelopes/Projects/graft/rules/secops/custom/workspace_nrd_possible_phishing.yaml):
 
@@ -181,7 +212,7 @@ tests:
 
 ---
 
-## 3. Scaffolding & Offline Validation
+## 4. Scaffolding & Offline Validation
 
 ### Scaffolding a New Rule
 Use `graft new rule` to generate an empty rule file conforming to the engine's schema:
