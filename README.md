@@ -10,7 +10,7 @@
 </p>
 
 <p align="center">
-  <a href="GRAFT_MASTER_PLAN.md"><img src="https://img.shields.io/badge/status-work_in_progress-orange.svg" alt="Status: Work in Progress"></a>
+  <a href="GRAFT_MASTER_PLAN.md"><img src="https://img.shields.io/badge/status-active-brightgreen.svg" alt="Status: Active"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-Apache_2.0-blue.svg" alt="License: Apache 2.0"></a>
   <a href="https://www.python.org/"><img src="https://img.shields.io/badge/python-%3E%3D3.13-blue" alt="Python Version"></a>
   <a href="https://github.com/astral-sh/ruff"><img src="https://img.shields.io/badge/code%20style-ruff-000000.svg" alt="Code Style: ruff"></a>
@@ -22,7 +22,7 @@
 > - **Public Lab Environment:** This public repository (`lopes/graft`) is strictly connected to an isolated lab/demo environment for open-source development and experimentation. It is never connected to production tenants.
 > - **Production Repositories Must Be Private:** Any detection engineering team or operator adopting or forking Graft for production use **must maintain their repository in private version control** under strict organizational access controls. While the Graft engine is open-source, version-controlling live production deployment states (`enabled`, `alerting`) or operational exclusions (`findingsRefinements`) in a public repository will leak defensive postures, monitoring coverage blind spots, and internal entity identities (hostnames, IP ranges, usernames, service accounts).
 > - **Curated Content Is Public:** The vendor-managed detection catalog metadata tracked in `rules/secops/managed.yaml` (category names, ruleset titles, descriptions, and catalog UUIDs) represents standard vendor content that is **publicly published** in official Google Cloud documentation. See [Google SecOps Curated Detections](https://docs.cloud.google.com/chronicle/docs/detection/curated-detections) and [Review Curated Detection Categories](https://docs.cloud.google.com/chronicle/docs/detection/cloud-threats-category).
-> - **Active Engineering:** Graft is under active phased development. Specifications and CLI subcommands are evolving according to [GRAFT_MASTER_PLAN.md](GRAFT_MASTER_PLAN.md).
+> - **Specification & Architecture:** Complete architectural foundations, component specifications, and engineering directives are documented in [GRAFT_MASTER_PLAN.md](GRAFT_MASTER_PLAN.md).
 
 ---
 
@@ -86,7 +86,7 @@ For full guides and architecture specifications, see the **[Graft Documentation 
 
 ```bash
 # Clone repository
-git clone https://github.com/joelopes/graft.git
+git clone https://github.com/lopes/graft.git
 cd graft
 
 # Install virtualenv and dev dependencies
@@ -121,32 +121,87 @@ git push origin main
 
 ### Essential CLI Commands
 
+#### 1. Rule Validation & Taxonomy Linting
 ```bash
-# 1. Offline rule and manifest linting
+# Lint the entire rules repository offline (<100ms)
 graft lint
+
+# Lint a specific rule file
 graft lint rules/secops/custom/workspace_nrd_possible_phishing.yaml
 
-# 2. Scaffolding new engines or rules
+# Output structured JSON diagnostics for CI/CD pipelines
+graft --json lint
+```
+
+#### 2. Rule & Engine Scaffolding
+```bash
+# Bootstrap a new detection rule (creates 5-block envelope with schema defaults)
+graft secops new suspicious_powershell_download
+# or using the engine-agnostic router:
+graft new rule suspicious_powershell_download --engine secops
+
+# Bootstrap an entirely new detection engine adapter (code, schema, rules, tests)
 graft new engine sentinel
-graft new rule gcp_cloud_storage_public_bucket --engine secops
+```
 
-# 3. Threat coverage matrix & catalog exports
-graft export matrix --format table
-graft export matrix --format navigator --out layers/coverage.json
-graft export catalog --format markdown
-graft export catalog --format csv --out exports/catalog.csv
-
-# 4. Google SecOps pre-merge syntax dry run
+#### 3. Pre-Merge Verification & Staging Replay Testing
+```bash
+# Dry-run YARA-L syntax against Google SecOps verifyRuleText (non-destructive)
 graft secops verify rules/secops/custom/workspace_nrd_possible_phishing.yaml
 
-# 5. Synthetic UDM replay testing
+# Execute synthetic UDM replay tests in isolated staging quarantine
 graft secops test
-graft secops test rules/secops/custom/workspace_nrd_possible_phishing.yaml --require-staging
 
-# 6. GitOps managed curated content reconciliation
-graft secops managed diff
-graft secops managed apply
-graft secops managed pull --out rules/secops/managed.yaml
+# Test only rules modified in the current Git branch or working tree
+graft secops test --changed-only
+
+# Enforce hard failure if staging credentials are missing (used in strict CI)
+graft secops test --require-staging
+```
+
+#### 4. GitOps Drift Detection & State Reconciliation
+```bash
+# Preview changes for rules modified in current branch (Mode B: scoped)
+graft secops diff --env production
+
+# Scan entire tenant catalog for out-of-band console drift (Mode A: full)
+graft secops diff --all --env production
+
+# Apply scoped branch changes to tenant (Mode B)
+graft secops apply --env production
+
+# Force complete tenant convergence back to Git state, healing any console drift (Mode A)
+graft secops apply --all --env production
+
+# Target only custom rules or only vendor-managed curated content
+graft secops diff --target custom --env production
+graft secops apply --target managed --env production
+```
+
+#### 5. Reverse Synchronization (Tenant Ingestion)
+```bash
+# Reverse-sync live tenant custom rules and managed curated manifest into local repo
+graft secops pull --env production
+
+# Reverse-sync only custom rules (with overwrite protection or --force)
+graft secops pull --target custom --env production --force
+
+# Granular reverse-sync for vendor-curated rule sets only
+graft secops managed pull --env production
+```
+
+#### 6. Threat Matrix & Visibility Catalogs
+```bash
+# Render ASCII MITRE ATT&CK coverage table in the terminal
+graft export matrix --format table
+
+# Generate official MITRE ATT&CK Navigator v4.5 JSON layer for visual heatmaps
+graft export matrix --format navigator --out layers/attack_coverage.json
+
+# Export detection catalog with Git author attribution and deployment metrics
+graft export catalog --format markdown --out docs/RULE_CATALOG.md
+graft export catalog --format csv --out exports/detection_catalog.csv
+graft export catalog --format json
 ```
 
 ---

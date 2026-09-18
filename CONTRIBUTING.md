@@ -7,7 +7,7 @@ Thank you for contributing to Graft. Graft is an extensible, standards-aligned D
 ## Code of Conduct & Philosophy
 
 - **Stdlib-First Policy:** Solve problems using Python standard libraries first. Zero third-party runtime dependencies are accepted beyond `pyyaml` (YAML I/O) and `jsonschema` (Draft 2020-12 validation). HTTP clients, subprocess callers, CLI parsers, and data models must rely on stdlib.
-- **Hexagonal Architecture:** The core engine (`src/graft/core/`) must remain 100% agnostic to cloud providers, SIEM APIs, and HTTP transports. All SIEM-specific interactions must live in adapters (`src/graft/adapters/`).
+- **Hexagonal Architecture:** The core engine (`src/graft/core/`) must remain 100% agnostic to cloud providers, SIEM APIs, and HTTP transports. All SIEM-specific interactions must live in engine adapters (`src/graft/engines/<engine>/`).
 - **High Signal-to-Noise:** Comments must explain *why* or non-obvious security/API constraints, never restate what the code does. Commented-out dead code and promotional trailers are rejected.
 - **Strict TDD:** Tests are written first (Red-Green-Refactor). Unit tests must execute in <1s with 100% mock isolation.
 
@@ -45,7 +45,7 @@ uv run ruff format --check .
 uv run mypy --strict src tests
 
 # 4. Offline test execution
-uv run pytest tests/unit tests/adapters
+uv run pytest tests/unit tests/engines
 
 # 5. Offline rule & manifest linting
 uv run graft lint
