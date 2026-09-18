@@ -29,3 +29,7 @@ Welcome to the Graft documentation. This table of contents is arranged in a dida
 
 8. **[Extending Engines Tutorial](engines/extending_engines.md)**  
    Step-by-step developer guide to scaffolding a new engine adapter via `graft new engine`, implementing the four core engine ports, and testing with strict TDD.
+
+9. **[Security Architecture & Best Practices](security.md)**  
+   Workload Identity Federation (WIF), OIDC token exchange, fork boundary isolation, least-privilege IAM, audit logging, and secrets management.
+

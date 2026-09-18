@@ -58,6 +58,7 @@ For full guides and architecture specifications, see the **[Graft Documentation 
 - **[Visibility, Matrix & Catalogs](docs/visibility_and_matrix.md):** MITRE ATT&CK matrix, Navigator v4 layers, and Git author attribution.
 - **[Google SecOps Engine Setup](docs/engines/secops.md):** Credentials, dual-tenant vs single-tenant lab topologies, and API mechanics.
 - **[Extending Engines Tutorial](docs/engines/extending_engines.md):** Developer guide to scaffolding and implementing new engine adapters.
+- **[Security Architecture](docs/security.md):** Workload Identity Federation, OIDC token exchange, fork isolation, and audit logging.
 
 ---
 
