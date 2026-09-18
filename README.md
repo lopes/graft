@@ -1,13 +1,21 @@
-# graft
+<p align="center">
+  <img src="assets/graft-logo.svg" alt="Graft Logo" width="160" height="160">
+</p>
 
-> **Write Once, Defend Everywhere.**  
-> *An extensible, vendor-agnostic Detection-as-Code (DaC) platform engineered for Google SecOps and modern enterprise security operations.*
+<h1 align="center">graft</h1>
 
-[![Status: Work in Progress](https://img.shields.io/badge/status-work_in_progress-orange.svg)](GRAFT_MASTER_PLAN.md)
-[![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
-[![Python Version](https://img.shields.io/badge/python-%3E%3D3.13-blue)](https://www.python.org/)
-[![Code Style: ruff](https://img.shields.io/badge/code%20style-ruff-000000.svg)](https://github.com/astral-sh/ruff)
-[![Type Checked: mypy](https://img.shields.io/badge/type_checked-mypy-informational)](http://mypy-lang.org/)
+<p align="center">
+  <strong>Write Once, Defend Everywhere.</strong><br>
+  <em>An extensible, vendor-agnostic Detection-as-Code (DaC) platform engineered for Google SecOps and modern enterprise security operations.</em>
+</p>
+
+<p align="center">
+  <a href="GRAFT_MASTER_PLAN.md"><img src="https://img.shields.io/badge/status-work_in_progress-orange.svg" alt="Status: Work in Progress"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/License-Apache_2.0-blue.svg" alt="License: Apache 2.0"></a>
+  <a href="https://www.python.org/"><img src="https://img.shields.io/badge/python-%3E%3D3.13-blue" alt="Python Version"></a>
+  <a href="https://github.com/astral-sh/ruff"><img src="https://img.shields.io/badge/code%20style-ruff-000000.svg" alt="Code Style: ruff"></a>
+  <a href="http://mypy-lang.org/"><img src="https://img.shields.io/badge/type_checked-mypy-informational" alt="Type Checked: mypy"></a>
+</p>
 
 > [!WARNING]
 > **Public Repository Notice & Operational Boundaries:**
