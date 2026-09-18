@@ -331,3 +331,174 @@ To avoid credential ambiguity across multiple platforms and engines, Graft enfor
 - **`GRAFT_GITHUB_TOKEN`:** Personal access token for GitHub operations (fetching repository metadata, release tracking, or PR automation).
 - **`GRAFT_SECOPS_TOKEN`** (or **`GRAFT_GCP_TOKEN`**): Dedicated GCP OAuth2 bearer token for Google SecOps REST APIs.
 
+---
+
+## 7. Google Curated Rule Sets & Managed Manifest (`rules/secops/managed.yaml`)
+
+Google SecOps provides Curated Rule Sets—vendor-managed detection packages maintained by Google Cloud Threat Intelligence (GCTI). Graft manages the entire curated content lifecycle declaratively through a single consolidated manifest: [`rules/secops/managed.yaml`](file:///usr/local/google/home/joelopes/Projects/graft/rules/secops/managed.yaml).
+
+```mermaid
+flowchart TD
+    MANIFEST["<b>rules/secops/managed.yaml</b>"]
+    CATS["<b>categories:</b><br/>Curated RuleSet Categories & Deployments"]
+    EXCLS["<b>exclusions:</b><br/>Detection Exclusions (findingsRefinements)"]
+
+    MANIFEST --> CATS
+    MANIFEST --> EXCLS
+
+    CATS --> RS["<b>Curated RuleSets</b><br/>• PRECISE (enabled, alerting)<br/>• BROAD (enabled, alerting)"]
+    EXCLS --> APP["<b>Target Application:</b><br/>• ruleset_id (Curated RuleSet UUID)<br/>• rule_id (Custom Rule Name/ID)"]
+
+    RS --> SEC_DEP["CuratedRuleSetDeployments API<br/><code>PATCH .../curatedRuleSetDeployments/{type}</code>"]
+    APP --> SEC_FR["findingsRefinements & Deployments API<br/><code>POST findingsRefinements</code><br/><code>PATCH .../deployment</code>"]
+```
+
+### Hierarchy & Deployment Precision
+
+Google SecOps organizes curated detections in a 3-tier hierarchy:
+1. **Category:** High-level threat vertical (e.g. *Cloud Threats*, *Linux Threats*, *Windows Threats*). Each category has a UUID.
+2. **Curated Rule Set:** A functional grouping of detection rules (e.g. *Malware Signals - Suspicious Execution*). Each ruleset has a UUID.
+3. **Deployments:** Every curated ruleset provides two operational deployment models:
+   - **`PRECISE`:** Strict, high-confidence detection logic tailored to produce actionable, high-fidelity SOC alerts with minimal false positives. Google strongly recommends enabling `PRECISE` first.
+   - **`BROAD`:** Heuristic, exploratory detection logic designed for comprehensive threat hunting and broader behavioral visibility. Often run with `alerting: false` to avoid alert fatigue.
+
+### Managed Manifest Format
+
+The manifest [`rules/secops/managed.yaml`](file:///usr/local/google/home/joelopes/Projects/graft/rules/secops/managed.yaml) adheres to [`schemas/secops_managed.schema.json`](file:///usr/local/google/home/joelopes/Projects/graft/schemas/secops_managed.schema.json):
+
+```yaml
+categories:
+  - name: "Linux Threats"
+    id: "a5366ed8-3746-2423-a972-98535279f96a"
+    rulesets:
+      - id: "1c4ab1f6-d801-d6a9-1177-3ec3dd5bcbe9"
+        name: "Malware Signals - Suspicious Execution"
+        deployments:
+          - type: PRECISE
+            enabled: true
+            alerting: false
+          - type: BROAD
+            enabled: false
+            alerting: false
+
+exclusions:
+  - id: "exclude-backup-automation"
+    description: "Exclude authorized overnight backup automation from Suspicious Execution"
+    ruleset_id: "1c4ab1f6-d801-d6a9-1177-3ec3dd5bcbe9"
+    expression: 'principal.hostname = "backup-server.corp.internal"'
+```
+
+---
+
+## 8. Detection Exclusions (`findingsRefinements`) & Operator Runbook
+
+In Google SecOps, detection exceptions are officially termed **Findings Refinements** (`findingsRefinements`). Exclusions allow operators to suppress known benign activity from generating alerts without modifying underlying curated detection logic.
+
+### API Architecture & Protocol Mechanics
+
+Unlike custom rules, exclusions in Google SecOps follow a decoupled, two-stage resource model:
+
+```mermaid
+sequenceDiagram
+    participant Reconciler as Graft GitOps Reconciler
+    participant RefinementAPI as SecOps findingsRefinements API
+    participant DeploymentAPI as SecOps Refinement Deployment API
+
+    Note over Reconciler,DeploymentAPI: Step 1: Create Refinement Logic
+    Reconciler->>RefinementAPI: POST /findingsRefinements<br/>{"displayName": "...", "query": "...", "type": "DETECTION_EXCLUSION"}
+    RefinementAPI-->>Reconciler: 200 OK {"name": ".../findingsRefinements/fr_01234567-89ab-..."}
+
+    Note over Reconciler,DeploymentAPI: Step 2: Configure & Activate Deployment
+    Reconciler->>DeploymentAPI: PATCH /findingsRefinements/{id}/deployment<br/>{"enabled": true, "archived": false, "detectionExclusionApplication": {"curatedRuleSets": [...]}}
+    DeploymentAPI-->>Reconciler: 200 OK
+
+    Note over Reconciler,DeploymentAPI: Retirement / Deletion Workflow
+    Reconciler->>DeploymentAPI: PATCH /findingsRefinements/{id}/deployment<br/>{"enabled": false, "archived": true}
+    DeploymentAPI-->>Reconciler: 200 OK (Exclusion Retired)
+```
+
+1. **Refinement Definition (`findingsRefinements`):**
+   - Holds the human-readable `displayName`, the UDM filter `query`, and the type `DETECTION_EXCLUSION`.
+   - The SecOps API generates an immutable UUID resource name: `projects/{project}/locations/{location}/instances/{instance}/findingsRefinements/{fr_uuid}`.
+2. **Refinement Deployment (`findingsRefinements/{id}/deployment`):**
+   - Governs execution state: `enabled` (boolean) and `archived` (boolean).
+   - Associates the exclusion with target detectors via `detectionExclusionApplication`:
+     - `curatedRuleSets`: List of full resource paths to curated rulesets.
+     - `rules`: List of full resource paths to custom detection rules.
+3. **Retirement Semantics (No Hard DELETE):**
+   - The Google SecOps API does not support HTTP `DELETE /findingsRefinements/{id}`.
+   - To safely retire an exclusion, Graft patches the deployment sub-resource with `{"enabled": false, "archived": true}`. Archived exclusions are ignored during synchronization, preventing stale exclusions from remaining active.
+4. **Idempotent Reconciliation:**
+   - In `managed.yaml`, operators assign a human-readable `id` slug (e.g. `exclude-ansible-runner`).
+   - When synchronizing, Graft matches exclusions by `id` first, and falls back to `description` (`displayName`). This ensures seamless reconciliation even after SecOps assigns an internal `fr_{uuid}`.
+
+### Exclusion Expression Grammar (UDM Syntax)
+
+Exclusion queries evaluate against Unified Data Model (UDM) fields. Unlike YARA-L rule bodies, exclusion queries **do not use event variable prefixes** (never prefix with `$e.` or `$u.`):
+
+| Target Filter | Valid Expression Syntax |
+| :--- | :--- |
+| **Hostname** | `principal.hostname = "authorized-host.corp.internal"` |
+| **User ID** | `principal.user.userid = "svc-backup-runner"` |
+| **IP Address** | `principal.ip = "10.128.0.50"` |
+| **File Path Prefix (Regex)** | `target.file.full_path = /opt\/corp\/tools\/.*/` |
+| **Command Line Substring** | `principal.process.command_line = /.*--safe-mode.*/` |
+| **Compound AND Condition** | `principal.user.userid = "svc-deployer" and target.process.file.name = "terraform"` |
+
+### Operator Runbook: Creating, Deploying, and Retiring an Exclusion
+
+Follow this step-by-step operational runbook:
+
+#### Step 1: Identify the Target RuleSet
+1. Open [`rules/secops/managed.yaml`](file:///usr/local/google/home/joelopes/Projects/graft/rules/secops/managed.yaml).
+2. Locate the ruleset where false positives occur (e.g. search for `"Malware Signals - Suspicious Execution"`).
+3. Copy its `id` UUID (e.g. `1c4ab1f6-d801-d6a9-1177-3ec3dd5bcbe9`).
+
+#### Step 2: Formulate and Test the UDM Expression
+Formulate a precise UDM filter matching the benign activity without broadening scope:
+```text
+principal.user.userid = "svc-maintenance-runner"
+```
+
+#### Step 3: Add to `rules/secops/managed.yaml`
+Add the exclusion entry to the `exclusions:` list at the bottom of the file:
+
+```yaml
+exclusions:
+  - id: "exclude-maintenance-runner-suspicious-exec"
+    description: "Exclude maintenance runner from Suspicious Execution"
+    ruleset_id: "1c4ab1f6-d801-d6a9-1177-3ec3dd5bcbe9"
+    expression: 'principal.user.userid = "svc-maintenance-runner"'
+```
+
+#### Step 4: Validate Locally
+Run Graft's validation suite:
+
+```bash
+# Validate manifest schema conformity
+uv run graft lint
+
+# Inspect pending additions against the live SecOps tenant
+uv run graft secops diff --target=managed
+```
+
+Expected output:
+```text
+[+] Exclusion to create: exclude-maintenance-runner-suspicious-exec
+```
+
+#### Step 5: Merge via PR & Deploy
+Open a Pull Request. Once reviewed and merged into `main`:
+- The GitHub Actions deploy workflow executes `graft secops apply --target=all --env=production`.
+- Graft creates the refinement in SecOps, sets its target curated ruleset, and activates it.
+- Within minutes, incoming events matching the expression will be excluded from alert generation.
+
+#### Step 6: Retiring an Exclusion (Rollback / Decommission)
+When an exclusion is no longer needed:
+1. Delete its entry from the `exclusions:` block in `rules/secops/managed.yaml` (or leave `exclusions: []`).
+2. Run `uv run graft lint` and commit:
+   ```bash
+   git commit -am "secops: rollback test exclusion for suspicious execution curated ruleset"
+   ```
+3. Push to `main`. During deployment, Graft detects the removed exclusion and automatically disables and archives its deployment in Google SecOps (`enabled: false, archived: true`).
+
