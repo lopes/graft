@@ -93,8 +93,8 @@ flowchart TD
     end
 
     subgraph Modes["Reconciliation Execution Modes"]
-        MODE_B["<b>Mode B: Scoped Change Reconciliation</b><br/>(<code>--changed-only</code>)<br/>• Scopes scope to <code>git diff origin/main...HEAD</code><br/>• Verifies only touched detection files<br/>• Generates focused PR delta plan<br/>• Leaves untouched SIEM rules alone"]
-        MODE_A["<b>Mode A: Full Catalog Reconciliation</b><br/>(Default / Authoritative Convergence)<br/>• Compares complete repository against SIEM<br/>• In-memory diffing with zero-cost no-op<br/>• Automatically detects out-of-band UI edits (Drift)<br/>• Overwrites drifted SIEM state back to Git"]
+        MODE_B["<b>Mode B: Scoped Reconciliation</b><br/>(Default: <code>diff</code> / <code>apply</code>)<br/>• Scopes scope to <code>git diff origin/main...HEAD</code> + working tree<br/>• Verifies and reconciles only touched detection files<br/>• Generates focused PR delta plan<br/>• Leaves untouched SIEM rules alone"]
+        MODE_A["<b>Mode A: Full Catalog Reconciliation</b><br/>(Flag: <code>--all</code> / <code>--full</code>)<br/>• Compares complete repository catalog against SIEM<br/>• In-memory diffing with zero-cost no-op<br/>• Automatically detects out-of-band UI edits (Drift)<br/>• Overwrites drifted SIEM state back to Git"]
     end
 
     subgraph Outcomes["Target Outcomes"]
@@ -106,45 +106,63 @@ flowchart TD
     PR --> MODE_B
     MODE_B --> REVIEW
 
-    MERGE --> MODE_A
-    CRON --> MODE_A
+    MERGE -->|--all| MODE_A
+    CRON -->|--all| MODE_A
     MODE_A --> CONVERGE
     CRON -.->|Drift Detected| ALERT
 ```
 
-### Mode A: Full Catalog Reconciliation (Authoritative Convergence)
+### Mode B: Scoped Reconciliation (Default)
 
-- **Purpose:** Enforces absolute convergence between the Git repository and the production SIEM tenant.
+- **Purpose:** Restricts reconciliation strictly to detection files modified within the current working branch, pull request, or uncommitted working tree.
+- **Invocation:**
+  ```bash
+  graft secops diff       # Scoped delta preview
+  graft secops apply      # Scoped execution
+  ```
 - **When Used:**
-  - **Post-Merge Deployments:** Automatically executed on every push to `main` via `deploy-production.yml`.
-  - **Scheduled Drift Monitoring:** Executed by periodic automation (e.g. hourly or daily cron) to monitor tenant integrity.
-- **Drift Auto-Healing Mechanics:**
-  - Graft fetches the current live state of all rules and managed configurations from the target SIEM API.
-  - It performs in-memory content and deployment state diffing against the entire local repository inventory.
-  - If an analyst, attacker, or automation script modifies a rule out-of-band in the SIEM console (e.g. disables alerting, modifies filter logic, or removes an exclusion):
-    1. `diff` flags the rule as drifted (`rules_to_update`).
-    2. `apply` automatically issues API update calls (`PATCH`) to overwrite the SIEM state and restore Git's desired state.
-- **Zero-Cost No-Op Guarantee:**
-  - Even though Graft compares the entire catalog, **it only invokes write APIs for rules that have drifted or changed**.
-  - Rules whose live state matches the repository definition trigger zero API requests, minimizing network latency, rate limits, and SIEM revision churn.
-
-### Mode B: Scoped Change Reconciliation (`--changed-only`)
-
-- **Purpose:** Restricts reconciliation to detection files modified within the current working branch or pull request.
-- **When Used:**
-  - **Pull Request Review & Validation:** Executed during PR validation workflows ([`pr-validation.yml`](file:///usr/local/google/home/joelopes/Projects/graft/.github/workflows/pr-validation.yml)) and local pre-commit checks.
-  - **Targeted Operations:** Used by operators executing tactical hotfixes on specific rule files via `--changed-only` or `--files <path>...`.
+  - **Local Development:** Default mode for detection engineers authoring or tuning rules.
+  - **Pull Request Validation:** Automatically executed in [`pr-validation.yml`](file:///usr/local/google/home/joelopes/Projects/graft/.github/workflows/pr-validation.yml) on every PR update.
 - **Operational Rationale:**
   - **Narrow Blast Radius:** Prevents a PR targeting rule `A` from inadvertently reverting an active, temporary out-of-band hotfix on rule `B` in the SIEM console.
   - **Review Ergonomics:** The PR plan diff comment displays only the changes introduced by the author's branch, avoiding noise from unrelated tenant drifts.
+- **Behavior on Clean Branches:**
+  - If executed when no detection files are modified (e.g. on a clean `main` branch), Graft emits a helpful reminder and cleanly exits:
+    ```text
+    No detection rules or managed manifests modified in current change scope.
+    To scan the entire catalog for tenant drift, run: graft secops diff --all
+    ```
+
+### Mode A: Full Catalog Reconciliation (`--all` / `--full`)
+
+- **Purpose:** Enforces absolute convergence between the Git repository and the target SIEM tenant across the entire detection catalog.
+- **Invocation:**
+  ```bash
+  graft secops diff --all       # Full tenant drift detection
+  graft secops apply --all      # Full tenant authoritative convergence
+  ```
+- **When Used:**
+  - **Post-Merge Deployments:** Executed on every push to `main` via [`deploy-production.yml`](file:///usr/local/google/home/joelopes/Projects/graft/.github/workflows/deploy-production.yml).
+  - **Scheduled Drift Monitoring:** Executed by periodic automation (e.g. hourly or daily cron) to detect unauthorized console changes.
+- **Drift Auto-Healing Mechanics:**
+  - Graft fetches the live state of all tenant rules and managed configurations.
+  - It performs in-memory diffing against the entire local repository inventory.
+  - If an analyst, attacker, or external automation modified a rule out-of-band in the SIEM console:
+    1. `diff --all` flags the rule as drifted (`rules_to_update`) and untracked rules as unmanaged.
+    2. `apply --all` automatically issues API update calls (`PATCH`) to overwrite the SIEM state and restore Git's desired state.
+- **Zero-Cost No-Op Guarantee:**
+  - Graft only invokes write APIs for rules that have drifted or changed.
+  - Rules whose live state matches the repository definition trigger zero write API requests.
 
 ### Summary Comparison
 
-| Capability | Mode A: Full Reconciliation (Default) | Mode B: Scoped Reconciliation (`--changed-only`) |
+| Capability | Mode B: Scoped Reconciliation (Default) | Mode A: Full Reconciliation (`--all`) |
 | :--- | :--- | :--- |
-| **Trigger Pipeline** | `push` to `main`, Scheduled Drift Cron | `pull_request`, local branch checks |
-| **Evaluation Scope** | Complete repository catalog (`rules/`) | Modified files in `git diff` against base |
-| **Drift Behavior** | Overwrites and heals out-of-band SIEM edits | Ignores untouched drifted rules |
-| **API Cost** | 1 read batch + N writes for drifted rules | 1 read batch + N writes for touched rules |
-| **Guaranteed State** | Complete SIEM alignment with `main` | Author's changes verified & previewed |
+| **CLI Invocation** | `graft <engine> diff`<br/>`graft <engine> apply` | `graft <engine> diff --all`<br/>`graft <engine> apply --all` |
+| **Trigger Pipeline** | `pull_request`, local branch authoring | `push` to `main`, scheduled drift monitoring |
+| **Evaluation Scope** | Modified files in `git diff` + working tree | Complete repository catalog (`rules/`) |
+| **Drift Behavior** | Ignores untouched drifted rules | Overwrites and heals out-of-band SIEM edits |
+| **API Cost** | 1 read batch + N writes for touched rules | 1 read batch + N writes for drifted rules |
+| **Guaranteed State** | Author's changes verified & previewed | Complete SIEM alignment with `main` |
+
 

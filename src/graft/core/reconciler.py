@@ -312,15 +312,16 @@ class CustomRuleReconciler:
         current: tuple[RuleEnvelope, ...],
         desired: tuple[RuleEnvelope, ...],
         content_comparator: Callable[[RuleEnvelope, RuleEnvelope], bool] | None = None,
+        scoped: bool = False,
     ) -> CustomRulesReconciliationDiff:
         current_map = {r.metadata.name: r for r in current}
         desired_map = {r.metadata.name: r for r in desired}
 
         rules_to_create: list[RuleEnvelope] = []
         rules_to_update: list[RuleEnvelope] = []
-        untracked_rules: list[RuleEnvelope] = [
-            r for name, r in current_map.items() if name not in desired_map
-        ]
+        untracked_rules: list[RuleEnvelope] = (
+            [] if scoped else [r for name, r in current_map.items() if name not in desired_map]
+        )
 
         for name, des_rule in desired_map.items():
             if name not in current_map:
@@ -356,11 +357,15 @@ class CustomRuleReconciler:
         desired: tuple[RuleEnvelope, ...],
         port: RuleDeployerPort,
         content_comparator: Callable[[RuleEnvelope, RuleEnvelope], bool] | None = None,
+        scoped: bool = False,
     ) -> CustomRulesReconciliationDiff:
         logger.info("Starting custom rules reconciliation against target tenant")
         current = port.list_rules()
         reconcile_diff = self.diff(
-            current=current, desired=desired, content_comparator=content_comparator
+            current=current,
+            desired=desired,
+            content_comparator=content_comparator,
+            scoped=scoped,
         )
 
         if not reconcile_diff.has_changes:

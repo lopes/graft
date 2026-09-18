@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Literal
 
 from graft.cli.scaffold import scaffold_rule
+from graft.core.git import get_changed_files
 from graft.core.loader import load_rule_from_yaml
 from graft.core.models.managed import ManagedState
 from graft.core.models.rule import RuleEnvelope
@@ -27,11 +28,20 @@ from graft.engines.secops.replay import SecOpsReplayAdapter
 
 logger = logging.getLogger("graft.cli.secops")
 
+_NO_CHANGES_MSG = "No detection rules or managed manifests modified in current change scope."
 
-def _load_custom_rules(custom_dir: Path = Path("rules/secops/custom")) -> tuple[RuleEnvelope, ...]:
+
+def _load_custom_rules(
+    custom_dir: Path = Path("rules/secops/custom"),
+    filter_paths: set[Path] | None = None,
+) -> tuple[RuleEnvelope, ...]:
     rules: list[RuleEnvelope] = []
     if custom_dir.is_dir():
         for rule_path in sorted(custom_dir.rglob("*.yaml")):
+            if filter_paths is not None and (
+                rule_path.resolve() not in filter_paths and rule_path not in filter_paths
+            ):
+                continue
             try:
                 rule = load_rule_from_yaml(rule_path, schema_name="secops_custom")
                 rules.append(rule)
@@ -112,6 +122,13 @@ def register_engine(subparsers: argparse._SubParsersAction[argparse.ArgumentPars
         default="all",
         help="Scope of comparison (custom rules, managed content, or all)",
     )
+    diff_p.add_argument(
+        "--all",
+        "--full",
+        action="store_true",
+        dest="all_rules",
+        help="Check entire catalog for tenant drift (Mode A: full reconciliation)",
+    )
 
     # 5. apply
     apply_p = cmd_subparsers.add_parser("apply", help="Apply desired Git state to SecOps tenant")
@@ -123,6 +140,13 @@ def register_engine(subparsers: argparse._SubParsersAction[argparse.ArgumentPars
         choices=["custom", "managed", "all"],
         default="all",
         help="Scope of apply (custom rules, managed content, or all)",
+    )
+    apply_p.add_argument(
+        "--all",
+        "--full",
+        action="store_true",
+        dest="all_rules",
+        help="Apply entire catalog to reconcile tenant drift (Mode A: full reconciliation)",
     )
 
     # 6. managed
@@ -295,6 +319,14 @@ def handle_secops_command(args: argparse.Namespace, json_output: bool = False) -
             default_dir = Path("rules/secops/custom")
             if default_dir.is_dir():
                 target_paths.extend(sorted(default_dir.rglob("*.yaml")))
+
+        if getattr(args, "changed_only", False):
+            test_changed_files = get_changed_files()
+            target_paths = [
+                tp
+                for tp in target_paths
+                if tp.resolve() in test_changed_files or tp in test_changed_files
+            ]
 
         rules_with_tests = []
         for tp in target_paths:
@@ -477,6 +509,46 @@ def handle_secops_command(args: argparse.Namespace, json_output: bool = False) -
         target_scope = getattr(args, "target", "all")
         run_custom = target_scope in ("custom", "all")
         run_managed = target_scope in ("managed", "all")
+        all_rules = getattr(args, "all_rules", False)
+
+        if not all_rules:
+            diff_changed_files = get_changed_files()
+            manifest_path = Path("rules/secops/managed.yaml").resolve()
+            if (
+                run_managed
+                and manifest_path not in diff_changed_files
+                and Path("rules/secops/managed.yaml") not in diff_changed_files
+            ):
+                run_managed = False
+
+            if run_custom:
+                custom_rules = _load_custom_rules(filter_paths=diff_changed_files)
+                if not custom_rules:
+                    run_custom = False
+            else:
+                custom_rules = ()
+
+            if not run_custom and not run_managed:
+                if json_output:
+                    sys.stdout.write(
+                        json.dumps(
+                            {
+                                "has_changes": False,
+                                "scoped": True,
+                                "message": _NO_CHANGES_MSG,
+                            }
+                        )
+                        + "\n"
+                    )
+                else:
+                    sys.stdout.write(
+                        f"{_NO_CHANGES_MSG}\n"
+                        "To scan the entire catalog for tenant drift, "
+                        "run: graft secops diff --all\n"
+                    )
+                return 0
+        else:
+            custom_rules = _load_custom_rules() if run_custom else ()
 
         try:
             config = SecOpsConfig.from_env(target=target_profile)
@@ -489,7 +561,6 @@ def handle_secops_command(args: argparse.Namespace, json_output: bool = False) -
         output_payload: dict[str, object] = {}
 
         if run_custom:
-            custom_rules = _load_custom_rules()
             deployer = SecOpsDeployerAdapter(client=client)
             custom_reconciler = CustomRuleReconciler()
             current_rules = deployer.list_rules()
@@ -497,6 +568,7 @@ def handle_secops_command(args: argparse.Namespace, json_output: bool = False) -
                 current=current_rules,
                 desired=custom_rules,
                 content_comparator=secops_rule_content_matches,
+                scoped=not all_rules,
             )
             custom_has_changes = custom_diff.has_changes
             if json_output:
@@ -541,6 +613,47 @@ def handle_secops_command(args: argparse.Namespace, json_output: bool = False) -
         target_scope = getattr(args, "target", "all")
         run_custom = target_scope in ("custom", "all")
         run_managed = target_scope in ("managed", "all")
+        all_rules = getattr(args, "all_rules", False)
+
+        if not all_rules:
+            apply_changed_files = get_changed_files()
+            manifest_path = Path("rules/secops/managed.yaml").resolve()
+            if (
+                run_managed
+                and manifest_path not in apply_changed_files
+                and Path("rules/secops/managed.yaml") not in apply_changed_files
+            ):
+                run_managed = False
+
+            if run_custom:
+                custom_rules = _load_custom_rules(filter_paths=apply_changed_files)
+                if not custom_rules:
+                    run_custom = False
+            else:
+                custom_rules = ()
+
+            if not run_custom and not run_managed:
+                if json_output:
+                    sys.stdout.write(
+                        json.dumps(
+                            {
+                                "applied": False,
+                                "has_changes": False,
+                                "scoped": True,
+                                "message": _NO_CHANGES_MSG,
+                            }
+                        )
+                        + "\n"
+                    )
+                else:
+                    sys.stdout.write(
+                        f"{_NO_CHANGES_MSG}\n"
+                        "To apply the entire catalog and reconcile tenant drift, "
+                        "run: graft secops apply --all\n"
+                    )
+                return 0
+        else:
+            custom_rules = _load_custom_rules() if run_custom else ()
 
         try:
             config = SecOpsConfig.from_env(target=target_profile)
@@ -551,13 +664,13 @@ def handle_secops_command(args: argparse.Namespace, json_output: bool = False) -
         output_payload = {}
 
         if run_custom:
-            custom_rules = _load_custom_rules()
             deployer = SecOpsDeployerAdapter(client=client)
             custom_reconciler = CustomRuleReconciler()
             custom_diff = custom_reconciler.apply(
                 desired=custom_rules,
                 port=deployer,
                 content_comparator=secops_rule_content_matches,
+                scoped=not all_rules,
             )
             if json_output:
                 output_payload["custom"] = {

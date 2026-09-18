@@ -65,9 +65,7 @@ def test_pr_validation_workflow_structure() -> None:
     )
     assert any("graft secops verify" in r for r in step_runs), "Must execute graft secops verify"
     assert any("graft secops test" in r for r in step_runs), "Must execute graft secops test"
-    assert any("graft secops managed diff" in r for r in step_runs), (
-        "Must execute graft secops managed diff"
-    )
+    assert any("graft secops diff" in r for r in step_runs), "Must execute graft secops diff"
 
 
 def test_deploy_production_workflow_structure() -> None:

@@ -251,7 +251,7 @@ def test_main_secops_diff_custom_target_returns_2_when_drift() -> None:
         mock_deployer.list_rules.return_value = ()
         mock_deployer_cls.return_value = mock_deployer
 
-        exit_code = main(["secops", "diff", "--target", "custom", "--env", "staging"])
+        exit_code = main(["secops", "diff", "--all", "--target", "custom", "--env", "staging"])
         assert exit_code == 2
 
 
@@ -270,7 +270,7 @@ def test_main_secops_diff_custom_target_returns_0_when_in_sync() -> None:
         mock_deployer.list_rules.return_value = tuple(local_rules)
         mock_deployer_cls.return_value = mock_deployer
 
-        exit_code = main(["secops", "diff", "--target", "custom", "--env", "staging"])
+        exit_code = main(["secops", "diff", "--all", "--target", "custom", "--env", "staging"])
         assert exit_code == 0
 
 
@@ -288,7 +288,7 @@ def test_main_secops_apply_all_targets() -> None:
         mock_managed.fetch_managed_state.return_value = ManagedState(rulesets=())
         mock_managed_cls.return_value = mock_managed
 
-        exit_code = main(["secops", "apply", "--env", "staging"])
+        exit_code = main(["secops", "apply", "--all", "--env", "staging"])
         assert exit_code == 0
         assert mock_deployer.create_rule.call_count > 0
         assert mock_managed.fetch_managed_state.call_count == 1
@@ -312,5 +312,5 @@ def test_main_secops_diff_all_targets_drift() -> None:
         )
         mock_managed_cls.return_value = mock_managed
 
-        exit_code = main(["secops", "diff", "--env", "staging"])
+        exit_code = main(["secops", "diff", "--all", "--env", "staging"])
         assert exit_code == 2

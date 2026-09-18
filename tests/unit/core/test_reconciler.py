@@ -555,3 +555,31 @@ def test_custom_rules_render_summary() -> None:
     assert "[+] Custom rule to create: create_me" in summary
     assert "[~] Custom rule to update: update_me (ID: ru_123)" in summary
     assert "[?] Untracked custom rule on tenant: untracked_me (ID: ru_456)" in summary
+
+
+def test_custom_rule_diff_scoped_ignores_untracked() -> None:
+    remote_untracked = _make_envelope("untracked_rule", rule_id="ru_remote_999")
+    remote_tracked = _make_envelope("login_alert", rule_id="ru_remote_123", enabled=False)
+    desired_tracked = _make_envelope("login_alert", rule_id="local_uuid", enabled=True)
+
+    reconciler = CustomRuleReconciler()
+
+    # In default/unscoped mode (Mode A): untracked_rule is detected
+    diff_unscoped = reconciler.diff(
+        current=(remote_untracked, remote_tracked),
+        desired=(desired_tracked,),
+        scoped=False,
+    )
+    assert len(diff_unscoped.untracked_rules) == 1
+    assert diff_unscoped.untracked_rules[0].metadata.name == "untracked_rule"
+    assert len(diff_unscoped.rules_to_update) == 1
+
+    # In scoped mode (Mode B): untracked_rule is omitted from untracked_rules
+    diff_scoped = reconciler.diff(
+        current=(remote_untracked, remote_tracked),
+        desired=(desired_tracked,),
+        scoped=True,
+    )
+    assert len(diff_scoped.untracked_rules) == 0
+    assert len(diff_scoped.rules_to_update) == 1
+    assert diff_scoped.rules_to_update[0].metadata.name == "login_alert"

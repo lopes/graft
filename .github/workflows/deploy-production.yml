@@ -54,7 +54,7 @@ jobs:
       - name: Apply GitOps desired state to Production SecOps tenant
         env:
           GRAFT_SECOPS_TOKEN: ${{ steps.auth.outputs.access_token }}
-        run: uv run graft secops apply --env production
+        run: uv run graft secops apply --env production --all
 
       - name: Generate threat matrix and visibility catalogs
         run: |

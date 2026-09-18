@@ -580,17 +580,17 @@ If the remote rule's logic and deployment state already match the Git definition
 
 When an operator, security analyst, or external integration modifies a detection directly in the Google SecOps console:
 
-1. **Drift Detection:** Running `graft secops diff` (or scheduled drift monitoring) detects the discrepancy and exits with code `2`:
+1. **Drift Detection:** Running `graft secops diff --all` (or scheduled drift monitoring) scans the full catalog, detects the discrepancy, and exits with code `2`:
    ```text
    === Custom Rules Diff ===
    Rules to update:
      ~ workspace_nrd_possible_phishing
    ```
-2. **Authoritative Healing:** Running `graft secops apply` overwrites the out-of-band edit, reconciling the tenant back to the exact version declared in Git:
+   *(Note: Running `graft secops diff` without `--all` operates in Mode B, scoping reconciliation only to locally modified detection files).*
+
+2. **Authoritative Healing:** Running `graft secops apply --all` overwrites the out-of-band edit, reconciling the tenant back to the exact version declared in Git:
    ```text
-   [INFO] Updating custom rule 'workspace_nrd_possible_phishing' in tenant
-   [INFO] Updated custom rule 'workspace_nrd_possible_phishing' in tenant
-   Custom rules reconciliation complete. 0 creations, 1 updates.
+   Applied custom rules: 0 created, 1 updated.
    ```
 
 
