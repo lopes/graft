@@ -13,8 +13,9 @@ from graft.core.loader import load_rule_from_yaml
 from graft.core.models.managed import ManagedState
 from graft.core.models.rule import RuleEnvelope
 from graft.core.reconciler import CustomRuleReconciler, GitOpsReconciler
-from graft.engines.secops.client import SecOpsClient
-from graft.engines.secops.compiler import synthesize_yaral_rule
+from graft.engines.secops.auth import SecOpsAuthError, SecOpsAuthResolver
+from graft.engines.secops.client import SecOpsApiError, SecOpsClient
+from graft.engines.secops.compiler import SecOpsCompilerAdapter, synthesize_yaral_rule
 from graft.engines.secops.config import SecOpsConfig
 from graft.engines.secops.deployer import SecOpsDeployerAdapter
 from graft.engines.secops.managed import SecOpsManagedAdapter
@@ -171,11 +172,114 @@ def handle_secops_command(args: argparse.Namespace, json_output: bool = False) -
     target_profile: Literal["staging", "prod"] = "staging" if env_target == "staging" else "prod"
 
     if cmd == "verify":
-        if json_output:
-            sys.stdout.write(json.dumps({"success": True, "verified": True}) + "\n")
+        verify_paths: list[Path] = []
+        raw_paths = getattr(args, "paths", [])
+        if raw_paths:
+            for p_str in raw_paths:
+                p = Path(p_str)
+                if p.is_dir():
+                    verify_paths.extend(sorted(p.rglob("*.yaml")))
+                elif p.is_file():
+                    verify_paths.append(p)
         else:
-            sys.stdout.write("SecOps verification completed cleanly.\n")
-        return 0
+            default_dir = Path("rules/secops/custom")
+            if default_dir.is_dir():
+                verify_paths.extend(sorted(default_dir.rglob("*.yaml")))
+
+        try:
+            config = SecOpsConfig.from_env(target=target_profile)
+            SecOpsAuthResolver(service_account_email=config.service_account_email).get_token()
+            client = SecOpsClient(config=config)
+            compiler = SecOpsCompilerAdapter(client=client)
+        except (KeyError, SecOpsAuthError) as exc:
+            logger.info(
+                "SecOps credentials not available (%s); verifyRuleText dry-run skipped.", exc
+            )
+            if json_output:
+                sys.stdout.write(
+                    json.dumps({"success": True, "skipped": True, "verified": 0}) + "\n"
+                )
+            else:
+                sys.stdout.write(
+                    "[WARNING] SecOps credentials not configured; "
+                    "skipping remote verifyRuleText dry-run.\n"
+                )
+            return 0
+
+        failed_count = 0
+        diagnostics_list: list[dict[str, object]] = []
+        for path in verify_paths:
+            try:
+                rule = load_rule_from_yaml(path, schema_name="secops_custom")
+                comp_res = compiler.verify_rule(rule)
+                if not comp_res.success:
+                    failed_count += 1
+                    for d in comp_res.diagnostics:
+                        diagnostics_list.append(
+                            {
+                                "file": str(path),
+                                "line": d.line,
+                                "column": d.column,
+                                "severity": d.severity,
+                                "message": d.message,
+                            }
+                        )
+                        if not json_output:
+                            sys.stderr.write(
+                                f"[FAIL] {path}:{d.line}:{d.column} [{d.severity}] {d.message}\n"
+                            )
+                else:
+                    if not json_output:
+                        sys.stdout.write(f"[PASS] {path}\n")
+            except SecOpsApiError as exc:
+                if exc.status_code == 401:
+                    logger.debug(
+                        "SecOps credentials expired (401 Unauthorized); skipping verifyRuleText."
+                    )
+                    if json_output:
+                        sys.stdout.write(
+                            json.dumps({"success": True, "skipped": True, "reason": str(exc)})
+                            + "\n"
+                        )
+                    else:
+                        sys.stdout.write(
+                            "[WARNING] SecOps credentials expired (401); "
+                            "skipping remote verifyRuleText dry-run.\n"
+                        )
+                    return 0
+                failed_count += 1
+                diagnostics_list.append({"file": str(path), "error": str(exc)})
+                if not json_output:
+                    sys.stderr.write(f"[FAIL] {path}: {exc}\n")
+            except Exception as exc:
+                failed_count += 1
+                diagnostics_list.append({"file": str(path), "error": str(exc)})
+                if not json_output:
+                    sys.stderr.write(f"[FAIL] {path}: {exc}\n")
+
+        if json_output:
+            sys.stdout.write(
+                json.dumps(
+                    {
+                        "success": failed_count == 0,
+                        "total": len(verify_paths),
+                        "failed": failed_count,
+                        "diagnostics": diagnostics_list,
+                    }
+                )
+                + "\n"
+            )
+        else:
+            if failed_count > 0:
+                sys.stderr.write(
+                    f"\nSecOps verification failed: {failed_count} rule(s) failed compilation.\n"
+                )
+            else:
+                sys.stdout.write(
+                    f"\nSecOps verification passed: {len(verify_paths)} rule(s) compiled cleanly.\n"
+                )
+
+        return 1 if failed_count > 0 else 0
 
     if cmd == "test":
         target_paths: list[Path] = []

@@ -351,12 +351,14 @@ class CustomRuleReconciler:
             return reconcile_diff
 
         for rule in reconcile_diff.rules_to_create:
-            logger.info("Created custom rule '%s' in tenant", rule.metadata.name)
+            logger.info("Creating custom rule '%s' in tenant", rule.metadata.name)
             port.create_rule(rule)
+            logger.info("Created custom rule '%s' in tenant", rule.metadata.name)
 
         for rule in reconcile_diff.rules_to_update:
-            logger.info("Updated custom rule '%s' in tenant", rule.metadata.name)
+            logger.info("Updating custom rule '%s' in tenant", rule.metadata.name)
             port.update_rule(rule)
+            logger.info("Updated custom rule '%s' in tenant", rule.metadata.name)
 
         logger.info(
             "Custom rules reconciliation complete. %d creations, %d updates.",

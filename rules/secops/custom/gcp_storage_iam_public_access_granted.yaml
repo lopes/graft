@@ -22,7 +22,7 @@ metadata:
 
 logic: |
   events:
-    $e.metadata.event_type = "USER_RESOURCE_UPDATE"
+    $e.metadata.event_type = "USER_RESOURCE_UPDATE_PERMISSIONS"
     $e.metadata.product_name = "GCP Cloud Audit"
     $e.metadata.product_event_type = "storage.setIamPermissions"
     $e.security_result.action = "ALLOW"
@@ -58,7 +58,7 @@ tests:
       - timestamp: "2026-09-17T16:00:00Z"
         payload:
           metadata:
-            event_type: "USER_RESOURCE_UPDATE"
+            event_type: "USER_RESOURCE_UPDATE_PERMISSIONS"
             product_name: "GCP Cloud Audit"
             product_event_type: "storage.setIamPermissions"
           target:
@@ -77,7 +77,7 @@ tests:
       - timestamp: "2026-09-17T16:05:00Z"
         payload:
           metadata:
-            event_type: "USER_RESOURCE_UPDATE"
+            event_type: "USER_RESOURCE_UPDATE_PERMISSIONS"
             product_name: "GCP Cloud Audit"
             product_event_type: "storage.setIamPermissions"
           target:
