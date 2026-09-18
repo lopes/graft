@@ -56,7 +56,7 @@ jobs:
     name: Google SecOps Verification Gates
     needs: [lint-and-unit-gates]
     runs-on: ubuntu-latest
-    if: ${{ secrets.GRAFT_SECOPS_WIF_PROVIDER != '' }}
+    if: github.event.pull_request.head.repo.full_name == github.repository
     env:
       GRAFT_SECOPS_PROD_PROJECT: ${{ vars.GRAFT_SECOPS_PROD_PROJECT }}
       GRAFT_SECOPS_PROD_LOCATION: ${{ vars.GRAFT_SECOPS_PROD_LOCATION }}

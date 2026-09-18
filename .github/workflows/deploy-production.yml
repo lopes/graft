@@ -17,7 +17,7 @@ jobs:
   deploy-production:
     name: Deploy to SecOps & Publish Value Artifacts
     runs-on: ubuntu-latest
-    if: ${{ github.repository == 'joelopes/graft' || !github.event.repository.fork }}
+    if: github.repository == 'lopes/graft'
     env:
       GRAFT_SECOPS_PROD_PROJECT: ${{ vars.GRAFT_SECOPS_PROD_PROJECT }}
       GRAFT_SECOPS_PROD_LOCATION: ${{ vars.GRAFT_SECOPS_PROD_LOCATION }}
@@ -44,14 +44,12 @@ jobs:
         run: uv run graft lint
 
       - name: Authenticate to Google Cloud via Workload Identity Federation
-        if: ${{ secrets.GRAFT_SECOPS_WIF_PROVIDER != '' }}
         uses: google-github-actions/auth@v2
         with:
           workload_identity_provider: ${{ secrets.GRAFT_SECOPS_WIF_PROVIDER }}
           service_account: ${{ secrets.GRAFT_SECOPS_PROD_SA_EMAIL }}
 
       - name: Apply GitOps desired state to Production SecOps tenant
-        if: ${{ secrets.GRAFT_SECOPS_WIF_PROVIDER != '' }}
         run: uv run graft secops apply --env production
 
       - name: Generate threat matrix and visibility catalogs

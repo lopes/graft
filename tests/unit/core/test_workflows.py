@@ -118,3 +118,24 @@ def test_pre_commit_hook_exists_and_is_executable() -> None:
     content = hook_path.read_text(encoding="utf-8")
     assert "graft lint" in content, "Pre-commit hook must execute graft lint"
     assert "ruff" in content, "Pre-commit hook must execute ruff"
+
+
+def test_workflows_do_not_reference_secrets_in_if_conditionals() -> None:
+    workflows_dir = Path(".github/workflows")
+    for wf in workflows_dir.glob("*.yml"):
+        with wf.open("r", encoding="utf-8") as f:
+            data: dict[str, Any] = yaml.safe_load(f)
+        jobs = data.get("jobs", {})
+        for job_name, job_data in jobs.items():
+            job_if = str(job_data.get("if", ""))
+            assert "secrets." not in job_if, (
+                f"Workflow {wf.name} job {job_name} references secrets in 'if': {job_if}. "
+                "GitHub Actions disallows secrets in 'if:' expressions."
+            )
+            for step in job_data.get("steps", []):
+                step_name = step.get("name", "unnamed")
+                step_if = str(step.get("if", ""))
+                assert "secrets." not in step_if, (
+                    f"Workflow {wf.name} step {step_name} references secrets in 'if': {step_if}. "
+                    "GitHub Actions disallows secrets in 'if:' expressions."
+                )

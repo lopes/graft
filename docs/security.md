@@ -77,7 +77,7 @@ flowchart TD
 1. **GitHub Secrets Masking:** Pull requests originating from forks do not have access to repository secrets (`GRAFT_SECOPS_WIF_PROVIDER`, `GRAFT_SECOPS_PROD_SA_EMAIL`).
 2. **Workflow Guard:** The cloud verification job explicitly declares:
    ```yaml
-   if: ${{ secrets.GRAFT_SECOPS_WIF_PROVIDER != '' }}
+   if: github.event.pull_request.head.repo.full_name == github.repository
    ```
    External PRs automatically skip cloud interactions and execute only offline quality gates (`ruff`, `mypy`, `pytest`, `graft lint`).
 3. **Read-Only PR Gates:** Even on internal branches, PR gates perform only read-only syntax dry runs (`verifyRuleText`) or ephemeral test quarantine. Live rule changes are applied exclusively upon merge to `main`.
