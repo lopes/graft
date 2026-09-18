@@ -593,4 +593,37 @@ When an operator, security analyst, or external integration modifies a detection
    Applied custom rules: 0 created, 1 updated.
    ```
 
+---
+
+## 10. Brownfield Engine Onboarding & Reverse Sync (`graft secops pull`)
+
+When deploying Graft into an existing Google SecOps tenant, the SIEM already contains live custom YARA-L rules and active Google Curated Rule Sets.
+
+To bootstrap Graft without manual transcription:
+
+1. **Execute Unified Reverse Sync:**
+   ```bash
+   uv run graft secops pull --env production
+   ```
+   This performs a two-track ingestion:
+   - **Custom Rules:** Fetches all tenant rules via `GET rules?view=FULL`, decompiles YARA-L headers and metadata, generates standard 5-block envelope YAMLs, and populates `rules/secops/custom/*.yaml`.
+   - **Managed Manifest:** Ingests live curated rulesets and exclusions into `rules/secops/managed.yaml`.
+
+2. **Verify & Enrich:**
+   ```bash
+   uv run graft lint
+   ```
+   Review imported rules, enrich operational runbooks, and add MITRE ATT&CK technique tags.
+
+3. **Commit & Cutover:**
+   ```bash
+   git add rules/
+   git commit -m "secops: import detection baseline from production tenant"
+   git push origin main
+   ```
+   Merging to `main` completes the cutover, declaring Git as the permanent, authoritative Source of Truth.
+
+For full architectural details, see the **[Engine Adoption & Lifecycle Guide](../adoption.md)**.
+
+
 

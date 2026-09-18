@@ -56,6 +56,7 @@ flowchart TD
 For full guides and architecture specifications, see the **[Graft Documentation Index (docs/README.md)](docs/README.md)**:
 
 - **[System Architecture](docs/architecture.md):** Hexagonal Ports & Adapters and stdlib runtime policy.
+- **[Engine Adoption & Lifecycle Guide](docs/adoption.md):** The 3-epoch lifecycle: brownfield ingestion (`pull`), baseline enrichment, and declaring Git as the authoritative Source of Truth.
 - **[Rule Authoring Guide](docs/rule_authoring.md):** 5-block envelope format, YARA-L logic, and runbooks.
 - **[GitOps Reconciliation](docs/gitops_reconciliation.md):** Managing vendor-curated content, drift detection (`diff`), and synchronization (`apply`, `pull`).
 - **[Synthetic Replay Testing](docs/replay_testing.md):** Dynamic verification using quarantined rules and synthetic UDM event injection.
@@ -91,6 +92,23 @@ uv run pytest
 
 # Optional: Enable native pre-commit hook (runs fast offline gates on git commit)
 git config core.hooksPath .githooks
+```
+
+### Brownfield Adoption: Fastest Path (Day 0 Ingestion)
+
+When adopting Graft on an existing SIEM instance, follow the 3-step bootstrap workflow (see [docs/adoption.md](docs/adoption.md) for full architectural specification):
+
+```bash
+# 1. Reverse sync existing custom rules & curated content from live tenant
+uv run graft secops pull --env production
+
+# 2. Validate all imported envelopes against schemas & MITRE matrix
+uv run graft lint
+
+# 3. Commit baseline and declare Git as authoritative Source of Truth
+git add rules/
+git commit -m "secops: import production detection baseline"
+git push origin main
 ```
 
 ### Essential CLI Commands

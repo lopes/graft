@@ -119,3 +119,17 @@ For granular vendor-managed content operations:
   graft secops managed pull --env=production --out rules/secops/managed.yaml
   ```
 
+### 4. Unified Reverse Sync & Ingestion (`graft secops pull`)
+For initial brownfield bootstrapping or complete catalog reverse-synchronization:
+
+```bash
+# Pull both custom rules and vendor-managed manifest from tenant
+graft secops pull --env=production
+
+# Or target custom rules only
+graft secops pull --target=custom --env=production --out-dir rules/secops/custom
+```
+
+For the complete lifecycle guide covering Day 0 discovery, baseline enrichment, and declaring Git as the permanent Source of Truth, see **[Engine Adoption & Lifecycle Guide](adoption.md)**.
+
+
