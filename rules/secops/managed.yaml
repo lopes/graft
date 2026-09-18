@@ -1,1829 +1,1829 @@
 categories:
-- name: Applied Threat Intelligence - Curated Prioritization
-  id: 42e1affb-3ab4-65d3-62d8-95e1d5e7f8d6
-  rulesets:
-  - id: f5533b66-9327-9880-93e6-75a738ac2345
-    name: Active Breach Priority Host Indicators
-    deployments:
-    - type: PRECISE
-      enabled: true
-      alerting: false
-    - type: BROAD
-      enabled: true
-      alerting: false
-  - id: 433faf9e-4d51-f284-c35b-009528ecff05
-    name: Active Breach Priority Network Indicators
-    deployments:
-    - type: PRECISE
-      enabled: true
-      alerting: false
-    - type: BROAD
-      enabled: true
-      alerting: false
-  - id: 25fa44c2-4d22-85a8-62dc-94ba55c096f5
-    name: Applied Threat Intelligence - Curated Composites
-    deployments:
-    - type: PRECISE
-      enabled: false
-      alerting: false
-    - type: BROAD
-      enabled: false
-      alerting: false
-  - id: 20c58085-d5f8-2b38-6b14-b4d017e3f923
-    name: High Priority Host Indicators
-    deployments:
-    - type: PRECISE
-      enabled: true
-      alerting: false
-    - type: BROAD
-      enabled: true
-      alerting: false
-  - id: 80eafc65-a11e-5137-1365-c64164f64c0e
-    name: High Priority Network Indicators
-    deployments:
-    - type: PRECISE
-      enabled: true
-      alerting: false
-    - type: BROAD
-      enabled: true
-      alerting: false
-  - id: f954120d-0a79-1a52-e177-b841b253a86f
-    name: Inbound IP Address Authentication Indicators
-    deployments:
-    - type: PRECISE
-      enabled: true
-      alerting: false
-    - type: BROAD
-      enabled: true
-      alerting: false
-  - id: 8ae8dd36-24e3-5dcc-a959-22c7259f32a9
-    name: Medium Priority Host Indicators
-    deployments:
-    - type: PRECISE
-      enabled: true
-      alerting: false
-    - type: BROAD
-      enabled: true
-      alerting: false
-  - id: ffdcc855-9a0a-1afe-0469-a5006966af90
-    name: Medium Priority Network Indicators
-    deployments:
-    - type: PRECISE
-      enabled: true
-      alerting: false
-    - type: BROAD
-      enabled: true
-      alerting: false
-- name: Applied Threat Intelligence - Non-prioritized IOC Matching
-  id: 77ea5055-0d4e-565e-63a9-2bb738ff50c9
-  rulesets:
-  - id: 8eb57cd7-0765-2902-2adb-7afdd41051db
-    name: Applied Threat Intelligence - Non-prioritized Domain IOC Matching
-    deployments:
-    - type: PRECISE
-      enabled: true
-      alerting: false
-    - type: BROAD
-      enabled: true
-      alerting: false
-  - id: c3b73bda-8791-05ac-a1af-c45143a3bb09
-    name: Applied Threat Intelligence - Non-prioritized File IOC Matching
-    deployments:
-    - type: PRECISE
-      enabled: true
-      alerting: false
-    - type: BROAD
-      enabled: true
-      alerting: false
-  - id: f9d05655-8654-6a06-df3d-aecb59a15981
-    name: Applied Threat Intelligence - Non-prioritized IP IOC Matching
-    deployments:
-    - type: PRECISE
-      enabled: true
-      alerting: false
-    - type: BROAD
-      enabled: true
-      alerting: false
-- name: Chrome Enterprise Premium Threats
-  id: db1114d4-569b-5f5d-0fb4-f65aaa766c92
-  rulesets:
-  - id: 7e52cd71-03c6-97d2-ffcb-b8d7159e08e1
-    name: Chrome Browser Threats
-    deployments:
-    - type: PRECISE
-      enabled: false
-      alerting: false
-    - type: BROAD
-      enabled: false
-      alerting: false
-  - id: 57d1ae46-43c7-e469-b247-c7f10b843829
-    name: Chrome Extensions Threats
-    deployments:
-    - type: PRECISE
-      enabled: false
-      alerting: false
-    - type: BROAD
-      enabled: false
-      alerting: false
-- name: Cloud Threats
-  id: 110fa43d-7165-2355-1985-a63b7cdf90e8
-  rulesets:
-  - id: c8156eae-7b63-a2fb-2e3e-4a38ab5abe0f
-    name: AWS - Compute
-    deployments:
-    - type: PRECISE
-      enabled: false
-      alerting: false
-    - type: BROAD
-      enabled: false
-      alerting: false
-  - id: 77e7af32-6565-861b-79f2-08c8fa7167a8
-    name: AWS - Data
-    deployments:
-    - type: PRECISE
-      enabled: false
-      alerting: false
-    - type: BROAD
-      enabled: false
-      alerting: false
-  - id: 2e7f838b-8a9c-da2d-dd9d-cacd6cd8fc37
-    name: 'AWS - GuardDuty: Behavior'
-    deployments:
-    - type: PRECISE
-      enabled: false
-      alerting: false
-    - type: BROAD
-      enabled: false
-      alerting: false
-  - id: 6f15dbf7-744a-90be-2348-51a34b45b06d
-    name: 'AWS - GuardDuty: Credential Access'
-    deployments:
-    - type: PRECISE
-      enabled: false
-      alerting: false
-    - type: BROAD
-      enabled: false
-      alerting: false
-  - id: 2b7d4703-ec22-c465-da52-219e6b286117
-    name: 'AWS - GuardDuty: Cryptomining'
-    deployments:
-    - type: PRECISE
-      enabled: false
-      alerting: false
-    - type: BROAD
-      enabled: false
-      alerting: false
-  - id: 4c4f8f22-6924-2feb-0ec0-05929445001a
-    name: 'AWS - GuardDuty: Discovery'
-    deployments:
-    - type: PRECISE
-      enabled: false
-      alerting: false
-    - type: BROAD
-      enabled: false
-      alerting: false
-  - id: 57386270-82c7-4b38-d76a-580a3f684ac8
-    name: 'AWS - GuardDuty: Evasion'
-    deployments:
-    - type: PRECISE
-      enabled: false
-      alerting: false
-    - type: BROAD
-      enabled: false
-      alerting: false
-  - id: af4768b3-5c64-485f-deaf-700595384b4e
-    name: 'AWS - GuardDuty: Execution'
-    deployments:
-    - type: PRECISE
-      enabled: false
-      alerting: false
-    - type: BROAD
-      enabled: false
-      alerting: false
-  - id: eaa84d42-746f-e407-b4d2-da03730bdbc5
-    name: 'AWS - GuardDuty: Exfiltration'
-    deployments:
-    - type: PRECISE
-      enabled: false
-      alerting: false
-    - type: BROAD
-      enabled: false
-      alerting: false
-  - id: ecd1bac7-49eb-fd82-d42f-4d57c32f0a94
-    name: 'AWS - GuardDuty: Impact'
-    deployments:
-    - type: PRECISE
-      enabled: false
-      alerting: false
-    - type: BROAD
-      enabled: false
-      alerting: false
-  - id: cebba4ad-3e63-52e6-3689-b4d55bfdba19
-    name: 'AWS - GuardDuty: Initial Access'
-    deployments:
-    - type: PRECISE
-      enabled: false
-      alerting: false
-    - type: BROAD
-      enabled: false
-      alerting: false
-  - id: 5d97691a-b189-8099-41d4-94c18bf0de68
-    name: 'AWS - GuardDuty: Malware'
-    deployments:
-    - type: PRECISE
-      enabled: false
-      alerting: false
-    - type: BROAD
-      enabled: false
-      alerting: false
-  - id: 05887726-0d24-6572-e52a-666d1781f049
-    name: 'AWS - GuardDuty: Pentest'
-    deployments:
-    - type: PRECISE
-      enabled: false
-      alerting: false
-    - type: BROAD
-      enabled: false
-      alerting: false
-  - id: 53fbec58-4eb0-6dd5-00f6-6d4ed5eb9501
-    name: 'AWS - GuardDuty: Persistence'
-    deployments:
-    - type: PRECISE
-      enabled: false
-      alerting: false
-    - type: BROAD
-      enabled: false
-      alerting: false
-  - id: 6ac5d638-4469-3536-4273-ce169056d708
-    name: 'AWS - GuardDuty: Policy'
-    deployments:
-    - type: PRECISE
-      enabled: false
-      alerting: false
-    - type: BROAD
-      enabled: false
-      alerting: false
-  - id: 288d5f7c-3a8c-e6a8-8c7d-b3619e556ae8
-    name: 'AWS - GuardDuty: Privilege Escalation'
-    deployments:
-    - type: PRECISE
-      enabled: false
-      alerting: false
-    - type: BROAD
-      enabled: false
-      alerting: false
-  - id: 2ba773db-fbf5-da4e-4ac5-92b11e2d32f3
-    name: 'AWS - GuardDuty: Unauthorized Access'
-    deployments:
-    - type: PRECISE
-      enabled: false
-      alerting: false
-    - type: BROAD
-      enabled: false
-      alerting: false
-  - id: d1a9c7f0-f094-804b-6d69-a43a3cb59996
-    name: AWS - Hacktools
-    deployments:
-    - type: PRECISE
-      enabled: false
-      alerting: false
-    - type: BROAD
-      enabled: false
-      alerting: false
-  - id: 94869e7b-482c-81ad-baa3-a6facc6ca4e9
-    name: AWS - Identity
-    deployments:
-    - type: PRECISE
-      enabled: false
-      alerting: false
-    - type: BROAD
-      enabled: false
-      alerting: false
-  - id: 39ff332e-5c59-96e8-7199-f96503e5dfcd
-    name: AWS - Logging and Monitoring
-    deployments:
-    - type: PRECISE
-      enabled: false
-      alerting: false
-    - type: BROAD
-      enabled: false
-      alerting: false
-  - id: f7506749-a725-7dbb-772a-32583a89c499
-    name: AWS - Network
-    deployments:
-    - type: PRECISE
-      enabled: false
-      alerting: false
-    - type: BROAD
-      enabled: false
-      alerting: false
-  - id: ebd05091-442d-28f7-40af-90ff1b0a18f3
-    name: AWS - Organization
-    deployments:
-    - type: PRECISE
-      enabled: false
-      alerting: false
-    - type: BROAD
-      enabled: false
-      alerting: false
-  - id: 66f54d33-31bc-dc37-4e88-96326456729e
-    name: AWS - Secrets
-    deployments:
-    - type: PRECISE
-      enabled: false
-      alerting: false
-    - type: BROAD
-      enabled: false
-      alerting: false
-  - id: 11c505d4-b424-65e3-d918-1a81232cc76b
-    name: Admin Action
-    deployments:
-    - type: PRECISE
-      enabled: false
-      alerting: false
-    - type: BROAD
-      enabled: false
-      alerting: false
-  - id: c6b2cbe6-68c8-a6a6-ac6a-60e2121593f9
-    name: Azure - Compute
-    deployments:
-    - type: PRECISE
-      enabled: false
-      alerting: false
-    - type: BROAD
-      enabled: false
-      alerting: false
-  - id: 889fb77a-2748-bf3c-4839-012385c113c4
-    name: Azure - Data
-    deployments:
-    - type: PRECISE
-      enabled: false
-      alerting: false
-    - type: BROAD
-      enabled: false
-      alerting: false
-  - id: f182d46a-fcdb-8a6d-2537-1cf7a4ad1c6e
-    name: Azure - Defender for Cloud APIs
-    deployments:
-    - type: PRECISE
-      enabled: false
-      alerting: false
-    - type: BROAD
-      enabled: false
-      alerting: false
-  - id: 9cc633cc-f70a-575d-1091-cd5f63944c55
-    name: Azure - Defender for Cloud App Service
-    deployments:
-    - type: PRECISE
-      enabled: false
-      alerting: false
-    - type: BROAD
-      enabled: false
-      alerting: false
-  - id: f3c122f5-3dbe-e903-eae0-37e20e827374
-    name: Azure - Defender for Cloud Cosmos DB
-    deployments:
-    - type: PRECISE
-      enabled: false
-      alerting: false
-    - type: BROAD
-      enabled: false
-      alerting: false
-  - id: 3d4aee46-ceba-23ed-c937-9d0d3e29bf21
-    name: Azure - Defender for Cloud DDoS Protection
-    deployments:
-    - type: PRECISE
-      enabled: false
-      alerting: false
-    - type: BROAD
-      enabled: false
-      alerting: false
-  - id: 8eeed8b4-af12-8aae-26eb-f5d3966a3c5f
-    name: Azure - Defender for Cloud DNS
-    deployments:
-    - type: PRECISE
-      enabled: false
-      alerting: false
-    - type: BROAD
-      enabled: false
-      alerting: false
-  - id: 59e22b3b-5c2a-fb20-0be7-112242949898
-    name: Azure - Defender for Cloud Key Vault
-    deployments:
-    - type: PRECISE
-      enabled: false
-      alerting: false
-    - type: BROAD
-      enabled: false
-      alerting: false
-  - id: 6f9e6cb3-73e5-cd49-702a-d1e7274c64ac
-    name: Azure - Defender for Cloud Kubernetes
-    deployments:
-    - type: PRECISE
-      enabled: false
-      alerting: false
-    - type: BROAD
-      enabled: false
-      alerting: false
-  - id: 3a98ae88-a56e-cbb9-b68e-0709a92e3cd8
-    name: Azure - Defender for Cloud Network Layer
-    deployments:
-    - type: PRECISE
-      enabled: false
-      alerting: false
-    - type: BROAD
-      enabled: false
-      alerting: false
-  - id: 6db8aae6-1c95-7c9f-7dce-a83414103c6f
-    name: Azure - Defender for Cloud Resource Manager
-    deployments:
-    - type: PRECISE
-      enabled: false
-      alerting: false
-    - type: BROAD
-      enabled: false
-      alerting: false
-  - id: c3224541-d632-37f2-2053-9746b6c6b4e1
-    name: Azure - Defender for Cloud SQL Synapse or Open Source DB
-    deployments:
-    - type: PRECISE
-      enabled: false
-      alerting: false
-    - type: BROAD
-      enabled: false
-      alerting: false
-  - id: 21521dc1-c824-f13e-a152-1322b207104d
-    name: Azure - Defender for Cloud Storage
-    deployments:
-    - type: PRECISE
-      enabled: false
-      alerting: false
-    - type: BROAD
-      enabled: false
-      alerting: false
-  - id: 09696145-5f04-98e5-a209-4c89e7e2ae8f
-    name: Azure - Defender for Cloud Test Detects
-    deployments:
-    - type: PRECISE
-      enabled: false
-      alerting: false
-    - type: BROAD
-      enabled: false
-      alerting: false
-  - id: 3d0f9e5b-50dd-2ef2-3e71-939957e0383b
-    name: Azure - Defender for Cloud VM Extensions
-    deployments:
-    - type: PRECISE
-      enabled: false
-      alerting: false
-    - type: BROAD
-      enabled: false
-      alerting: false
-  - id: def076ad-90cd-e3db-be57-e4fcaab424f2
-    name: Azure - Defender for Cloud Windows and Linux VM
-    deployments:
-    - type: PRECISE
-      enabled: false
-      alerting: false
-    - type: BROAD
-      enabled: false
-      alerting: false
-  - id: 44c6744f-ad06-8300-f3d0-a6359f67dec4
-    name: Azure - Hacktools
-    deployments:
-    - type: PRECISE
-      enabled: false
-      alerting: false
-    - type: BROAD
-      enabled: false
-      alerting: false
-  - id: db3387b5-8125-2747-7a4c-343b42fc401e
-    name: Azure - Identity
-    deployments:
-    - type: PRECISE
-      enabled: false
-      alerting: false
-    - type: BROAD
-      enabled: false
-      alerting: false
-  - id: 0ea98728-a45b-4458-7753-f85ff7e87930
-    name: Azure - Logging and Monitoring
-    deployments:
-    - type: PRECISE
-      enabled: false
-      alerting: false
-    - type: BROAD
-      enabled: false
-      alerting: false
-  - id: 00ad672e-ebb3-0dd1-2a4d-99bd7c5e5f93
-    name: Azure - Network
-    deployments:
-    - type: PRECISE
-      enabled: false
-      alerting: false
-    - type: BROAD
-      enabled: false
-      alerting: false
-  - id: 273840b6-bb70-03e4-375a-716f1a661c9e
-    name: Azure - Organization
-    deployments:
-    - type: PRECISE
-      enabled: false
-      alerting: false
-    - type: BROAD
-      enabled: false
-      alerting: false
-  - id: de6d5318-2a46-33fb-de07-90558cb7d5d3
-    name: Azure - Secrets
-    deployments:
-    - type: PRECISE
-      enabled: false
-      alerting: false
-    - type: BROAD
-      enabled: false
-      alerting: false
-  - id: c3671cd3-4fe1-9b5a-861c-f70616e2850f
-    name: CDIR SCC Command And Control Alerts
-    deployments:
-    - type: PRECISE
-      enabled: false
-      alerting: false
-    - type: BROAD
-      enabled: false
-      alerting: false
-  - id: 9aa1121c-cfb2-eee2-fe38-7f19bfb8de36
-    name: CDIR SCC Critical Cloud Armor Alerts
-    deployments:
-    - type: PRECISE
-      enabled: false
-      alerting: false
-    - type: BROAD
-      enabled: false
-      alerting: false
-  - id: b13d905c-6712-187d-5c4d-3e502b40fe83
-    name: CDIR SCC Critical Cloud IDS Alerts
-    deployments:
-    - type: PRECISE
-      enabled: false
-      alerting: false
-    - type: BROAD
-      enabled: false
-      alerting: false
-  - id: 726eb799-a258-01f9-6152-afa6d70de5a9
-    name: CDIR SCC Custom Module Alerts
-    deployments:
-    - type: PRECISE
-      enabled: false
-      alerting: false
-    - type: BROAD
-      enabled: false
-      alerting: false
-  - id: f74cd4c2-395e-7db5-30f7-d3a7d278704b
-    name: CDIR SCC Enhanced Brute Force Alerts
-    deployments:
-    - type: PRECISE
-      enabled: false
-      alerting: false
-    - type: BROAD
-      enabled: false
-      alerting: false
-  - id: da9fa929-b677-6c29-fbfc-8a346995281e
-    name: CDIR SCC Enhanced Credential Access Alerts
-    deployments:
-    - type: PRECISE
-      enabled: false
-      alerting: false
-    - type: BROAD
-      enabled: false
-      alerting: false
-  - id: 6a9efd7a-73ce-5062-ac46-f5f474b40a9c
-    name: CDIR SCC Enhanced Data Destruction Alerts
-    deployments:
-    - type: PRECISE
-      enabled: false
-      alerting: false
-    - type: BROAD
-      enabled: false
-      alerting: false
-  - id: 92f84c0d-678c-c2ba-fd76-9baa399885a2
-    name: CDIR SCC Enhanced Defense Discovery Alerts
-    deployments:
-    - type: PRECISE
-      enabled: false
-      alerting: false
-    - type: BROAD
-      enabled: false
-      alerting: false
-  - id: a6df6f21-789e-849a-f078-98d3489ef123
-    name: CDIR SCC Enhanced Defense Evasion Alerts
-    deployments:
-    - type: PRECISE
-      enabled: false
-      alerting: false
-    - type: BROAD
-      enabled: false
-      alerting: false
-  - id: dd833433-a4f8-953a-b599-1dc37d39d0f0
-    name: CDIR SCC Enhanced Defense Evasion Alerts
-    deployments:
-    - type: PRECISE
-      enabled: false
-      alerting: false
-    - type: BROAD
-      enabled: false
-      alerting: false
-  - id: bdaffc97-50cb-b329-97b3-c3664abdc0f2
-    name: CDIR SCC Enhanced Execution Alerts
-    deployments:
-    - type: PRECISE
-      enabled: false
-      alerting: false
-    - type: BROAD
-      enabled: false
-      alerting: false
-  - id: a6299a34-9e0f-5802-f60a-f493d49b6256
-    name: CDIR SCC Enhanced Exfiltration Alerts
-    deployments:
-    - type: PRECISE
-      enabled: false
-      alerting: false
-    - type: BROAD
-      enabled: false
-      alerting: false
-  - id: 5b07b1a9-1bca-ac94-9bc9-be5d8d5fd297
-    name: CDIR SCC Enhanced Impair Defenses Alerts
-    deployments:
-    - type: PRECISE
-      enabled: false
-      alerting: false
-    - type: BROAD
-      enabled: false
-      alerting: false
-  - id: 0223c3ee-a0ab-762f-15d0-df077ec81782
-    name: CDIR SCC Enhanced Inhibit System Recovery Alerts
-    deployments:
-    - type: PRECISE
-      enabled: false
-      alerting: false
-    - type: BROAD
-      enabled: false
-      alerting: false
-  - id: d8d9698b-b067-7874-9e5b-83e85d746438
-    name: CDIR SCC Enhanced Initial Access Alerts
-    deployments:
-    - type: PRECISE
-      enabled: false
-      alerting: false
-    - type: BROAD
-      enabled: false
-      alerting: false
-  - id: 468cf1fb-c2a5-3924-4c11-e4e9bc6147d2
-    name: CDIR SCC Enhanced Malware Alerts
-    deployments:
-    - type: PRECISE
-      enabled: false
-      alerting: false
-    - type: BROAD
-      enabled: false
-      alerting: false
-  - id: 5999899d-a163-8c0e-da05-afa47a4bfbb5
-    name: CDIR SCC Enhanced Persistence Alerts
-    deployments:
-    - type: PRECISE
-      enabled: false
-      alerting: false
-    - type: BROAD
-      enabled: false
-      alerting: false
-  - id: 1bb02b3f-b870-e048-94d6-ad3d08eb2866
-    name: CDIR SCC Enhanced Privilege Escalation Alerts
-    deployments:
-    - type: PRECISE
-      enabled: false
-      alerting: false
-    - type: BROAD
-      enabled: false
-      alerting: false
-  - id: cd75543c-e709-3f9b-db7b-4e828ca57791
-    name: CDIR SCC High Cloud Armor Alerts
-    deployments:
-    - type: PRECISE
-      enabled: false
-      alerting: false
-    - type: BROAD
-      enabled: false
-      alerting: false
-  - id: 98d0131e-b772-b930-b861-7a52ddecac2f
-    name: CDIR SCC High Cloud IDS Alerts
-    deployments:
-    - type: PRECISE
-      enabled: false
-      alerting: false
-    - type: BROAD
-      enabled: false
-      alerting: false
-  - id: 654e6077-be4d-3916-4a24-d4fcbf55f42f
-    name: CDIR SCC Impact
-    deployments:
-    - type: PRECISE
-      enabled: false
-      alerting: false
-    - type: BROAD
-      enabled: false
-      alerting: false
-  - id: 69de2c51-9840-81b4-a367-e96451b9b070
-    name: CDIR SCC Low Cloud Armor Alerts
-    deployments:
-    - type: PRECISE
-      enabled: false
-      alerting: false
-    - type: BROAD
-      enabled: false
-      alerting: false
-  - id: a3aaeb2e-6c1b-24d1-fb1c-daefd92cfde8
-    name: CDIR SCC Low Cloud IDS Alerts
-    deployments:
-    - type: PRECISE
-      enabled: false
-      alerting: false
-    - type: BROAD
-      enabled: false
-      alerting: false
-  - id: 6e716273-3784-fe23-463a-0c14c7e124d3
-    name: CDIR SCC Medium Cloud Armor Alerts
-    deployments:
-    - type: PRECISE
-      enabled: false
-      alerting: false
-    - type: BROAD
-      enabled: false
-      alerting: false
-  - id: 7f1e1806-d8b9-cd5a-6f43-e62356e98c34
-    name: CDIR SCC Medium Cloud IDS Alerts
-    deployments:
-    - type: PRECISE
-      enabled: false
-      alerting: false
-    - type: BROAD
-      enabled: false
-      alerting: false
-  - id: 07eab257-51fb-b9c5-2040-dd5d6f65ed79
-    name: Cloud Hacktool
-    deployments:
-    - type: PRECISE
-      enabled: false
-      alerting: false
-    - type: BROAD
-      enabled: false
-      alerting: false
-  - id: 6a3033c5-6322-92a4-c3d4-79bbbdb17188
-    name: Cloud SQL Ransom
-    deployments:
-    - type: PRECISE
-      enabled: false
-      alerting: false
-    - type: BROAD
-      enabled: false
-      alerting: false
-  - id: 8c395bfe-bb62-b02d-ff93-cef098136aa0
-    name: IAM Abuse
-    deployments:
-    - type: PRECISE
-      enabled: false
-      alerting: false
-    - type: BROAD
-      enabled: false
-      alerting: false
-  - id: 4dab4665-0b94-7a78-4391-2da653487acf
-    name: Kubernetes Certificate Sensitive Actions
-    deployments:
-    - type: PRECISE
-      enabled: false
-      alerting: false
-    - type: BROAD
-      enabled: false
-      alerting: false
-  - id: 7aaa39b9-37aa-eace-ec81-3e1282c1c843
-    name: Kubernetes RBAC Abuse
-    deployments:
-    - type: PRECISE
-      enabled: false
-      alerting: false
-    - type: BROAD
-      enabled: false
-      alerting: false
-  - id: fff1c065-d50f-22f3-c51e-b85593c11893
-    name: Kubernetes Suspicious Tools
-    deployments:
-    - type: PRECISE
-      enabled: false
-      alerting: false
-    - type: BROAD
-      enabled: false
-      alerting: false
-  - id: 95dcad9f-b3cf-1833-9e4a-240c0781e64d
-    name: Mandiant Frontline Threats
-    deployments:
-    - type: PRECISE
-      enabled: false
-      alerting: false
-    - type: BROAD
-      enabled: false
-      alerting: false
-  - id: af800f38-1d0c-0478-043a-21e5a34581bc
-    name: Office 365 - Administrative
-    deployments:
-    - type: PRECISE
-      enabled: false
-      alerting: false
-    - type: BROAD
-      enabled: false
-      alerting: false
-  - id: d710bb92-80c0-ec6e-a3a8-0edb4ab73eec
-    name: Office 365 - Ediscovery
-    deployments:
-    - type: PRECISE
-      enabled: false
-      alerting: false
-    - type: BROAD
-      enabled: false
-      alerting: false
-  - id: 514c90cd-0b6a-81ca-ebbe-35cdd2d1e289
-    name: Office 365 - Email
-    deployments:
-    - type: PRECISE
-      enabled: false
-      alerting: false
-    - type: BROAD
-      enabled: false
-      alerting: false
-  - id: 075922f7-fdbf-b111-e86e-45ebc60fa225
-    name: Office 365 - Forms
-    deployments:
-    - type: PRECISE
-      enabled: false
-      alerting: false
-    - type: BROAD
-      enabled: false
-      alerting: false
-  - id: 5e518ca0-45eb-0f95-9e36-7474d2a14ae2
-    name: Office 365 - Identity
-    deployments:
-    - type: PRECISE
-      enabled: false
-      alerting: false
-    - type: BROAD
-      enabled: false
-      alerting: false
-  - id: 6ce780ba-2554-e280-3e19-df87bfa5c656
-    name: Office 365 - Sharepoint and OneDrive
-    deployments:
-    - type: PRECISE
-      enabled: false
-      alerting: false
-    - type: BROAD
-      enabled: false
-      alerting: false
-  - id: 726ed7e3-c789-9e15-da7a-30b884e975f5
-    name: Office 365 - Teams
-    deployments:
-    - type: PRECISE
-      enabled: false
-      alerting: false
-    - type: BROAD
-      enabled: false
-      alerting: false
-  - id: a5ad1763-72c7-82ce-7fb2-86fc12104ec3
-    name: Okta
-    deployments:
-    - type: PRECISE
-      enabled: false
-      alerting: false
-    - type: BROAD
-      enabled: false
-      alerting: false
-  - id: 95dc765b-970d-f602-4335-83bdcdcca74c
-    name: Potential Exfil Activity
-    deployments:
-    - type: PRECISE
-      enabled: false
-      alerting: false
-    - type: BROAD
-      enabled: false
-      alerting: false
-  - id: dc46099b-a96c-c554-5c3a-ebcc88a3252e
-    name: Resource Masquerading
-    deployments:
-    - type: PRECISE
-      enabled: false
-      alerting: false
-    - type: BROAD
-      enabled: false
-      alerting: false
-  - id: 72d4374a-bfcd-1f48-4c28-80f0fb1b5fae
-    name: Serverless Threats
-    deployments:
-    - type: PRECISE
-      enabled: false
-      alerting: false
-    - type: BROAD
-      enabled: false
-      alerting: false
-  - id: 9d7537ae-0ae2-1b3f-b5e2-507c6f018ae9
-    name: Service Disruption
-    deployments:
-    - type: PRECISE
-      enabled: false
-      alerting: false
-    - type: BROAD
-      enabled: false
-      alerting: false
-  - id: 5ca4cb55-df0a-634a-4a2a-08e18bb0bc46
-    name: Suspicious Behavior
-    deployments:
-    - type: PRECISE
-      enabled: false
-      alerting: false
-    - type: BROAD
-      enabled: false
-      alerting: false
-  - id: fbf3134d-db14-79f1-e310-826e8b7e30ce
-    name: Suspicious Infrastructure Change
-    deployments:
-    - type: PRECISE
-      enabled: false
-      alerting: false
-    - type: BROAD
-      enabled: false
-      alerting: false
-  - id: aa88cf05-6dd3-4a75-bf4f-2addc384b0a5
-    name: Weakened Config
-    deployments:
-    - type: PRECISE
-      enabled: false
-      alerting: false
-    - type: BROAD
-      enabled: false
-      alerting: false
-  - id: 4d6f3153-13ba-dea4-84e6-82604100d927
-    name: 'Workspace: Data Exfiltration from Chrome'
-    deployments:
-    - type: PRECISE
-      enabled: false
-      alerting: false
-    - type: BROAD
-      enabled: false
-      alerting: false
-  - id: fa8fd143-9056-a12f-d8c8-90d7cffccb69
-    name: 'Workspace: Data Exfiltration from Drive'
-    deployments:
-    - type: PRECISE
-      enabled: false
-      alerting: false
-    - type: BROAD
-      enabled: false
-      alerting: false
-  - id: d79dcb65-efaa-98c6-41fe-f9be9fe67adf
-    name: 'Workspace: Data Exfiltration from Gmail'
-    deployments:
-    - type: PRECISE
-      enabled: false
-      alerting: false
-    - type: BROAD
-      enabled: false
-      alerting: false
-  - id: 43f7241e-a22c-6122-267b-3d1edc11c8c4
-    name: 'Workspace: Potential Account Compromise'
-    deployments:
-    - type: PRECISE
-      enabled: false
-      alerting: false
-    - type: BROAD
-      enabled: false
-      alerting: false
-  - id: 81796f08-3e2e-c2f9-b7b3-9ad04acc3c6c
-    name: 'Workspace: Potential Account Compromise in Drive'
-    deployments:
-    - type: PRECISE
-      enabled: false
-      alerting: false
-    - type: BROAD
-      enabled: false
-      alerting: false
-  - id: cfc49e38-7ad4-eef8-5557-e476b23a5932
-    name: 'Workspace: Suspicious Admin Actions'
-    deployments:
-    - type: PRECISE
-      enabled: false
-      alerting: false
-    - type: BROAD
-      enabled: false
-      alerting: false
-- name: Composite Rules
-  id: af98131a-b604-bd6b-ec1f-c545ff12193e
-  rulesets:
-  - id: 9d76cb89-b647-4edf-855b-5a7e9d5cfc38
-    name: Cloud Composite Rules
-    deployments:
-    - type: PRECISE
-      enabled: false
-      alerting: false
-    - type: BROAD
-      enabled: false
-      alerting: false
-  - id: 9d87d10c-dc95-d9d6-c605-1762d22ec3a1
-    name: Endpoint Composite Rules
-    deployments:
-    - type: PRECISE
-      enabled: false
-      alerting: false
-    - type: BROAD
-      enabled: false
-      alerting: false
-- name: Linux Threats
-  id: a5366ed8-3746-2423-a972-98535279f96a
-  rulesets:
-  - id: c2cd1fe7-22c6-e5a8-6a0e-d6a015ad0a43
-    name: Malware Signals - Suspicious Download Activity
-    deployments:
-    - type: PRECISE
-      enabled: false
-      alerting: false
-    - type: BROAD
-      enabled: false
-      alerting: false
-  - id: 1c4ab1f6-d801-d6a9-1177-3ec3dd5bcbe9
-    name: Malware Signals - Suspicious Execution
-    deployments:
-    - type: PRECISE
-      enabled: false
-      alerting: false
-    - type: BROAD
-      enabled: false
-      alerting: false
-  - id: 0d156170-220f-1400-0318-a4be835b9674
-    name: Malware Signals - Suspicious LOTL Binary Activity
-    deployments:
-    - type: PRECISE
-      enabled: false
-      alerting: false
-    - type: BROAD
-      enabled: false
-      alerting: false
-  - id: c489d0a6-41bf-8ec0-5f5a-d0aaea012978
-    name: Mandiant Frontline Threats
-    deployments:
-    - type: PRECISE
-      enabled: false
-      alerting: false
-    - type: BROAD
-      enabled: false
-      alerting: false
-  - id: fe9afff9-b4f7-01dc-727d-aebd83a8c801
-    name: Mandiant Intel Emerging Threats
-    deployments:
-    - type: PRECISE
-      enabled: false
-      alerting: false
-    - type: BROAD
-      enabled: false
-      alerting: false
-  - id: 47044c03-e9ae-1c15-e799-12e57b2029f9
-    name: OS Privilege Escalation Tools
-    deployments:
-    - type: PRECISE
-      enabled: false
-      alerting: false
-    - type: BROAD
-      enabled: false
-      alerting: false
-  - id: b762ac05-7f91-554f-b25a-ac0e6aeeb37d
-    name: Persistence Mechanisms
-    deployments:
-    - type: PRECISE
-      enabled: false
-      alerting: false
-    - type: BROAD
-      enabled: false
-      alerting: false
-  - id: 246d8616-56e4-9aa6-dcc1-8460ae80afa9
-    name: Privilege Modifications
-    deployments:
-    - type: PRECISE
-      enabled: false
-      alerting: false
-    - type: BROAD
-      enabled: false
-      alerting: false
-- name: MacOS Threats
-  id: 35a2ed94-daae-da6c-c829-c5dab7939ab9
-  rulesets:
-  - id: 631c8ef3-b117-5486-812c-5222b5819f37
-    name: Mandiant Frontline Threats
-    deployments:
-    - type: PRECISE
-      enabled: false
-      alerting: false
-    - type: BROAD
-      enabled: false
-      alerting: false
-  - id: 2fc08799-1d2e-11d8-e473-1d5daaff0b2d
-    name: Mandiant Intel Emerging Threats
-    deployments:
-    - type: PRECISE
-      enabled: false
-      alerting: false
-    - type: BROAD
-      enabled: false
-      alerting: false
-- name: Managed Detection Testing
-  id: 56feb49e-a3bd-dfee-395c-23cc0f327474
-  rulesets:
-  - id: e00b94f3-7dc0-b5fc-42dc-a3bc6f731217
-    name: AWS Managed Detection Testing
-    deployments:
-    - type: PRECISE
-      enabled: false
-      alerting: false
-    - type: BROAD
-      enabled: false
-      alerting: false
-  - id: 6be12d66-f39c-3660-8d5b-2c80f3e732aa
-    name: Azure Managed Detection Testing
-    deployments:
-    - type: PRECISE
-      enabled: false
-      alerting: false
-    - type: BROAD
-      enabled: false
-      alerting: false
-  - id: f6a67133-6ede-4258-94a5-dc8962c5116f
-    name: Chrome Enterprise Managed Detection Testing
-    deployments:
-    - type: PRECISE
-      enabled: false
-      alerting: false
-    - type: BROAD
-      enabled: false
-      alerting: false
-  - id: 0c547c7f-886c-0ee7-01e2-906fcb5a1013
-    name: GCP Managed Detection Testing
-    deployments:
-    - type: PRECISE
-      enabled: false
-      alerting: false
-    - type: BROAD
-      enabled: false
-      alerting: false
-  - id: 988cf5ca-a075-4b04-534e-76c45c346b66
-    name: Linux Managed Detection Testing
-    deployments:
-    - type: PRECISE
-      enabled: false
-      alerting: false
-    - type: BROAD
-      enabled: false
-      alerting: false
-  - id: 773414d4-330a-aba9-4a2b-bb66dc21d753
-    name: Office Managed Detection Testing
-    deployments:
-    - type: PRECISE
-      enabled: false
-      alerting: false
-    - type: BROAD
-      enabled: false
-      alerting: false
-  - id: 6d6953bb-194a-e744-4626-1d63da047361
-    name: Okta Managed Detection Testing
-    deployments:
-    - type: PRECISE
-      enabled: false
-      alerting: false
-    - type: BROAD
-      enabled: false
-      alerting: false
-  - id: f6739fb3-e585-bd37-1494-74e713e856d4
-    name: SCC Managed Detection Testing
-    deployments:
-    - type: PRECISE
-      enabled: false
-      alerting: false
-    - type: BROAD
-      enabled: false
-      alerting: false
-  - id: 92e0320d-c484-517f-7e75-09d7f0d83ced
-    name: UEBA Testing
-    deployments:
-    - type: PRECISE
-      enabled: false
-      alerting: false
-    - type: BROAD
-      enabled: false
-      alerting: false
-  - id: 5ba58d81-2386-2ae1-df99-31bf2787981d
-    name: Windows Managed Detection Testing
-    deployments:
-    - type: PRECISE
-      enabled: false
-      alerting: false
-    - type: BROAD
-      enabled: false
-      alerting: false
-- name: Mandiant Hunting Rules
-  id: 41460d15-a126-6759-1899-a7a414f8b0a0
-  rulesets:
-  - id: 43f65756-7b8c-b21d-2ec7-ad3d7dc42f83
-    name: Mandiant Hunt Cloud Identification Rules
-    deployments:
-    - type: PRECISE
-      enabled: false
-      alerting: false
-    - type: BROAD
-      enabled: false
-      alerting: false
-  - id: 54e890e7-26a5-9ff9-bd49-670a35c63c9e
-    name: Mandiant Hunt Endpoint Identification Rules
-    deployments:
-    - type: PRECISE
-      enabled: false
-      alerting: false
-    - type: BROAD
-      enabled: false
-      alerting: false
-- name: Risk Analytics for UEBA
-  id: 7b36ba59-c319-dbdb-c103-327993c7eb2b
-  rulesets:
-  - id: cf86a092-6154-f1eb-7183-47328a4acc2d
-    name: Anomalous Authentication Events by User
-    deployments:
-    - type: PRECISE
-      enabled: false
-      alerting: false
-    - type: BROAD
-      enabled: false
-      alerting: false
-  - id: 3b09cefe-8a5d-ffc2-70b6-a9f6a85264d0
-    name: Anomalous Inbound Bytes by Device
-    deployments:
-    - type: PRECISE
-      enabled: false
-      alerting: false
-    - type: BROAD
-      enabled: false
-      alerting: false
-  - id: e0063a93-fb0f-23e2-915a-87e7f8600331
-    name: Anomalous Inbound Bytes by User
-    deployments:
-    - type: PRECISE
-      enabled: false
-      alerting: false
-    - type: BROAD
-      enabled: false
-      alerting: false
-  - id: e3f40344-c027-b3e1-2df6-386827e41422
-    name: Anomalous Outbound Bytes by Device
-    deployments:
-    - type: PRECISE
-      enabled: false
-      alerting: false
-    - type: BROAD
-      enabled: false
-      alerting: false
-  - id: 64eb7732-9f8f-a04b-4496-2580cf6ba002
-    name: Anomalous Total Bytes by Device
-    deployments:
-    - type: PRECISE
-      enabled: false
-      alerting: false
-    - type: BROAD
-      enabled: false
-      alerting: false
-  - id: dc33882a-fbff-b279-37ba-2207749e3a37
-    name: Anomalous Total Bytes by User
-    deployments:
-    - type: PRECISE
-      enabled: false
-      alerting: false
-    - type: BROAD
-      enabled: false
-      alerting: false
-  - id: 732033da-8037-3b0a-594e-fb5ec7514d30
-    name: Anomalous or Excessive Logins for a Newly Created User
-    deployments:
-    - type: PRECISE
-      enabled: false
-      alerting: false
-    - type: BROAD
-      enabled: false
-      alerting: false
-  - id: 2b7b902f-e32f-65d1-fdc0-a4577361062a
-    name: Anomalous or Excessive Processes with Data Exfiltration Capabilities
-    deployments:
-    - type: PRECISE
-      enabled: false
-      alerting: false
-    - type: BROAD
-      enabled: false
-      alerting: false
-  - id: 6ce52505-9829-51dd-5f62-8cf5e19f76cb
-    name: Anomalous or Excessive Suspicious Actions for a Newly Created User
-    deployments:
-    - type: PRECISE
-      enabled: false
-      alerting: false
-    - type: BROAD
-      enabled: false
-      alerting: false
-  - id: 40a53cd7-57e6-08c7-66a6-9e48b58b7513
-    name: Brute Force then Successful Login by User
-    deployments:
-    - type: PRECISE
-      enabled: false
-      alerting: false
-    - type: BROAD
-      enabled: false
-      alerting: false
-  - id: 2feb1948-4246-eb84-7ad4-cedc835d080d
-    name: Excessive Account Creation by Device
-    deployments:
-    - type: PRECISE
-      enabled: false
-      alerting: false
-    - type: BROAD
-      enabled: false
-      alerting: false
-  - id: e791a4b2-4003-4a75-76e8-27277698187e
-    name: Excessive Alerts by User
-    deployments:
-    - type: PRECISE
-      enabled: false
-      alerting: false
-    - type: BROAD
-      enabled: false
-      alerting: false
-  - id: cf2e2fc9-4ed6-29b9-3d9e-6c589f649ee1
-    name: Failed Authentications by Device
-    deployments:
-    - type: PRECISE
-      enabled: false
-      alerting: false
-    - type: BROAD
-      enabled: false
-      alerting: false
-  - id: 605d2263-6754-e7f8-41bf-9e75f79ae169
-    name: Failed Authentications by User
-    deployments:
-    - type: PRECISE
-      enabled: false
-      alerting: false
-    - type: BROAD
-      enabled: false
-      alerting: false
-  - id: 57d1ad50-538f-aef1-9b61-47383a2490fb
-    name: New Login by User to Device
-    deployments:
-    - type: PRECISE
-      enabled: false
-      alerting: false
-    - type: BROAD
-      enabled: false
-      alerting: false
-- name: Third Party Vendor Alerts
-  id: ebfc92e8-d06d-e57c-a474-561d18e88406
-  rulesets:
-  - id: 42e57db9-74e5-b389-f20c-87ab0f6c6d20
-    name: Carbon Black EDR Passthrough Rules
-    deployments:
-    - type: PRECISE
-      enabled: false
-      alerting: false
-    - type: BROAD
-      enabled: false
-      alerting: false
-  - id: 9a87ab41-48d4-84e1-a33a-425d28baaec8
-    name: Claroty CTD Alerts
-    deployments:
-    - type: PRECISE
-      enabled: false
-      alerting: false
-    - type: BROAD
-      enabled: false
-      alerting: false
-  - id: 820a5962-a349-21d2-c26e-2820f4d1c056
-    name: Claroty xDome Alerts
-    deployments:
-    - type: PRECISE
-      enabled: false
-      alerting: false
-    - type: BROAD
-      enabled: false
-      alerting: false
-  - id: 63c08059-d2cd-19fa-c6f0-818cbd947cad
-    name: Corelight Suricata Alerts
-    deployments:
-    - type: PRECISE
-      enabled: false
-      alerting: false
-    - type: BROAD
-      enabled: false
-      alerting: false
-  - id: 9aca9fd1-80be-12d2-9f3a-963a07e5bc0e
-    name: Crowdstrike Passthrough Rules
-    deployments:
-    - type: PRECISE
-      enabled: false
-      alerting: false
-    - type: BROAD
-      enabled: false
-      alerting: false
-  - id: 3490a75c-bf46-ada2-33d0-10d24ee0400f
-    name: Cybereason EDR Passthrough Rules
-    deployments:
-    - type: PRECISE
-      enabled: false
-      alerting: false
-    - type: BROAD
-      enabled: false
-      alerting: false
-  - id: 73ef620b-dbe0-7108-d574-8bd9ee46fa1d
-    name: Deep Instinct EDR Passthrough Rules
-    deployments:
-    - type: PRECISE
-      enabled: false
-      alerting: false
-    - type: BROAD
-      enabled: false
-      alerting: false
-  - id: d237fb3e-17c8-3978-033d-e3a8791427dc
-    name: Digital Guardian EDR Passthrough Rules
-    deployments:
-    - type: PRECISE
-      enabled: false
-      alerting: false
-    - type: BROAD
-      enabled: false
-      alerting: false
-  - id: 69f3d78b-93eb-2059-54a9-af28f4725fc7
-    name: ESET EDR Passthrough Rules
-    deployments:
-    - type: PRECISE
-      enabled: false
-      alerting: false
-    - type: BROAD
-      enabled: false
-      alerting: false
-  - id: 488ab363-9e10-abb1-b11a-08d756d2b186
-    name: Forescout eyeInspect Alerts
-    deployments:
-    - type: PRECISE
-      enabled: false
-      alerting: false
-    - type: BROAD
-      enabled: false
-      alerting: false
-  - id: 96b5ec1e-09a4-05c9-008d-df435d087fdf
-    name: Fortinet Passthrough Rules
-    deployments:
-    - type: PRECISE
-      enabled: false
-      alerting: false
-    - type: BROAD
-      enabled: false
-      alerting: false
-  - id: 7f770549-0948-5a5d-df0a-aeee1632c1b1
-    name: Google Threat Intelligence (BYOL)
-    deployments:
-    - type: PRECISE
-      enabled: false
-      alerting: false
-    - type: BROAD
-      enabled: false
-      alerting: false
-  - id: 4a2820e0-f95a-a90b-ef53-46756a11e725
-    name: LimaCharlie EDR Passthrough Rules
-    deployments:
-    - type: PRECISE
-      enabled: false
-      alerting: false
-    - type: BROAD
-      enabled: false
-      alerting: false
-  - id: 3b0acddf-4d79-b554-5b65-82afda5646f2
-    name: MalwareBytes EDR Passthrough Rules
-    deployments:
-    - type: PRECISE
-      enabled: false
-      alerting: false
-    - type: BROAD
-      enabled: false
-      alerting: false
-  - id: ba2b595b-0dba-bde8-bede-8f5ed47de8f4
-    name: Microsoft Defender for Endpoint Passthrough Rules
-    deployments:
-    - type: PRECISE
-      enabled: false
-      alerting: false
-    - type: BROAD
-      enabled: false
-      alerting: false
-  - id: 9e519bd2-a194-1484-7d07-b409291d2851
-    name: Nozomi N2OS Alerts
-    deployments:
-    - type: PRECISE
-      enabled: false
-      alerting: false
-    - type: BROAD
-      enabled: false
-      alerting: false
-  - id: 3fd15a13-4fcd-f172-a840-ae7692e45fa9
-    name: Nozomi Vantage Alerts
-    deployments:
-    - type: PRECISE
-      enabled: false
-      alerting: false
-    - type: BROAD
-      enabled: false
-      alerting: false
-  - id: df93d8fd-73e8-4285-5a0d-33bcd2707d04
-    name: PAN Cortex XDR Alerts
-    deployments:
-    - type: PRECISE
-      enabled: false
-      alerting: false
-    - type: BROAD
-      enabled: false
-      alerting: false
-  - id: e6a84533-851d-b98d-d867-5e79205d82bd
-    name: PAN Passthrough Rules
-    deployments:
-    - type: PRECISE
-      enabled: false
-      alerting: false
-    - type: BROAD
-      enabled: false
-      alerting: false
-  - id: 2e7d150c-91a7-a10b-5b89-9ca8925cec0a
-    name: Proofpoint TAP Alerts
-    deployments:
-    - type: PRECISE
-      enabled: false
-      alerting: false
-    - type: BROAD
-      enabled: false
-      alerting: false
-  - id: 4fa67718-5838-999b-8f6f-4415e133f3cf
-    name: SentinelOne Cloud Funnel Passthrough Rules
-    deployments:
-    - type: PRECISE
-      enabled: false
-      alerting: false
-    - type: BROAD
-      enabled: false
-      alerting: false
-  - id: 6e597fa0-32af-ba57-ee94-9e8930982710
-    name: Sophos EDR Passthrough Rules
-    deployments:
-    - type: PRECISE
-      enabled: false
-      alerting: false
-    - type: BROAD
-      enabled: false
-      alerting: false
-  - id: a43a710f-7330-5471-173b-8f667130d342
-    name: Symantec EDR Passthrough Rules
-    deployments:
-    - type: PRECISE
-      enabled: false
-      alerting: false
-    - type: BROAD
-      enabled: false
-      alerting: false
-  - id: 97d164bc-03af-f309-8365-0c583b6050be
-    name: Trellix ETP Alerts
-    deployments:
-    - type: PRECISE
-      enabled: false
-      alerting: false
-    - type: BROAD
-      enabled: false
-      alerting: false
-  - id: 5c6e1c3d-227a-db37-bdfc-2a3053a33f55
-    name: Trellix EX Alerts
-    deployments:
-    - type: PRECISE
-      enabled: false
-      alerting: false
-    - type: BROAD
-      enabled: false
-      alerting: false
-  - id: a992fb7b-23e0-8c4b-ae45-645e90d45836
-    name: Trellix HX Alerts
-    deployments:
-    - type: PRECISE
-      enabled: false
-      alerting: false
-    - type: BROAD
-      enabled: false
-      alerting: false
-  - id: 7b0b90dc-f8be-2c77-a574-1e4694b6d39b
-    name: Trellix NX Alerts
-    deployments:
-    - type: PRECISE
-      enabled: false
-      alerting: false
-    - type: BROAD
-      enabled: false
-      alerting: false
-  - id: 89a61ff4-2841-76a9-7386-91af9f74b5ec
-    name: TrendMicro Vision One Alerts
-    deployments:
-    - type: PRECISE
-      enabled: false
-      alerting: false
-    - type: BROAD
-      enabled: false
-      alerting: false
-  - id: 5e055b01-2de7-b075-96ca-2a3edb3b1a53
-    name: Vectra Detect Alerts
-    deployments:
-    - type: PRECISE
-      enabled: false
-      alerting: false
-    - type: BROAD
-      enabled: false
-      alerting: false
-  - id: 81c6af62-5ce5-8f68-02de-d6c3e0832840
-    name: Vectra XDR Alerts
-    deployments:
-    - type: PRECISE
-      enabled: false
-      alerting: false
-    - type: BROAD
-      enabled: false
-      alerting: false
-  - id: 8efc01c3-7051-3fee-e4dd-6cc763e7b186
-    name: Wiz Alerts
-    deployments:
-    - type: PRECISE
-      enabled: false
-      alerting: false
-    - type: BROAD
-      enabled: false
-      alerting: false
-  - id: 08441977-6693-89ae-2e6e-dc2f5411428f
-    name: Zscaler Passthrough Rules
-    deployments:
-    - type: PRECISE
-      enabled: false
-      alerting: false
-    - type: BROAD
-      enabled: false
-      alerting: false
-  - id: 39aa074a-efa4-b55e-8abe-3823d04129fa
-    name: uptycs EDR Passthrough Rules
-    deployments:
-    - type: PRECISE
-      enabled: false
-      alerting: false
-    - type: BROAD
-      enabled: false
-      alerting: false
-- name: Windows Threats
-  id: 588c3ec3-15a9-8a7c-b938-1d160912eef7
-  rulesets:
-  - id: c3bcd130-4ae7-4550-1acb-8b636930a8e3
-    name: Alert Prioritization for Endpoints
-    deployments:
-    - type: PRECISE
-      enabled: false
-      alerting: false
-    - type: BROAD
-      enabled: false
-      alerting: false
-  - id: d68057c9-d72a-34f5-efff-6bc40ad13e89
-    name: Anomalous PowerShell
-    deployments:
-    - type: PRECISE
-      enabled: false
-      alerting: false
-    - type: BROAD
-      enabled: false
-      alerting: false
-  - id: 7d90f5c9-8822-3c49-f012-cdf5643a7b64
-    name: Crypto Activity
-    deployments:
-    - type: PRECISE
-      enabled: false
-      alerting: false
-    - type: BROAD
-      enabled: false
-      alerting: false
-  - id: 610b943a-1c6e-f734-d793-e19452e521a0
-    name: Hacktool
-    deployments:
-    - type: PRECISE
-      enabled: false
-      alerting: false
-    - type: BROAD
-      enabled: false
-      alerting: false
-  - id: ed6c1989-73c6-6eae-14ab-01b1b13715cc
-    name: Info Stealer
-    deployments:
-    - type: PRECISE
-      enabled: false
-      alerting: false
-    - type: BROAD
-      enabled: false
-      alerting: false
-  - id: bd4f7752-7e5f-a6bb-5f8f-e362a3415931
-    name: Initial Access
-    deployments:
-    - type: PRECISE
-      enabled: false
-      alerting: false
-    - type: BROAD
-      enabled: false
-      alerting: false
-  - id: 51bd0127-93fd-816c-4bc7-fe5630f10432
-    name: Legitimate but Misused
-    deployments:
-    - type: PRECISE
-      enabled: false
-      alerting: false
-    - type: BROAD
-      enabled: false
-      alerting: false
-  - id: 89adf0db-5d29-0a04-c926-f8c2a58f5d1b
-    name: Living off the Land Binaries
-    deployments:
-    - type: PRECISE
-      enabled: false
-      alerting: false
-    - type: BROAD
-      enabled: false
-      alerting: false
-  - id: 300eb2a7-99d6-90ae-3ab3-b4842aa9a7cd
-    name: Mandiant Frontline Threats
-    deployments:
-    - type: PRECISE
-      enabled: false
-      alerting: false
-    - type: BROAD
-      enabled: false
-      alerting: false
-  - id: cc753288-558d-dbd0-fed1-abeecd6bf734
-    name: Mandiant Intel Emerging Threats
-    deployments:
-    - type: PRECISE
-      enabled: false
-      alerting: false
-    - type: BROAD
-      enabled: false
-      alerting: false
-  - id: 48585cce-806e-1129-7640-00ebd287e591
-    name: Named Threat
-    deployments:
-    - type: PRECISE
-      enabled: false
-      alerting: false
-    - type: BROAD
-      enabled: false
-      alerting: false
-  - id: 6e6eda02-51b9-e57e-9597-622f1c7f3ee9
-    name: RAT
-    deployments:
-    - type: PRECISE
-      enabled: false
-      alerting: false
-    - type: BROAD
-      enabled: false
-      alerting: false
-  - id: 8713c524-0f77-1e83-a814-356c465f3168
-    name: Ransomware
-    deployments:
-    - type: PRECISE
-      enabled: false
-      alerting: false
-    - type: BROAD
-      enabled: false
-      alerting: false
-  - id: fa68bcdd-09b2-f313-24ce-42dfa4fc4a43
-    name: Security Posture Downgrade
-    deployments:
-    - type: PRECISE
-      enabled: false
-      alerting: false
-    - type: BROAD
-      enabled: false
-      alerting: false
-  - id: a5590799-315c-27e5-c591-e86cad9a0788
-    name: Suspicious Behavior
-    deployments:
-    - type: PRECISE
-      enabled: false
-      alerting: false
-    - type: BROAD
-      enabled: false
-      alerting: false
+  - name: Applied Threat Intelligence - Curated Prioritization
+    id: 42e1affb-3ab4-65d3-62d8-95e1d5e7f8d6
+    rulesets:
+      - id: f5533b66-9327-9880-93e6-75a738ac2345
+        name: Active Breach Priority Host Indicators
+        deployments:
+          - type: PRECISE
+            enabled: true
+            alerting: false
+          - type: BROAD
+            enabled: true
+            alerting: false
+      - id: 433faf9e-4d51-f284-c35b-009528ecff05
+        name: Active Breach Priority Network Indicators
+        deployments:
+          - type: PRECISE
+            enabled: true
+            alerting: false
+          - type: BROAD
+            enabled: true
+            alerting: false
+      - id: 25fa44c2-4d22-85a8-62dc-94ba55c096f5
+        name: Applied Threat Intelligence - Curated Composites
+        deployments:
+          - type: PRECISE
+            enabled: false
+            alerting: false
+          - type: BROAD
+            enabled: false
+            alerting: false
+      - id: 20c58085-d5f8-2b38-6b14-b4d017e3f923
+        name: High Priority Host Indicators
+        deployments:
+          - type: PRECISE
+            enabled: true
+            alerting: false
+          - type: BROAD
+            enabled: true
+            alerting: false
+      - id: 80eafc65-a11e-5137-1365-c64164f64c0e
+        name: High Priority Network Indicators
+        deployments:
+          - type: PRECISE
+            enabled: true
+            alerting: false
+          - type: BROAD
+            enabled: true
+            alerting: false
+      - id: f954120d-0a79-1a52-e177-b841b253a86f
+        name: Inbound IP Address Authentication Indicators
+        deployments:
+          - type: PRECISE
+            enabled: true
+            alerting: false
+          - type: BROAD
+            enabled: true
+            alerting: false
+      - id: 8ae8dd36-24e3-5dcc-a959-22c7259f32a9
+        name: Medium Priority Host Indicators
+        deployments:
+          - type: PRECISE
+            enabled: true
+            alerting: false
+          - type: BROAD
+            enabled: true
+            alerting: false
+      - id: ffdcc855-9a0a-1afe-0469-a5006966af90
+        name: Medium Priority Network Indicators
+        deployments:
+          - type: PRECISE
+            enabled: true
+            alerting: false
+          - type: BROAD
+            enabled: true
+            alerting: false
+  - name: Applied Threat Intelligence - Non-prioritized IOC Matching
+    id: 77ea5055-0d4e-565e-63a9-2bb738ff50c9
+    rulesets:
+      - id: 8eb57cd7-0765-2902-2adb-7afdd41051db
+        name: Applied Threat Intelligence - Non-prioritized Domain IOC Matching
+        deployments:
+          - type: PRECISE
+            enabled: true
+            alerting: false
+          - type: BROAD
+            enabled: true
+            alerting: false
+      - id: c3b73bda-8791-05ac-a1af-c45143a3bb09
+        name: Applied Threat Intelligence - Non-prioritized File IOC Matching
+        deployments:
+          - type: PRECISE
+            enabled: true
+            alerting: false
+          - type: BROAD
+            enabled: true
+            alerting: false
+      - id: f9d05655-8654-6a06-df3d-aecb59a15981
+        name: Applied Threat Intelligence - Non-prioritized IP IOC Matching
+        deployments:
+          - type: PRECISE
+            enabled: true
+            alerting: false
+          - type: BROAD
+            enabled: true
+            alerting: false
+  - name: Chrome Enterprise Premium Threats
+    id: db1114d4-569b-5f5d-0fb4-f65aaa766c92
+    rulesets:
+      - id: 7e52cd71-03c6-97d2-ffcb-b8d7159e08e1
+        name: Chrome Browser Threats
+        deployments:
+          - type: PRECISE
+            enabled: false
+            alerting: false
+          - type: BROAD
+            enabled: false
+            alerting: false
+      - id: 57d1ae46-43c7-e469-b247-c7f10b843829
+        name: Chrome Extensions Threats
+        deployments:
+          - type: PRECISE
+            enabled: false
+            alerting: false
+          - type: BROAD
+            enabled: false
+            alerting: false
+  - name: Cloud Threats
+    id: 110fa43d-7165-2355-1985-a63b7cdf90e8
+    rulesets:
+      - id: c8156eae-7b63-a2fb-2e3e-4a38ab5abe0f
+        name: AWS - Compute
+        deployments:
+          - type: PRECISE
+            enabled: false
+            alerting: false
+          - type: BROAD
+            enabled: false
+            alerting: false
+      - id: 77e7af32-6565-861b-79f2-08c8fa7167a8
+        name: AWS - Data
+        deployments:
+          - type: PRECISE
+            enabled: false
+            alerting: false
+          - type: BROAD
+            enabled: false
+            alerting: false
+      - id: 2e7f838b-8a9c-da2d-dd9d-cacd6cd8fc37
+        name: "AWS - GuardDuty: Behavior"
+        deployments:
+          - type: PRECISE
+            enabled: false
+            alerting: false
+          - type: BROAD
+            enabled: false
+            alerting: false
+      - id: 6f15dbf7-744a-90be-2348-51a34b45b06d
+        name: "AWS - GuardDuty: Credential Access"
+        deployments:
+          - type: PRECISE
+            enabled: false
+            alerting: false
+          - type: BROAD
+            enabled: false
+            alerting: false
+      - id: 2b7d4703-ec22-c465-da52-219e6b286117
+        name: "AWS - GuardDuty: Cryptomining"
+        deployments:
+          - type: PRECISE
+            enabled: false
+            alerting: false
+          - type: BROAD
+            enabled: false
+            alerting: false
+      - id: 4c4f8f22-6924-2feb-0ec0-05929445001a
+        name: "AWS - GuardDuty: Discovery"
+        deployments:
+          - type: PRECISE
+            enabled: false
+            alerting: false
+          - type: BROAD
+            enabled: false
+            alerting: false
+      - id: 57386270-82c7-4b38-d76a-580a3f684ac8
+        name: "AWS - GuardDuty: Evasion"
+        deployments:
+          - type: PRECISE
+            enabled: false
+            alerting: false
+          - type: BROAD
+            enabled: false
+            alerting: false
+      - id: af4768b3-5c64-485f-deaf-700595384b4e
+        name: "AWS - GuardDuty: Execution"
+        deployments:
+          - type: PRECISE
+            enabled: false
+            alerting: false
+          - type: BROAD
+            enabled: false
+            alerting: false
+      - id: eaa84d42-746f-e407-b4d2-da03730bdbc5
+        name: "AWS - GuardDuty: Exfiltration"
+        deployments:
+          - type: PRECISE
+            enabled: false
+            alerting: false
+          - type: BROAD
+            enabled: false
+            alerting: false
+      - id: ecd1bac7-49eb-fd82-d42f-4d57c32f0a94
+        name: "AWS - GuardDuty: Impact"
+        deployments:
+          - type: PRECISE
+            enabled: false
+            alerting: false
+          - type: BROAD
+            enabled: false
+            alerting: false
+      - id: cebba4ad-3e63-52e6-3689-b4d55bfdba19
+        name: "AWS - GuardDuty: Initial Access"
+        deployments:
+          - type: PRECISE
+            enabled: false
+            alerting: false
+          - type: BROAD
+            enabled: false
+            alerting: false
+      - id: 5d97691a-b189-8099-41d4-94c18bf0de68
+        name: "AWS - GuardDuty: Malware"
+        deployments:
+          - type: PRECISE
+            enabled: false
+            alerting: false
+          - type: BROAD
+            enabled: false
+            alerting: false
+      - id: 05887726-0d24-6572-e52a-666d1781f049
+        name: "AWS - GuardDuty: Pentest"
+        deployments:
+          - type: PRECISE
+            enabled: false
+            alerting: false
+          - type: BROAD
+            enabled: false
+            alerting: false
+      - id: 53fbec58-4eb0-6dd5-00f6-6d4ed5eb9501
+        name: "AWS - GuardDuty: Persistence"
+        deployments:
+          - type: PRECISE
+            enabled: false
+            alerting: false
+          - type: BROAD
+            enabled: false
+            alerting: false
+      - id: 6ac5d638-4469-3536-4273-ce169056d708
+        name: "AWS - GuardDuty: Policy"
+        deployments:
+          - type: PRECISE
+            enabled: false
+            alerting: false
+          - type: BROAD
+            enabled: false
+            alerting: false
+      - id: 288d5f7c-3a8c-e6a8-8c7d-b3619e556ae8
+        name: "AWS - GuardDuty: Privilege Escalation"
+        deployments:
+          - type: PRECISE
+            enabled: false
+            alerting: false
+          - type: BROAD
+            enabled: false
+            alerting: false
+      - id: 2ba773db-fbf5-da4e-4ac5-92b11e2d32f3
+        name: "AWS - GuardDuty: Unauthorized Access"
+        deployments:
+          - type: PRECISE
+            enabled: false
+            alerting: false
+          - type: BROAD
+            enabled: false
+            alerting: false
+      - id: d1a9c7f0-f094-804b-6d69-a43a3cb59996
+        name: AWS - Hacktools
+        deployments:
+          - type: PRECISE
+            enabled: false
+            alerting: false
+          - type: BROAD
+            enabled: false
+            alerting: false
+      - id: 94869e7b-482c-81ad-baa3-a6facc6ca4e9
+        name: AWS - Identity
+        deployments:
+          - type: PRECISE
+            enabled: false
+            alerting: false
+          - type: BROAD
+            enabled: false
+            alerting: false
+      - id: 39ff332e-5c59-96e8-7199-f96503e5dfcd
+        name: AWS - Logging and Monitoring
+        deployments:
+          - type: PRECISE
+            enabled: false
+            alerting: false
+          - type: BROAD
+            enabled: false
+            alerting: false
+      - id: f7506749-a725-7dbb-772a-32583a89c499
+        name: AWS - Network
+        deployments:
+          - type: PRECISE
+            enabled: false
+            alerting: false
+          - type: BROAD
+            enabled: false
+            alerting: false
+      - id: ebd05091-442d-28f7-40af-90ff1b0a18f3
+        name: AWS - Organization
+        deployments:
+          - type: PRECISE
+            enabled: false
+            alerting: false
+          - type: BROAD
+            enabled: false
+            alerting: false
+      - id: 66f54d33-31bc-dc37-4e88-96326456729e
+        name: AWS - Secrets
+        deployments:
+          - type: PRECISE
+            enabled: false
+            alerting: false
+          - type: BROAD
+            enabled: false
+            alerting: false
+      - id: 11c505d4-b424-65e3-d918-1a81232cc76b
+        name: Admin Action
+        deployments:
+          - type: PRECISE
+            enabled: false
+            alerting: false
+          - type: BROAD
+            enabled: false
+            alerting: false
+      - id: c6b2cbe6-68c8-a6a6-ac6a-60e2121593f9
+        name: Azure - Compute
+        deployments:
+          - type: PRECISE
+            enabled: false
+            alerting: false
+          - type: BROAD
+            enabled: false
+            alerting: false
+      - id: 889fb77a-2748-bf3c-4839-012385c113c4
+        name: Azure - Data
+        deployments:
+          - type: PRECISE
+            enabled: false
+            alerting: false
+          - type: BROAD
+            enabled: false
+            alerting: false
+      - id: f182d46a-fcdb-8a6d-2537-1cf7a4ad1c6e
+        name: Azure - Defender for Cloud APIs
+        deployments:
+          - type: PRECISE
+            enabled: false
+            alerting: false
+          - type: BROAD
+            enabled: false
+            alerting: false
+      - id: 9cc633cc-f70a-575d-1091-cd5f63944c55
+        name: Azure - Defender for Cloud App Service
+        deployments:
+          - type: PRECISE
+            enabled: false
+            alerting: false
+          - type: BROAD
+            enabled: false
+            alerting: false
+      - id: f3c122f5-3dbe-e903-eae0-37e20e827374
+        name: Azure - Defender for Cloud Cosmos DB
+        deployments:
+          - type: PRECISE
+            enabled: false
+            alerting: false
+          - type: BROAD
+            enabled: false
+            alerting: false
+      - id: 3d4aee46-ceba-23ed-c937-9d0d3e29bf21
+        name: Azure - Defender for Cloud DDoS Protection
+        deployments:
+          - type: PRECISE
+            enabled: false
+            alerting: false
+          - type: BROAD
+            enabled: false
+            alerting: false
+      - id: 8eeed8b4-af12-8aae-26eb-f5d3966a3c5f
+        name: Azure - Defender for Cloud DNS
+        deployments:
+          - type: PRECISE
+            enabled: false
+            alerting: false
+          - type: BROAD
+            enabled: false
+            alerting: false
+      - id: 59e22b3b-5c2a-fb20-0be7-112242949898
+        name: Azure - Defender for Cloud Key Vault
+        deployments:
+          - type: PRECISE
+            enabled: false
+            alerting: false
+          - type: BROAD
+            enabled: false
+            alerting: false
+      - id: 6f9e6cb3-73e5-cd49-702a-d1e7274c64ac
+        name: Azure - Defender for Cloud Kubernetes
+        deployments:
+          - type: PRECISE
+            enabled: false
+            alerting: false
+          - type: BROAD
+            enabled: false
+            alerting: false
+      - id: 3a98ae88-a56e-cbb9-b68e-0709a92e3cd8
+        name: Azure - Defender for Cloud Network Layer
+        deployments:
+          - type: PRECISE
+            enabled: false
+            alerting: false
+          - type: BROAD
+            enabled: false
+            alerting: false
+      - id: 6db8aae6-1c95-7c9f-7dce-a83414103c6f
+        name: Azure - Defender for Cloud Resource Manager
+        deployments:
+          - type: PRECISE
+            enabled: false
+            alerting: false
+          - type: BROAD
+            enabled: false
+            alerting: false
+      - id: c3224541-d632-37f2-2053-9746b6c6b4e1
+        name: Azure - Defender for Cloud SQL Synapse or Open Source DB
+        deployments:
+          - type: PRECISE
+            enabled: false
+            alerting: false
+          - type: BROAD
+            enabled: false
+            alerting: false
+      - id: 21521dc1-c824-f13e-a152-1322b207104d
+        name: Azure - Defender for Cloud Storage
+        deployments:
+          - type: PRECISE
+            enabled: false
+            alerting: false
+          - type: BROAD
+            enabled: false
+            alerting: false
+      - id: 09696145-5f04-98e5-a209-4c89e7e2ae8f
+        name: Azure - Defender for Cloud Test Detects
+        deployments:
+          - type: PRECISE
+            enabled: false
+            alerting: false
+          - type: BROAD
+            enabled: false
+            alerting: false
+      - id: 3d0f9e5b-50dd-2ef2-3e71-939957e0383b
+        name: Azure - Defender for Cloud VM Extensions
+        deployments:
+          - type: PRECISE
+            enabled: false
+            alerting: false
+          - type: BROAD
+            enabled: false
+            alerting: false
+      - id: def076ad-90cd-e3db-be57-e4fcaab424f2
+        name: Azure - Defender for Cloud Windows and Linux VM
+        deployments:
+          - type: PRECISE
+            enabled: false
+            alerting: false
+          - type: BROAD
+            enabled: false
+            alerting: false
+      - id: 44c6744f-ad06-8300-f3d0-a6359f67dec4
+        name: Azure - Hacktools
+        deployments:
+          - type: PRECISE
+            enabled: false
+            alerting: false
+          - type: BROAD
+            enabled: false
+            alerting: false
+      - id: db3387b5-8125-2747-7a4c-343b42fc401e
+        name: Azure - Identity
+        deployments:
+          - type: PRECISE
+            enabled: false
+            alerting: false
+          - type: BROAD
+            enabled: false
+            alerting: false
+      - id: 0ea98728-a45b-4458-7753-f85ff7e87930
+        name: Azure - Logging and Monitoring
+        deployments:
+          - type: PRECISE
+            enabled: false
+            alerting: false
+          - type: BROAD
+            enabled: false
+            alerting: false
+      - id: 00ad672e-ebb3-0dd1-2a4d-99bd7c5e5f93
+        name: Azure - Network
+        deployments:
+          - type: PRECISE
+            enabled: false
+            alerting: false
+          - type: BROAD
+            enabled: false
+            alerting: false
+      - id: 273840b6-bb70-03e4-375a-716f1a661c9e
+        name: Azure - Organization
+        deployments:
+          - type: PRECISE
+            enabled: false
+            alerting: false
+          - type: BROAD
+            enabled: false
+            alerting: false
+      - id: de6d5318-2a46-33fb-de07-90558cb7d5d3
+        name: Azure - Secrets
+        deployments:
+          - type: PRECISE
+            enabled: false
+            alerting: false
+          - type: BROAD
+            enabled: false
+            alerting: false
+      - id: c3671cd3-4fe1-9b5a-861c-f70616e2850f
+        name: CDIR SCC Command And Control Alerts
+        deployments:
+          - type: PRECISE
+            enabled: false
+            alerting: false
+          - type: BROAD
+            enabled: false
+            alerting: false
+      - id: 9aa1121c-cfb2-eee2-fe38-7f19bfb8de36
+        name: CDIR SCC Critical Cloud Armor Alerts
+        deployments:
+          - type: PRECISE
+            enabled: false
+            alerting: false
+          - type: BROAD
+            enabled: false
+            alerting: false
+      - id: b13d905c-6712-187d-5c4d-3e502b40fe83
+        name: CDIR SCC Critical Cloud IDS Alerts
+        deployments:
+          - type: PRECISE
+            enabled: false
+            alerting: false
+          - type: BROAD
+            enabled: false
+            alerting: false
+      - id: 726eb799-a258-01f9-6152-afa6d70de5a9
+        name: CDIR SCC Custom Module Alerts
+        deployments:
+          - type: PRECISE
+            enabled: false
+            alerting: false
+          - type: BROAD
+            enabled: false
+            alerting: false
+      - id: f74cd4c2-395e-7db5-30f7-d3a7d278704b
+        name: CDIR SCC Enhanced Brute Force Alerts
+        deployments:
+          - type: PRECISE
+            enabled: false
+            alerting: false
+          - type: BROAD
+            enabled: false
+            alerting: false
+      - id: da9fa929-b677-6c29-fbfc-8a346995281e
+        name: CDIR SCC Enhanced Credential Access Alerts
+        deployments:
+          - type: PRECISE
+            enabled: false
+            alerting: false
+          - type: BROAD
+            enabled: false
+            alerting: false
+      - id: 6a9efd7a-73ce-5062-ac46-f5f474b40a9c
+        name: CDIR SCC Enhanced Data Destruction Alerts
+        deployments:
+          - type: PRECISE
+            enabled: false
+            alerting: false
+          - type: BROAD
+            enabled: false
+            alerting: false
+      - id: 92f84c0d-678c-c2ba-fd76-9baa399885a2
+        name: CDIR SCC Enhanced Defense Discovery Alerts
+        deployments:
+          - type: PRECISE
+            enabled: false
+            alerting: false
+          - type: BROAD
+            enabled: false
+            alerting: false
+      - id: a6df6f21-789e-849a-f078-98d3489ef123
+        name: CDIR SCC Enhanced Defense Evasion Alerts
+        deployments:
+          - type: PRECISE
+            enabled: false
+            alerting: false
+          - type: BROAD
+            enabled: false
+            alerting: false
+      - id: dd833433-a4f8-953a-b599-1dc37d39d0f0
+        name: CDIR SCC Enhanced Defense Evasion Alerts
+        deployments:
+          - type: PRECISE
+            enabled: false
+            alerting: false
+          - type: BROAD
+            enabled: false
+            alerting: false
+      - id: bdaffc97-50cb-b329-97b3-c3664abdc0f2
+        name: CDIR SCC Enhanced Execution Alerts
+        deployments:
+          - type: PRECISE
+            enabled: false
+            alerting: false
+          - type: BROAD
+            enabled: false
+            alerting: false
+      - id: a6299a34-9e0f-5802-f60a-f493d49b6256
+        name: CDIR SCC Enhanced Exfiltration Alerts
+        deployments:
+          - type: PRECISE
+            enabled: false
+            alerting: false
+          - type: BROAD
+            enabled: false
+            alerting: false
+      - id: 5b07b1a9-1bca-ac94-9bc9-be5d8d5fd297
+        name: CDIR SCC Enhanced Impair Defenses Alerts
+        deployments:
+          - type: PRECISE
+            enabled: false
+            alerting: false
+          - type: BROAD
+            enabled: false
+            alerting: false
+      - id: 0223c3ee-a0ab-762f-15d0-df077ec81782
+        name: CDIR SCC Enhanced Inhibit System Recovery Alerts
+        deployments:
+          - type: PRECISE
+            enabled: false
+            alerting: false
+          - type: BROAD
+            enabled: false
+            alerting: false
+      - id: d8d9698b-b067-7874-9e5b-83e85d746438
+        name: CDIR SCC Enhanced Initial Access Alerts
+        deployments:
+          - type: PRECISE
+            enabled: false
+            alerting: false
+          - type: BROAD
+            enabled: false
+            alerting: false
+      - id: 468cf1fb-c2a5-3924-4c11-e4e9bc6147d2
+        name: CDIR SCC Enhanced Malware Alerts
+        deployments:
+          - type: PRECISE
+            enabled: false
+            alerting: false
+          - type: BROAD
+            enabled: false
+            alerting: false
+      - id: 5999899d-a163-8c0e-da05-afa47a4bfbb5
+        name: CDIR SCC Enhanced Persistence Alerts
+        deployments:
+          - type: PRECISE
+            enabled: false
+            alerting: false
+          - type: BROAD
+            enabled: false
+            alerting: false
+      - id: 1bb02b3f-b870-e048-94d6-ad3d08eb2866
+        name: CDIR SCC Enhanced Privilege Escalation Alerts
+        deployments:
+          - type: PRECISE
+            enabled: false
+            alerting: false
+          - type: BROAD
+            enabled: false
+            alerting: false
+      - id: cd75543c-e709-3f9b-db7b-4e828ca57791
+        name: CDIR SCC High Cloud Armor Alerts
+        deployments:
+          - type: PRECISE
+            enabled: false
+            alerting: false
+          - type: BROAD
+            enabled: false
+            alerting: false
+      - id: 98d0131e-b772-b930-b861-7a52ddecac2f
+        name: CDIR SCC High Cloud IDS Alerts
+        deployments:
+          - type: PRECISE
+            enabled: false
+            alerting: false
+          - type: BROAD
+            enabled: false
+            alerting: false
+      - id: 654e6077-be4d-3916-4a24-d4fcbf55f42f
+        name: CDIR SCC Impact
+        deployments:
+          - type: PRECISE
+            enabled: false
+            alerting: false
+          - type: BROAD
+            enabled: false
+            alerting: false
+      - id: 69de2c51-9840-81b4-a367-e96451b9b070
+        name: CDIR SCC Low Cloud Armor Alerts
+        deployments:
+          - type: PRECISE
+            enabled: false
+            alerting: false
+          - type: BROAD
+            enabled: false
+            alerting: false
+      - id: a3aaeb2e-6c1b-24d1-fb1c-daefd92cfde8
+        name: CDIR SCC Low Cloud IDS Alerts
+        deployments:
+          - type: PRECISE
+            enabled: false
+            alerting: false
+          - type: BROAD
+            enabled: false
+            alerting: false
+      - id: 6e716273-3784-fe23-463a-0c14c7e124d3
+        name: CDIR SCC Medium Cloud Armor Alerts
+        deployments:
+          - type: PRECISE
+            enabled: false
+            alerting: false
+          - type: BROAD
+            enabled: false
+            alerting: false
+      - id: 7f1e1806-d8b9-cd5a-6f43-e62356e98c34
+        name: CDIR SCC Medium Cloud IDS Alerts
+        deployments:
+          - type: PRECISE
+            enabled: false
+            alerting: false
+          - type: BROAD
+            enabled: false
+            alerting: false
+      - id: 07eab257-51fb-b9c5-2040-dd5d6f65ed79
+        name: Cloud Hacktool
+        deployments:
+          - type: PRECISE
+            enabled: false
+            alerting: false
+          - type: BROAD
+            enabled: false
+            alerting: false
+      - id: 6a3033c5-6322-92a4-c3d4-79bbbdb17188
+        name: Cloud SQL Ransom
+        deployments:
+          - type: PRECISE
+            enabled: false
+            alerting: false
+          - type: BROAD
+            enabled: false
+            alerting: false
+      - id: 8c395bfe-bb62-b02d-ff93-cef098136aa0
+        name: IAM Abuse
+        deployments:
+          - type: PRECISE
+            enabled: false
+            alerting: false
+          - type: BROAD
+            enabled: false
+            alerting: false
+      - id: 4dab4665-0b94-7a78-4391-2da653487acf
+        name: Kubernetes Certificate Sensitive Actions
+        deployments:
+          - type: PRECISE
+            enabled: false
+            alerting: false
+          - type: BROAD
+            enabled: false
+            alerting: false
+      - id: 7aaa39b9-37aa-eace-ec81-3e1282c1c843
+        name: Kubernetes RBAC Abuse
+        deployments:
+          - type: PRECISE
+            enabled: false
+            alerting: false
+          - type: BROAD
+            enabled: false
+            alerting: false
+      - id: fff1c065-d50f-22f3-c51e-b85593c11893
+        name: Kubernetes Suspicious Tools
+        deployments:
+          - type: PRECISE
+            enabled: false
+            alerting: false
+          - type: BROAD
+            enabled: false
+            alerting: false
+      - id: 95dcad9f-b3cf-1833-9e4a-240c0781e64d
+        name: Mandiant Frontline Threats
+        deployments:
+          - type: PRECISE
+            enabled: false
+            alerting: false
+          - type: BROAD
+            enabled: false
+            alerting: false
+      - id: af800f38-1d0c-0478-043a-21e5a34581bc
+        name: Office 365 - Administrative
+        deployments:
+          - type: PRECISE
+            enabled: false
+            alerting: false
+          - type: BROAD
+            enabled: false
+            alerting: false
+      - id: d710bb92-80c0-ec6e-a3a8-0edb4ab73eec
+        name: Office 365 - Ediscovery
+        deployments:
+          - type: PRECISE
+            enabled: false
+            alerting: false
+          - type: BROAD
+            enabled: false
+            alerting: false
+      - id: 514c90cd-0b6a-81ca-ebbe-35cdd2d1e289
+        name: Office 365 - Email
+        deployments:
+          - type: PRECISE
+            enabled: false
+            alerting: false
+          - type: BROAD
+            enabled: false
+            alerting: false
+      - id: 075922f7-fdbf-b111-e86e-45ebc60fa225
+        name: Office 365 - Forms
+        deployments:
+          - type: PRECISE
+            enabled: false
+            alerting: false
+          - type: BROAD
+            enabled: false
+            alerting: false
+      - id: 5e518ca0-45eb-0f95-9e36-7474d2a14ae2
+        name: Office 365 - Identity
+        deployments:
+          - type: PRECISE
+            enabled: false
+            alerting: false
+          - type: BROAD
+            enabled: false
+            alerting: false
+      - id: 6ce780ba-2554-e280-3e19-df87bfa5c656
+        name: Office 365 - Sharepoint and OneDrive
+        deployments:
+          - type: PRECISE
+            enabled: false
+            alerting: false
+          - type: BROAD
+            enabled: false
+            alerting: false
+      - id: 726ed7e3-c789-9e15-da7a-30b884e975f5
+        name: Office 365 - Teams
+        deployments:
+          - type: PRECISE
+            enabled: false
+            alerting: false
+          - type: BROAD
+            enabled: false
+            alerting: false
+      - id: a5ad1763-72c7-82ce-7fb2-86fc12104ec3
+        name: Okta
+        deployments:
+          - type: PRECISE
+            enabled: false
+            alerting: false
+          - type: BROAD
+            enabled: false
+            alerting: false
+      - id: 95dc765b-970d-f602-4335-83bdcdcca74c
+        name: Potential Exfil Activity
+        deployments:
+          - type: PRECISE
+            enabled: false
+            alerting: false
+          - type: BROAD
+            enabled: false
+            alerting: false
+      - id: dc46099b-a96c-c554-5c3a-ebcc88a3252e
+        name: Resource Masquerading
+        deployments:
+          - type: PRECISE
+            enabled: false
+            alerting: false
+          - type: BROAD
+            enabled: false
+            alerting: false
+      - id: 72d4374a-bfcd-1f48-4c28-80f0fb1b5fae
+        name: Serverless Threats
+        deployments:
+          - type: PRECISE
+            enabled: false
+            alerting: false
+          - type: BROAD
+            enabled: false
+            alerting: false
+      - id: 9d7537ae-0ae2-1b3f-b5e2-507c6f018ae9
+        name: Service Disruption
+        deployments:
+          - type: PRECISE
+            enabled: false
+            alerting: false
+          - type: BROAD
+            enabled: false
+            alerting: false
+      - id: 5ca4cb55-df0a-634a-4a2a-08e18bb0bc46
+        name: Suspicious Behavior
+        deployments:
+          - type: PRECISE
+            enabled: false
+            alerting: false
+          - type: BROAD
+            enabled: false
+            alerting: false
+      - id: fbf3134d-db14-79f1-e310-826e8b7e30ce
+        name: Suspicious Infrastructure Change
+        deployments:
+          - type: PRECISE
+            enabled: false
+            alerting: false
+          - type: BROAD
+            enabled: false
+            alerting: false
+      - id: aa88cf05-6dd3-4a75-bf4f-2addc384b0a5
+        name: Weakened Config
+        deployments:
+          - type: PRECISE
+            enabled: false
+            alerting: false
+          - type: BROAD
+            enabled: false
+            alerting: false
+      - id: 4d6f3153-13ba-dea4-84e6-82604100d927
+        name: "Workspace: Data Exfiltration from Chrome"
+        deployments:
+          - type: PRECISE
+            enabled: false
+            alerting: false
+          - type: BROAD
+            enabled: false
+            alerting: false
+      - id: fa8fd143-9056-a12f-d8c8-90d7cffccb69
+        name: "Workspace: Data Exfiltration from Drive"
+        deployments:
+          - type: PRECISE
+            enabled: false
+            alerting: false
+          - type: BROAD
+            enabled: false
+            alerting: false
+      - id: d79dcb65-efaa-98c6-41fe-f9be9fe67adf
+        name: "Workspace: Data Exfiltration from Gmail"
+        deployments:
+          - type: PRECISE
+            enabled: false
+            alerting: false
+          - type: BROAD
+            enabled: false
+            alerting: false
+      - id: 43f7241e-a22c-6122-267b-3d1edc11c8c4
+        name: "Workspace: Potential Account Compromise"
+        deployments:
+          - type: PRECISE
+            enabled: false
+            alerting: false
+          - type: BROAD
+            enabled: false
+            alerting: false
+      - id: 81796f08-3e2e-c2f9-b7b3-9ad04acc3c6c
+        name: "Workspace: Potential Account Compromise in Drive"
+        deployments:
+          - type: PRECISE
+            enabled: false
+            alerting: false
+          - type: BROAD
+            enabled: false
+            alerting: false
+      - id: cfc49e38-7ad4-eef8-5557-e476b23a5932
+        name: "Workspace: Suspicious Admin Actions"
+        deployments:
+          - type: PRECISE
+            enabled: false
+            alerting: false
+          - type: BROAD
+            enabled: false
+            alerting: false
+  - name: Composite Rules
+    id: af98131a-b604-bd6b-ec1f-c545ff12193e
+    rulesets:
+      - id: 9d76cb89-b647-4edf-855b-5a7e9d5cfc38
+        name: Cloud Composite Rules
+        deployments:
+          - type: PRECISE
+            enabled: false
+            alerting: false
+          - type: BROAD
+            enabled: false
+            alerting: false
+      - id: 9d87d10c-dc95-d9d6-c605-1762d22ec3a1
+        name: Endpoint Composite Rules
+        deployments:
+          - type: PRECISE
+            enabled: false
+            alerting: false
+          - type: BROAD
+            enabled: false
+            alerting: false
+  - name: Linux Threats
+    id: a5366ed8-3746-2423-a972-98535279f96a
+    rulesets:
+      - id: c2cd1fe7-22c6-e5a8-6a0e-d6a015ad0a43
+        name: Malware Signals - Suspicious Download Activity
+        deployments:
+          - type: PRECISE
+            enabled: false
+            alerting: false
+          - type: BROAD
+            enabled: false
+            alerting: false
+      - id: 1c4ab1f6-d801-d6a9-1177-3ec3dd5bcbe9
+        name: Malware Signals - Suspicious Execution
+        deployments:
+          - type: PRECISE
+            enabled: true
+            alerting: true
+          - type: BROAD
+            enabled: false
+            alerting: false
+      - id: 0d156170-220f-1400-0318-a4be835b9674
+        name: Malware Signals - Suspicious LOTL Binary Activity
+        deployments:
+          - type: PRECISE
+            enabled: false
+            alerting: false
+          - type: BROAD
+            enabled: false
+            alerting: false
+      - id: c489d0a6-41bf-8ec0-5f5a-d0aaea012978
+        name: Mandiant Frontline Threats
+        deployments:
+          - type: PRECISE
+            enabled: false
+            alerting: false
+          - type: BROAD
+            enabled: false
+            alerting: false
+      - id: fe9afff9-b4f7-01dc-727d-aebd83a8c801
+        name: Mandiant Intel Emerging Threats
+        deployments:
+          - type: PRECISE
+            enabled: false
+            alerting: false
+          - type: BROAD
+            enabled: false
+            alerting: false
+      - id: 47044c03-e9ae-1c15-e799-12e57b2029f9
+        name: OS Privilege Escalation Tools
+        deployments:
+          - type: PRECISE
+            enabled: false
+            alerting: false
+          - type: BROAD
+            enabled: false
+            alerting: false
+      - id: b762ac05-7f91-554f-b25a-ac0e6aeeb37d
+        name: Persistence Mechanisms
+        deployments:
+          - type: PRECISE
+            enabled: false
+            alerting: false
+          - type: BROAD
+            enabled: false
+            alerting: false
+      - id: 246d8616-56e4-9aa6-dcc1-8460ae80afa9
+        name: Privilege Modifications
+        deployments:
+          - type: PRECISE
+            enabled: false
+            alerting: false
+          - type: BROAD
+            enabled: false
+            alerting: false
+  - name: MacOS Threats
+    id: 35a2ed94-daae-da6c-c829-c5dab7939ab9
+    rulesets:
+      - id: 631c8ef3-b117-5486-812c-5222b5819f37
+        name: Mandiant Frontline Threats
+        deployments:
+          - type: PRECISE
+            enabled: false
+            alerting: false
+          - type: BROAD
+            enabled: false
+            alerting: false
+      - id: 2fc08799-1d2e-11d8-e473-1d5daaff0b2d
+        name: Mandiant Intel Emerging Threats
+        deployments:
+          - type: PRECISE
+            enabled: false
+            alerting: false
+          - type: BROAD
+            enabled: false
+            alerting: false
+  - name: Managed Detection Testing
+    id: 56feb49e-a3bd-dfee-395c-23cc0f327474
+    rulesets:
+      - id: e00b94f3-7dc0-b5fc-42dc-a3bc6f731217
+        name: AWS Managed Detection Testing
+        deployments:
+          - type: PRECISE
+            enabled: false
+            alerting: false
+          - type: BROAD
+            enabled: false
+            alerting: false
+      - id: 6be12d66-f39c-3660-8d5b-2c80f3e732aa
+        name: Azure Managed Detection Testing
+        deployments:
+          - type: PRECISE
+            enabled: false
+            alerting: false
+          - type: BROAD
+            enabled: false
+            alerting: false
+      - id: f6a67133-6ede-4258-94a5-dc8962c5116f
+        name: Chrome Enterprise Managed Detection Testing
+        deployments:
+          - type: PRECISE
+            enabled: false
+            alerting: false
+          - type: BROAD
+            enabled: false
+            alerting: false
+      - id: 0c547c7f-886c-0ee7-01e2-906fcb5a1013
+        name: GCP Managed Detection Testing
+        deployments:
+          - type: PRECISE
+            enabled: false
+            alerting: false
+          - type: BROAD
+            enabled: false
+            alerting: false
+      - id: 988cf5ca-a075-4b04-534e-76c45c346b66
+        name: Linux Managed Detection Testing
+        deployments:
+          - type: PRECISE
+            enabled: false
+            alerting: false
+          - type: BROAD
+            enabled: false
+            alerting: false
+      - id: 773414d4-330a-aba9-4a2b-bb66dc21d753
+        name: Office Managed Detection Testing
+        deployments:
+          - type: PRECISE
+            enabled: false
+            alerting: false
+          - type: BROAD
+            enabled: false
+            alerting: false
+      - id: 6d6953bb-194a-e744-4626-1d63da047361
+        name: Okta Managed Detection Testing
+        deployments:
+          - type: PRECISE
+            enabled: false
+            alerting: false
+          - type: BROAD
+            enabled: false
+            alerting: false
+      - id: f6739fb3-e585-bd37-1494-74e713e856d4
+        name: SCC Managed Detection Testing
+        deployments:
+          - type: PRECISE
+            enabled: false
+            alerting: false
+          - type: BROAD
+            enabled: false
+            alerting: false
+      - id: 92e0320d-c484-517f-7e75-09d7f0d83ced
+        name: UEBA Testing
+        deployments:
+          - type: PRECISE
+            enabled: false
+            alerting: false
+          - type: BROAD
+            enabled: false
+            alerting: false
+      - id: 5ba58d81-2386-2ae1-df99-31bf2787981d
+        name: Windows Managed Detection Testing
+        deployments:
+          - type: PRECISE
+            enabled: false
+            alerting: false
+          - type: BROAD
+            enabled: false
+            alerting: false
+  - name: Mandiant Hunting Rules
+    id: 41460d15-a126-6759-1899-a7a414f8b0a0
+    rulesets:
+      - id: 43f65756-7b8c-b21d-2ec7-ad3d7dc42f83
+        name: Mandiant Hunt Cloud Identification Rules
+        deployments:
+          - type: PRECISE
+            enabled: false
+            alerting: false
+          - type: BROAD
+            enabled: false
+            alerting: false
+      - id: 54e890e7-26a5-9ff9-bd49-670a35c63c9e
+        name: Mandiant Hunt Endpoint Identification Rules
+        deployments:
+          - type: PRECISE
+            enabled: false
+            alerting: false
+          - type: BROAD
+            enabled: false
+            alerting: false
+  - name: Risk Analytics for UEBA
+    id: 7b36ba59-c319-dbdb-c103-327993c7eb2b
+    rulesets:
+      - id: cf86a092-6154-f1eb-7183-47328a4acc2d
+        name: Anomalous Authentication Events by User
+        deployments:
+          - type: PRECISE
+            enabled: false
+            alerting: false
+          - type: BROAD
+            enabled: false
+            alerting: false
+      - id: 3b09cefe-8a5d-ffc2-70b6-a9f6a85264d0
+        name: Anomalous Inbound Bytes by Device
+        deployments:
+          - type: PRECISE
+            enabled: false
+            alerting: false
+          - type: BROAD
+            enabled: false
+            alerting: false
+      - id: e0063a93-fb0f-23e2-915a-87e7f8600331
+        name: Anomalous Inbound Bytes by User
+        deployments:
+          - type: PRECISE
+            enabled: false
+            alerting: false
+          - type: BROAD
+            enabled: false
+            alerting: false
+      - id: e3f40344-c027-b3e1-2df6-386827e41422
+        name: Anomalous Outbound Bytes by Device
+        deployments:
+          - type: PRECISE
+            enabled: false
+            alerting: false
+          - type: BROAD
+            enabled: false
+            alerting: false
+      - id: 64eb7732-9f8f-a04b-4496-2580cf6ba002
+        name: Anomalous Total Bytes by Device
+        deployments:
+          - type: PRECISE
+            enabled: false
+            alerting: false
+          - type: BROAD
+            enabled: false
+            alerting: false
+      - id: dc33882a-fbff-b279-37ba-2207749e3a37
+        name: Anomalous Total Bytes by User
+        deployments:
+          - type: PRECISE
+            enabled: false
+            alerting: false
+          - type: BROAD
+            enabled: false
+            alerting: false
+      - id: 732033da-8037-3b0a-594e-fb5ec7514d30
+        name: Anomalous or Excessive Logins for a Newly Created User
+        deployments:
+          - type: PRECISE
+            enabled: false
+            alerting: false
+          - type: BROAD
+            enabled: false
+            alerting: false
+      - id: 2b7b902f-e32f-65d1-fdc0-a4577361062a
+        name: Anomalous or Excessive Processes with Data Exfiltration Capabilities
+        deployments:
+          - type: PRECISE
+            enabled: false
+            alerting: false
+          - type: BROAD
+            enabled: false
+            alerting: false
+      - id: 6ce52505-9829-51dd-5f62-8cf5e19f76cb
+        name: Anomalous or Excessive Suspicious Actions for a Newly Created User
+        deployments:
+          - type: PRECISE
+            enabled: false
+            alerting: false
+          - type: BROAD
+            enabled: false
+            alerting: false
+      - id: 40a53cd7-57e6-08c7-66a6-9e48b58b7513
+        name: Brute Force then Successful Login by User
+        deployments:
+          - type: PRECISE
+            enabled: false
+            alerting: false
+          - type: BROAD
+            enabled: false
+            alerting: false
+      - id: 2feb1948-4246-eb84-7ad4-cedc835d080d
+        name: Excessive Account Creation by Device
+        deployments:
+          - type: PRECISE
+            enabled: false
+            alerting: false
+          - type: BROAD
+            enabled: false
+            alerting: false
+      - id: e791a4b2-4003-4a75-76e8-27277698187e
+        name: Excessive Alerts by User
+        deployments:
+          - type: PRECISE
+            enabled: false
+            alerting: false
+          - type: BROAD
+            enabled: false
+            alerting: false
+      - id: cf2e2fc9-4ed6-29b9-3d9e-6c589f649ee1
+        name: Failed Authentications by Device
+        deployments:
+          - type: PRECISE
+            enabled: false
+            alerting: false
+          - type: BROAD
+            enabled: false
+            alerting: false
+      - id: 605d2263-6754-e7f8-41bf-9e75f79ae169
+        name: Failed Authentications by User
+        deployments:
+          - type: PRECISE
+            enabled: false
+            alerting: false
+          - type: BROAD
+            enabled: false
+            alerting: false
+      - id: 57d1ad50-538f-aef1-9b61-47383a2490fb
+        name: New Login by User to Device
+        deployments:
+          - type: PRECISE
+            enabled: false
+            alerting: false
+          - type: BROAD
+            enabled: false
+            alerting: false
+  - name: Third Party Vendor Alerts
+    id: ebfc92e8-d06d-e57c-a474-561d18e88406
+    rulesets:
+      - id: 42e57db9-74e5-b389-f20c-87ab0f6c6d20
+        name: Carbon Black EDR Passthrough Rules
+        deployments:
+          - type: PRECISE
+            enabled: false
+            alerting: false
+          - type: BROAD
+            enabled: false
+            alerting: false
+      - id: 9a87ab41-48d4-84e1-a33a-425d28baaec8
+        name: Claroty CTD Alerts
+        deployments:
+          - type: PRECISE
+            enabled: false
+            alerting: false
+          - type: BROAD
+            enabled: false
+            alerting: false
+      - id: 820a5962-a349-21d2-c26e-2820f4d1c056
+        name: Claroty xDome Alerts
+        deployments:
+          - type: PRECISE
+            enabled: false
+            alerting: false
+          - type: BROAD
+            enabled: false
+            alerting: false
+      - id: 63c08059-d2cd-19fa-c6f0-818cbd947cad
+        name: Corelight Suricata Alerts
+        deployments:
+          - type: PRECISE
+            enabled: false
+            alerting: false
+          - type: BROAD
+            enabled: false
+            alerting: false
+      - id: 9aca9fd1-80be-12d2-9f3a-963a07e5bc0e
+        name: Crowdstrike Passthrough Rules
+        deployments:
+          - type: PRECISE
+            enabled: false
+            alerting: false
+          - type: BROAD
+            enabled: false
+            alerting: false
+      - id: 3490a75c-bf46-ada2-33d0-10d24ee0400f
+        name: Cybereason EDR Passthrough Rules
+        deployments:
+          - type: PRECISE
+            enabled: false
+            alerting: false
+          - type: BROAD
+            enabled: false
+            alerting: false
+      - id: 73ef620b-dbe0-7108-d574-8bd9ee46fa1d
+        name: Deep Instinct EDR Passthrough Rules
+        deployments:
+          - type: PRECISE
+            enabled: false
+            alerting: false
+          - type: BROAD
+            enabled: false
+            alerting: false
+      - id: d237fb3e-17c8-3978-033d-e3a8791427dc
+        name: Digital Guardian EDR Passthrough Rules
+        deployments:
+          - type: PRECISE
+            enabled: false
+            alerting: false
+          - type: BROAD
+            enabled: false
+            alerting: false
+      - id: 69f3d78b-93eb-2059-54a9-af28f4725fc7
+        name: ESET EDR Passthrough Rules
+        deployments:
+          - type: PRECISE
+            enabled: false
+            alerting: false
+          - type: BROAD
+            enabled: false
+            alerting: false
+      - id: 488ab363-9e10-abb1-b11a-08d756d2b186
+        name: Forescout eyeInspect Alerts
+        deployments:
+          - type: PRECISE
+            enabled: false
+            alerting: false
+          - type: BROAD
+            enabled: false
+            alerting: false
+      - id: 96b5ec1e-09a4-05c9-008d-df435d087fdf
+        name: Fortinet Passthrough Rules
+        deployments:
+          - type: PRECISE
+            enabled: false
+            alerting: false
+          - type: BROAD
+            enabled: false
+            alerting: false
+      - id: 7f770549-0948-5a5d-df0a-aeee1632c1b1
+        name: Google Threat Intelligence (BYOL)
+        deployments:
+          - type: PRECISE
+            enabled: false
+            alerting: false
+          - type: BROAD
+            enabled: false
+            alerting: false
+      - id: 4a2820e0-f95a-a90b-ef53-46756a11e725
+        name: LimaCharlie EDR Passthrough Rules
+        deployments:
+          - type: PRECISE
+            enabled: false
+            alerting: false
+          - type: BROAD
+            enabled: false
+            alerting: false
+      - id: 3b0acddf-4d79-b554-5b65-82afda5646f2
+        name: MalwareBytes EDR Passthrough Rules
+        deployments:
+          - type: PRECISE
+            enabled: false
+            alerting: false
+          - type: BROAD
+            enabled: false
+            alerting: false
+      - id: ba2b595b-0dba-bde8-bede-8f5ed47de8f4
+        name: Microsoft Defender for Endpoint Passthrough Rules
+        deployments:
+          - type: PRECISE
+            enabled: false
+            alerting: false
+          - type: BROAD
+            enabled: false
+            alerting: false
+      - id: 9e519bd2-a194-1484-7d07-b409291d2851
+        name: Nozomi N2OS Alerts
+        deployments:
+          - type: PRECISE
+            enabled: false
+            alerting: false
+          - type: BROAD
+            enabled: false
+            alerting: false
+      - id: 3fd15a13-4fcd-f172-a840-ae7692e45fa9
+        name: Nozomi Vantage Alerts
+        deployments:
+          - type: PRECISE
+            enabled: false
+            alerting: false
+          - type: BROAD
+            enabled: false
+            alerting: false
+      - id: df93d8fd-73e8-4285-5a0d-33bcd2707d04
+        name: PAN Cortex XDR Alerts
+        deployments:
+          - type: PRECISE
+            enabled: false
+            alerting: false
+          - type: BROAD
+            enabled: false
+            alerting: false
+      - id: e6a84533-851d-b98d-d867-5e79205d82bd
+        name: PAN Passthrough Rules
+        deployments:
+          - type: PRECISE
+            enabled: false
+            alerting: false
+          - type: BROAD
+            enabled: false
+            alerting: false
+      - id: 2e7d150c-91a7-a10b-5b89-9ca8925cec0a
+        name: Proofpoint TAP Alerts
+        deployments:
+          - type: PRECISE
+            enabled: false
+            alerting: false
+          - type: BROAD
+            enabled: false
+            alerting: false
+      - id: 4fa67718-5838-999b-8f6f-4415e133f3cf
+        name: SentinelOne Cloud Funnel Passthrough Rules
+        deployments:
+          - type: PRECISE
+            enabled: false
+            alerting: false
+          - type: BROAD
+            enabled: false
+            alerting: false
+      - id: 6e597fa0-32af-ba57-ee94-9e8930982710
+        name: Sophos EDR Passthrough Rules
+        deployments:
+          - type: PRECISE
+            enabled: false
+            alerting: false
+          - type: BROAD
+            enabled: false
+            alerting: false
+      - id: a43a710f-7330-5471-173b-8f667130d342
+        name: Symantec EDR Passthrough Rules
+        deployments:
+          - type: PRECISE
+            enabled: false
+            alerting: false
+          - type: BROAD
+            enabled: false
+            alerting: false
+      - id: 97d164bc-03af-f309-8365-0c583b6050be
+        name: Trellix ETP Alerts
+        deployments:
+          - type: PRECISE
+            enabled: false
+            alerting: false
+          - type: BROAD
+            enabled: false
+            alerting: false
+      - id: 5c6e1c3d-227a-db37-bdfc-2a3053a33f55
+        name: Trellix EX Alerts
+        deployments:
+          - type: PRECISE
+            enabled: false
+            alerting: false
+          - type: BROAD
+            enabled: false
+            alerting: false
+      - id: a992fb7b-23e0-8c4b-ae45-645e90d45836
+        name: Trellix HX Alerts
+        deployments:
+          - type: PRECISE
+            enabled: false
+            alerting: false
+          - type: BROAD
+            enabled: false
+            alerting: false
+      - id: 7b0b90dc-f8be-2c77-a574-1e4694b6d39b
+        name: Trellix NX Alerts
+        deployments:
+          - type: PRECISE
+            enabled: false
+            alerting: false
+          - type: BROAD
+            enabled: false
+            alerting: false
+      - id: 89a61ff4-2841-76a9-7386-91af9f74b5ec
+        name: TrendMicro Vision One Alerts
+        deployments:
+          - type: PRECISE
+            enabled: false
+            alerting: false
+          - type: BROAD
+            enabled: false
+            alerting: false
+      - id: 5e055b01-2de7-b075-96ca-2a3edb3b1a53
+        name: Vectra Detect Alerts
+        deployments:
+          - type: PRECISE
+            enabled: false
+            alerting: false
+          - type: BROAD
+            enabled: false
+            alerting: false
+      - id: 81c6af62-5ce5-8f68-02de-d6c3e0832840
+        name: Vectra XDR Alerts
+        deployments:
+          - type: PRECISE
+            enabled: false
+            alerting: false
+          - type: BROAD
+            enabled: false
+            alerting: false
+      - id: 8efc01c3-7051-3fee-e4dd-6cc763e7b186
+        name: Wiz Alerts
+        deployments:
+          - type: PRECISE
+            enabled: false
+            alerting: false
+          - type: BROAD
+            enabled: false
+            alerting: false
+      - id: 08441977-6693-89ae-2e6e-dc2f5411428f
+        name: Zscaler Passthrough Rules
+        deployments:
+          - type: PRECISE
+            enabled: false
+            alerting: false
+          - type: BROAD
+            enabled: false
+            alerting: false
+      - id: 39aa074a-efa4-b55e-8abe-3823d04129fa
+        name: uptycs EDR Passthrough Rules
+        deployments:
+          - type: PRECISE
+            enabled: false
+            alerting: false
+          - type: BROAD
+            enabled: false
+            alerting: false
+  - name: Windows Threats
+    id: 588c3ec3-15a9-8a7c-b938-1d160912eef7
+    rulesets:
+      - id: c3bcd130-4ae7-4550-1acb-8b636930a8e3
+        name: Alert Prioritization for Endpoints
+        deployments:
+          - type: PRECISE
+            enabled: false
+            alerting: false
+          - type: BROAD
+            enabled: false
+            alerting: false
+      - id: d68057c9-d72a-34f5-efff-6bc40ad13e89
+        name: Anomalous PowerShell
+        deployments:
+          - type: PRECISE
+            enabled: false
+            alerting: false
+          - type: BROAD
+            enabled: false
+            alerting: false
+      - id: 7d90f5c9-8822-3c49-f012-cdf5643a7b64
+        name: Crypto Activity
+        deployments:
+          - type: PRECISE
+            enabled: false
+            alerting: false
+          - type: BROAD
+            enabled: false
+            alerting: false
+      - id: 610b943a-1c6e-f734-d793-e19452e521a0
+        name: Hacktool
+        deployments:
+          - type: PRECISE
+            enabled: false
+            alerting: false
+          - type: BROAD
+            enabled: false
+            alerting: false
+      - id: ed6c1989-73c6-6eae-14ab-01b1b13715cc
+        name: Info Stealer
+        deployments:
+          - type: PRECISE
+            enabled: false
+            alerting: false
+          - type: BROAD
+            enabled: false
+            alerting: false
+      - id: bd4f7752-7e5f-a6bb-5f8f-e362a3415931
+        name: Initial Access
+        deployments:
+          - type: PRECISE
+            enabled: false
+            alerting: false
+          - type: BROAD
+            enabled: false
+            alerting: false
+      - id: 51bd0127-93fd-816c-4bc7-fe5630f10432
+        name: Legitimate but Misused
+        deployments:
+          - type: PRECISE
+            enabled: false
+            alerting: false
+          - type: BROAD
+            enabled: false
+            alerting: false
+      - id: 89adf0db-5d29-0a04-c926-f8c2a58f5d1b
+        name: Living off the Land Binaries
+        deployments:
+          - type: PRECISE
+            enabled: false
+            alerting: false
+          - type: BROAD
+            enabled: false
+            alerting: false
+      - id: 300eb2a7-99d6-90ae-3ab3-b4842aa9a7cd
+        name: Mandiant Frontline Threats
+        deployments:
+          - type: PRECISE
+            enabled: false
+            alerting: false
+          - type: BROAD
+            enabled: false
+            alerting: false
+      - id: cc753288-558d-dbd0-fed1-abeecd6bf734
+        name: Mandiant Intel Emerging Threats
+        deployments:
+          - type: PRECISE
+            enabled: false
+            alerting: false
+          - type: BROAD
+            enabled: false
+            alerting: false
+      - id: 48585cce-806e-1129-7640-00ebd287e591
+        name: Named Threat
+        deployments:
+          - type: PRECISE
+            enabled: false
+            alerting: false
+          - type: BROAD
+            enabled: false
+            alerting: false
+      - id: 6e6eda02-51b9-e57e-9597-622f1c7f3ee9
+        name: RAT
+        deployments:
+          - type: PRECISE
+            enabled: false
+            alerting: false
+          - type: BROAD
+            enabled: false
+            alerting: false
+      - id: 8713c524-0f77-1e83-a814-356c465f3168
+        name: Ransomware
+        deployments:
+          - type: PRECISE
+            enabled: false
+            alerting: false
+          - type: BROAD
+            enabled: false
+            alerting: false
+      - id: fa68bcdd-09b2-f313-24ce-42dfa4fc4a43
+        name: Security Posture Downgrade
+        deployments:
+          - type: PRECISE
+            enabled: false
+            alerting: false
+          - type: BROAD
+            enabled: false
+            alerting: false
+      - id: a5590799-315c-27e5-c591-e86cad9a0788
+        name: Suspicious Behavior
+        deployments:
+          - type: PRECISE
+            enabled: false
+            alerting: false
+          - type: BROAD
+            enabled: false
+            alerting: false
 exclusions: []
