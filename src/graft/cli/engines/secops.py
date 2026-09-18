@@ -344,12 +344,36 @@ def handle_secops_command(args: argparse.Namespace, json_output: bool = False) -
 
         try:
             prod_config = SecOpsConfig.from_env(target="prod")
-            if config.is_same_instance(prod_config) and not json_output:
-                sys.stdout.write(
-                    "[WARNING] Single-tenant mode: Replay tests running in shared instance "
-                    f"'{config.instance_path}'. Rules will be executed in non-alerting "
-                    "quarantine mode.\n"
-                )
+            if config.is_same_instance(prod_config):
+                if require_staging:
+                    err_msg = (
+                        "--require-staging was specified but only production tenant is configured"
+                    )
+                    if json_output:
+                        sys.stdout.write(json.dumps({"success": False, "error": err_msg}) + "\n")
+                    else:
+                        sys.stderr.write(f"Error: {err_msg}.\n")
+                    return 1
+
+                if json_output:
+                    sys.stdout.write(
+                        json.dumps(
+                            {
+                                "success": True,
+                                "skipped": True,
+                                "reason": "Replay tests cannot run against production tenant",
+                                "total": 0,
+                                "results": [],
+                            }
+                        )
+                        + "\n"
+                    )
+                else:
+                    sys.stdout.write(
+                        "[WARNING] Skipping replay tests: Replay tests require a dedicated staging "
+                        "tenant and cannot run against production coordinates.\n"
+                    )
+                return 0
         except KeyError:
             pass
 

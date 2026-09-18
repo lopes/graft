@@ -139,3 +139,46 @@ def test_cli_test_json_output(
         data = json.loads(captured.out)
         assert data["success"] is True
         assert len(data["results"]) >= 1
+
+
+def test_cli_test_skips_when_pointing_to_prod_tenant(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    # Only PROD variables set; staging falls back to PROD
+    monkeypatch.delenv("GRAFT_SECOPS_STAGING_PROJECT", raising=False)
+    monkeypatch.delenv("GRAFT_STAGING_PROJECT", raising=False)
+    monkeypatch.setenv("GRAFT_SECOPS_PROD_PROJECT", "prod-proj")
+    monkeypatch.setenv("GRAFT_SECOPS_PROD_LOCATION", "us")
+    monkeypatch.setenv("GRAFT_SECOPS_PROD_INSTANCE_ID", "prod-inst")
+
+    exit_code = main(
+        ["secops", "test", "rules/secops/custom/gcp_iam_service_account_key_create.yaml"]
+    )
+    assert exit_code == 0
+    captured = capsys.readouterr()
+    assert "WARNING" in captured.out
+    assert "cannot run against production" in captured.out
+
+
+def test_cli_test_fails_when_pointing_to_prod_tenant_and_require_staging(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    monkeypatch.delenv("GRAFT_SECOPS_STAGING_PROJECT", raising=False)
+    monkeypatch.delenv("GRAFT_STAGING_PROJECT", raising=False)
+    monkeypatch.setenv("GRAFT_SECOPS_PROD_PROJECT", "prod-proj")
+    monkeypatch.setenv("GRAFT_SECOPS_PROD_LOCATION", "us")
+    monkeypatch.setenv("GRAFT_SECOPS_PROD_INSTANCE_ID", "prod-inst")
+
+    exit_code = main(
+        [
+            "secops",
+            "test",
+            "rules/secops/custom/gcp_iam_service_account_key_create.yaml",
+            "--require-staging",
+        ]
+    )
+    assert exit_code == 1
+    captured = capsys.readouterr()
+    assert "Error" in captured.err
