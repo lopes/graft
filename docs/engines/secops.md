@@ -47,72 +47,7 @@ flowchart TD
 
 ---
 
-## 2. Authentication Architecture: Local Workstation vs. CI/CD (GitHub Actions)
-
-Graft adheres to a strict **stdlib-first architecture** and intentionally avoids importing proprietary cloud SDKs (such as `google-auth`, `google-cloud-storage`, or `google-api-python-client`) into its runtime source. All HTTP requests route through the Python standard library (`urllib.request`).
-
-Because Google SecOps REST endpoints require an OAuth2 Bearer token (`Authorization: Bearer <token>`), authentication differs based on whether Graft runs in automated CI/CD or on a developer workstation:
-
-```mermaid
-flowchart TD
-    subgraph REMOTE["Remote CI/CD (GitHub Actions)"]
-        direction TB
-        RUNNER["GitHub Actions Runner"] --> OIDC["GitHub OIDC Token<br/>(ACTIONS_ID_TOKEN_REQUEST_URL)"]
-        OIDC --> WIF["GCP Workload Identity Provider<br/>(GRAFT_SECOPS_WIF_PROVIDER)"]
-        WIF --> STS["GCP Security Token Service"]
-        STS --> SA_TOKEN_REMOTE["Short-Lived SA Bearer Token<br/>(graft-secops-deployer)"]
-        SA_TOKEN_REMOTE --> CHRONICLE_API_REMOTE["Google SecOps REST API"]
-    end
-
-    subgraph LOCAL["Local Developer Workstation (CLI)"]
-        direction TB
-        DEV["Developer Workstation"] --> AUTH_CHOICE{"Local Auth Strategy"}
-        
-        AUTH_CHOICE -- "Strategy A (Automated)" --> GCLOUD["gcloud CLI Installed<br/>(gcloud auth login)"]
-        GCLOUD --> SA_IMPERSONATE["gcloud auth print-access-token<br/>--impersonate-service-account"]
-        SA_IMPERSONATE --> SA_TOKEN_LOCAL["Short-Lived Access Token"]
-        SA_TOKEN_LOCAL --> CHRONICLE_API_LOCAL["Google SecOps REST API"]
-
-        AUTH_CHOICE -- "Strategy B (Zero-Dependency)" --> TOKEN_ENV["GRAFT_TOKEN Variable<br/>(in .env or shell export)"]
-        TOKEN_ENV --> CHRONICLE_API_LOCAL
-    end
-```
-
-### Why Workload Identity Federation (WIF) is CI/CD-Only
-Workload Identity Federation requires an OpenID Connect (OIDC) identity provider. In GitHub Actions, each workflow runner receives a cryptographically signed OIDC JWT token issued by GitHub (`https://token.actions.githubusercontent.com`). GCP verifies GitHub's signature, checks repository claim attributes (`assertion.repository == 'owner/repo'`), and mints temporary credentials without storing any static GCP keys in GitHub.
-
-Local developer workstations cannot generate GitHub OIDC tokens. Therefore, WIF cannot be used on local machines.
-
-### Local Workstation Authentication Strategies
-
-#### Strategy A: Google Cloud CLI (`gcloud`) Impersonation (Recommended for Dev Machines)
-When `gcloud` is installed on your workstation, Graft's `SecOpsAuthResolver` executes:
-```bash
-gcloud auth print-access-token --impersonate-service-account=<SA_EMAIL>
-```
-- **Requirements:** `google-cloud-cli` installed (`sudo apt install -y google-cloud-cli`) and authenticated (`gcloud auth login`).
-- **IAM Permission:** Your GCP user account must have `roles/iam.serviceAccountTokenCreator` on the automation service account (configured in Step 4).
-- **Advantage:** Completely transparent and automatic; fresh short-lived tokens are minted in the background whenever commands run.
-
-#### Strategy B: Explicit Access Token via `GRAFT_TOKEN` (Zero-Dependency Fallback)
-If you do not have `gcloud` installed on your workstation (e.g. corp machines without `google-cloud-cli`, or locked-down environments), you can pass a temporary OAuth2 token directly via the `GRAFT_TOKEN` environment variable:
-```bash
-export GRAFT_TOKEN="<access_token>"
-```
-Or place it in your `.env` file:
-```bash
-GRAFT_TOKEN="<access_token>"
-```
-- **Generating a Token:** You can generate a token from any environment where you have GCP access (such as Cloud Shell or an authenticated machine) by running:
-  ```bash
-  gcloud auth print-access-token --impersonate-service-account="${SA_EMAIL}"
-  ```
-- **Advantage:** Requires zero CLI tools or SDKs installed on your local workstation.
-- **Lifetime:** Standard GCP access tokens expire after 1 hour (3600 seconds).
-
----
-
-## 3. CLI Provisioning & Setup (Step-by-Step)
+## 2. CLI Provisioning & Setup (Step-by-Step)
 
 ### Step 1: Obtain Tenant Coordinates from SecOps Web UI (One-Time)
 
@@ -217,7 +152,7 @@ export WIF_PROVIDER="$(gcloud iam workload-identity-pools providers describe "${
 
 ---
 
-## 4. Pre-Flight Dry-Run Verification
+## 3. Pre-Flight Dry-Run Verification
 
 Test the entire integration chain before saving variables. This generates an impersonated OAuth2 token and tests the Chronicle `v1` `:verifyRuleText` endpoint.
 
@@ -253,7 +188,7 @@ content-type: application/json; charset=UTF-8
 
 ---
 
-## 5. Output & Annotate Environment Variables
+## 4. Output & Annotate Environment Variables
 
 Once the dry-run passes, run this snippet directly in Cloud Shell to print the unified configuration block on screen:
 
@@ -277,7 +212,7 @@ EOF
 > **Action Required: Copy and record these 5 values now.**  
 > Your GCP environment and SecOps instance are now fully configured and pre-flight verified. Once you close this Cloud Shell session, these session environment variables will be cleared from terminal memory.
 >
-> - **Local CLI:** Paste this block directly into your `.env` file at the root of the repository. Locally, Graft authenticates either via `gcloud` impersonation (Strategy A) or via the `GRAFT_TOKEN` environment variable (Strategy B).
+> - **Local CLI:** Paste this block directly into your `.env` file at the root of the repository. Locally, Graft authenticates directly against GCP via `gcloud` impersonation (Option 1) or via `GRAFT_SECOPS_TOKEN` (Option 2).
 > - **GitHub Actions:** In your GitHub repository (**Settings** > **Secrets and variables** > **Actions**), register these same 5 values:
 >   - **Secrets (`${{ secrets.* }}`):** `GRAFT_SECOPS_WIF_PROVIDER` and `GRAFT_SECOPS_${TARGET_ENV_UPPER}_SA_EMAIL`
 >   - **Variables (`${{ vars.* }}`):** `GRAFT_SECOPS_${TARGET_ENV_UPPER}_PROJECT`, `GRAFT_SECOPS_${TARGET_ENV_UPPER}_LOCATION`, and `GRAFT_SECOPS_${TARGET_ENV_UPPER}_INSTANCE_ID`
@@ -285,7 +220,7 @@ EOF
 
 ---
 
-## 6. Reference: Secret & Variable Matrix
+## 5. Reference: Secret & Variable Matrix
 
 All variables and secrets strictly use the unified `GRAFT_SECOPS_` namespace:
 
@@ -315,9 +250,84 @@ All variables and secrets strictly use the unified `GRAFT_SECOPS_` namespace:
 | `GRAFT_SECOPS_PROD_PROJECT` | Local / Prod | GCP Project ID hosting the Production SecOps tenant |
 | `GRAFT_SECOPS_PROD_LOCATION` | Local / Prod | Multi-region location (`us`, `europe-west3`, etc.) |
 | `GRAFT_SECOPS_PROD_INSTANCE_ID` | Local / Prod | Production Customer ID UUID |
-| `GRAFT_SECOPS_PROD_SA_EMAIL` | Local / Prod | Automation service account email (required when using Strategy A `gcloud` impersonation) |
-| `GRAFT_TOKEN` | Local / Any | Direct OAuth2 Bearer token override (Strategy B). When present, bypasses `gcloud` entirely |
+| `GRAFT_SECOPS_PROD_SA_EMAIL` | Local / Prod | Automation service account email (required when using Option 1 `gcloud` impersonation) |
+| `GRAFT_SECOPS_TOKEN` | Local / Any | Direct GCP OAuth2 Bearer token override (Option 2). Bypasses `gcloud` entirely |
+| `GRAFT_GCP_TOKEN` | Local / Any | Alias fallback for `GRAFT_SECOPS_TOKEN` |
+| `GRAFT_GITHUB_TOKEN` | Local / CI | Optional GitHub personal access token for release metadata or PR automation |
 
 > [!NOTE]
 > **Single-Tenant Mode:** When operating with a single SecOps instance shared between testing and production, you only need to register the 5 Production items (`GRAFT_SECOPS_PROD_*` and `GRAFT_SECOPS_WIF_PROVIDER`). Graft automatically falls back to the production instance coordinates for PR validation and replay tests when staging variables are not defined.
+
+---
+
+## 6. Authentication Architecture: GitHub Actions (CI/CD) vs. Local Workstation
+
+Graft adheres to a strict **stdlib-first architecture** and intentionally avoids importing 3rd-party GCP SDKs or client libraries (such as `google-auth`, `google-cloud-storage`, or `google-api-python-client`) into its production source code. All HTTP requests route through the Python standard library (`urllib.request`).
+
+Because Google SecOps REST endpoints require a valid OAuth2 Bearer token (`Authorization: Bearer <token>`), authentication must be handled directly with Google Cloud Platform depending on your operational environment:
+
+```mermaid
+flowchart TD
+    subgraph REMOTE["Remote Execution (GitHub Actions CI/CD)"]
+        direction TB
+        RUNNER["GitHub Actions Runner"] --> OIDC["GitHub OIDC Token<br/>(ACTIONS_ID_TOKEN_REQUEST_URL)"]
+        OIDC --> WIF["GCP Workload Identity Federation<br/>(GRAFT_SECOPS_WIF_PROVIDER)"]
+        WIF --> STS["GCP Security Token Service"]
+        STS --> SA_TOKEN_REMOTE["Short-Lived SA Bearer Token<br/>(graft-secops-deployer)"]
+        SA_TOKEN_REMOTE --> CHRONICLE_API_REMOTE["Google SecOps REST API"]
+    end
+
+    subgraph LOCAL["Local Developer Workstation (CLI)"]
+        direction TB
+        DEV["Developer Workstation"] --> AUTH_CHOICE{"Direct GCP Auth Option"}
+        
+        AUTH_CHOICE -- "Option 1 (Automatic)" --> GCLOUD["gcloud CLI Installed<br/>(gcloud auth login)"]
+        GCLOUD --> SA_IMPERSONATE["gcloud auth print-access-token<br/>--impersonate-service-account"]
+        SA_IMPERSONATE --> SA_TOKEN_LOCAL["Short-Lived Access Token"]
+        SA_TOKEN_LOCAL --> CHRONICLE_API_LOCAL["Google SecOps REST API"]
+
+        AUTH_CHOICE -- "Option 2 (Token Override)" --> TOKEN_ENV["GRAFT_SECOPS_TOKEN / GRAFT_GCP_TOKEN<br/>(in .env or shell export)"]
+        TOKEN_ENV --> CHRONICLE_API_LOCAL
+    end
+```
+
+### 1. Remote CI/CD: Workload Identity Federation (WIF)
+In GitHub Actions, each workflow runner receives a cryptographically signed OpenID Connect (OIDC) JWT token issued by GitHub (`https://token.actions.githubusercontent.com`). GCP verifies GitHub's signature, evaluates repository claim conditions (`assertion.repository == 'owner/repo'`), and exchanges it via GCP Security Token Service (STS) for temporary credentials impersonating `graft-secops-deployer`. This eliminates static private keys or long-lived secrets in GitHub.
+
+Because local developer workstations cannot generate GitHub-signed OIDC assertions, WIF is strictly available to GitHub Actions runners.
+
+### 2. Local Workstation: Direct GCP Authentication
+Without 3rd-party client libraries, local authentication must be done directly against GCP via one of two options:
+
+#### Option 1: Google Cloud CLI (`gcloud`) Service Account Impersonation
+When `google-cloud-cli` is installed locally, Graft's `SecOpsAuthResolver` executes:
+```bash
+gcloud auth print-access-token --impersonate-service-account=<SA_EMAIL>
+```
+- **Prerequisites:** `google-cloud-cli` installed (`sudo apt install -y google-cloud-cli`) and authenticated (`gcloud auth login`).
+- **IAM Requirement:** Your Google user account must have `roles/iam.serviceAccountTokenCreator` on the automation service account (configured in Section 2, Step 4).
+- **Advantage:** Automated and maintenance-free; fresh 1-hour access tokens are minted on demand.
+
+#### Option 2: Explicit GCP Bearer Token (`GRAFT_SECOPS_TOKEN` or `GRAFT_GCP_TOKEN`)
+If `gcloud` is not installed on your local machine (e.g. corporate machines without `google-cloud-cli` or containerized environments), you can pass an impersonated token directly via the environment:
+```bash
+export GRAFT_SECOPS_TOKEN="<access_token>"
+# or
+export GRAFT_GCP_TOKEN="<access_token>"
+```
+Or define it inside your local `.env` file:
+```bash
+GRAFT_SECOPS_TOKEN="<access_token>"
+```
+- **How to Generate:** Run the impersonation command in Google Cloud Shell or any machine with `gcloud` access:
+  ```bash
+  gcloud auth print-access-token --impersonate-service-account="${SA_EMAIL}"
+  ```
+- **Advantage:** Zero local CLI dependencies or packages needed on your workstation.
+- **Lifetime:** Standard GCP access tokens are valid for 1 hour (3,600 seconds).
+
+### 3. Token Grammar Reference
+To avoid credential ambiguity across multiple platforms and engines, Graft enforces consistent token naming conventions:
+- **`GRAFT_GITHUB_TOKEN`:** Personal access token for GitHub operations (fetching repository metadata, release tracking, or PR automation).
+- **`GRAFT_SECOPS_TOKEN`** (or **`GRAFT_GCP_TOKEN`**): Dedicated GCP OAuth2 bearer token for Google SecOps REST APIs.
 

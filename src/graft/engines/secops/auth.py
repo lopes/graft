@@ -19,7 +19,11 @@ class SecOpsAuthResolver:
         if self._token:
             return self._token
 
-        env_token = os.environ.get("GRAFT_TOKEN")
+        env_token = (
+            os.environ.get("GRAFT_SECOPS_TOKEN")
+            or os.environ.get("GRAFT_GCP_TOKEN")
+            or os.environ.get("GRAFT_TOKEN")
+        )
         if env_token:
             return env_token.strip()
 
@@ -36,7 +40,7 @@ class SecOpsAuthResolver:
             )
         except FileNotFoundError as err:
             raise SecOpsAuthError(
-                "gcloud CLI not found. Install Google Cloud SDK or set GRAFT_TOKEN."
+                "gcloud CLI not found. Install Google Cloud SDK or set GRAFT_SECOPS_TOKEN."
             ) from err
 
         if result.returncode != 0:

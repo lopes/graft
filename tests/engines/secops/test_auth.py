@@ -18,6 +18,22 @@ def test_auth_resolver_env_token(monkeypatch: pytest.MonkeyPatch) -> None:
     assert resolver.get_token() == "env-token-xyz"
 
 
+def test_auth_resolver_secops_token_precedence(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("GRAFT_SECOPS_TOKEN", "secops-token-1")
+    monkeypatch.setenv("GRAFT_GCP_TOKEN", "gcp-token-2")
+    monkeypatch.setenv("GRAFT_TOKEN", "graft-token-3")
+    resolver = SecOpsAuthResolver()
+    assert resolver.get_token() == "secops-token-1"
+
+
+def test_auth_resolver_gcp_token_fallback(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("GRAFT_SECOPS_TOKEN", raising=False)
+    monkeypatch.setenv("GRAFT_GCP_TOKEN", "gcp-token-2")
+    monkeypatch.setenv("GRAFT_TOKEN", "graft-token-3")
+    resolver = SecOpsAuthResolver()
+    assert resolver.get_token() == "gcp-token-2"
+
+
 def test_auth_resolver_gcloud_default(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("GRAFT_TOKEN", raising=False)
 
