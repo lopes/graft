@@ -81,19 +81,27 @@ jobs:
         run: uv sync
 
       - name: Authenticate to Google Cloud via Workload Identity Federation
+        id: auth
         uses: google-github-actions/auth@v2
         with:
+          token_format: "access_token"
           workload_identity_provider: ${{ secrets.GRAFT_SECOPS_WIF_PROVIDER }}
           service_account: ${{ secrets.GRAFT_SECOPS_STAGING_SA_EMAIL || secrets.GRAFT_SECOPS_PROD_SA_EMAIL }}
 
       - name: Gate 6 - Chronicle verifyRuleText pre-merge compiler dry-run
+        env:
+          GRAFT_SECOPS_TOKEN: ${{ steps.auth.outputs.access_token }}
         run: uv run graft secops verify rules/secops/custom/
 
       - name: Gate 7 - Synthetic UDM replay test harness
+        env:
+          GRAFT_SECOPS_TOKEN: ${{ steps.auth.outputs.access_token }}
         run: uv run graft secops test
 
       - name: Gate 8 - GitOps managed content drift check
         id: managed_diff
+        env:
+          GRAFT_SECOPS_TOKEN: ${{ steps.auth.outputs.access_token }}
         run: |
           set +e
           DIFF_OUTPUT=$(uv run graft secops managed diff 2>&1)

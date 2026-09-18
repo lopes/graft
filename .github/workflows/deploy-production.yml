@@ -44,12 +44,16 @@ jobs:
         run: uv run graft lint
 
       - name: Authenticate to Google Cloud via Workload Identity Federation
+        id: auth
         uses: google-github-actions/auth@v2
         with:
+          token_format: "access_token"
           workload_identity_provider: ${{ secrets.GRAFT_SECOPS_WIF_PROVIDER }}
           service_account: ${{ secrets.GRAFT_SECOPS_PROD_SA_EMAIL }}
 
       - name: Apply GitOps desired state to Production SecOps tenant
+        env:
+          GRAFT_SECOPS_TOKEN: ${{ steps.auth.outputs.access_token }}
         run: uv run graft secops apply --env production
 
       - name: Generate threat matrix and visibility catalogs
