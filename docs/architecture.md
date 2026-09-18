@@ -75,3 +75,76 @@ flowchart LR
 
 - **Track 1: Custom Rules (`rules/<engine>/custom/*.yaml`):** Bespoke organizational detections packaged in the 5-block envelope (`metadata`, `logic`, `deployment`, `runbook`, `tests`).
 - **Track 2: Vendor-Managed Content (`rules/<engine>/managed.yaml`):** Single declarative manifest tracking deployment state (`PRECISE` vs `BROAD`, `enabled`, `alerting`) and active exclusions for vendor-provided rulesets (e.g., Google Curated Rule Sets).
+
+---
+
+## 4. GitOps Reconciliation Framework: Mode A vs. Mode B
+
+Graft is engineered on the principle that **the Git repository is the single authoritative source of truth for detection state**. When a discrepancy exists between what is committed to Git and what is currently active in the SIEM/EDR, Git always wins.
+
+To balance authoritative state convergence against PR safety and blast radius, Graft establishes a formal **dual-mode reconciliation contract** that every engine adapter must implement:
+
+```mermaid
+flowchart TD
+    subgraph Trigger["Reconciliation Triggers"]
+        PR["Pull Request / Feature Branch<br/>Developer Proposes Changes"]
+        MERGE["Push to Mainline (main)<br/>Production Deployment"]
+        CRON["Scheduled Drift Monitor<br/>Periodic Heartbeat (e.g. Daily)"]
+    end
+
+    subgraph Modes["Reconciliation Execution Modes"]
+        MODE_B["<b>Mode B: Scoped Change Reconciliation</b><br/>(<code>--changed-only</code>)<br/>• Scopes scope to <code>git diff origin/main...HEAD</code><br/>• Verifies only touched detection files<br/>• Generates focused PR delta plan<br/>• Leaves untouched SIEM rules alone"]
+        MODE_A["<b>Mode A: Full Catalog Reconciliation</b><br/>(Default / Authoritative Convergence)<br/>• Compares complete repository against SIEM<br/>• In-memory diffing with zero-cost no-op<br/>• Automatically detects out-of-band UI edits (Drift)<br/>• Overwrites drifted SIEM state back to Git"]
+    end
+
+    subgraph Outcomes["Target Outcomes"]
+        REVIEW["PR Plan Summary Comment<br/>Narrow Blast Radius for Reviewer"]
+        CONVERGE["Production SIEM State Aligned<br/>Drift Healed & State Enforced"]
+        ALERT["Security Incident / Alert<br/>Unauthorized Out-of-Band Modification"]
+    end
+
+    PR --> MODE_B
+    MODE_B --> REVIEW
+
+    MERGE --> MODE_A
+    CRON --> MODE_A
+    MODE_A --> CONVERGE
+    CRON -.->|Drift Detected| ALERT
+```
+
+### Mode A: Full Catalog Reconciliation (Authoritative Convergence)
+
+- **Purpose:** Enforces absolute convergence between the Git repository and the production SIEM tenant.
+- **When Used:**
+  - **Post-Merge Deployments:** Automatically executed on every push to `main` via `deploy-production.yml`.
+  - **Scheduled Drift Monitoring:** Executed by periodic automation (e.g. hourly or daily cron) to monitor tenant integrity.
+- **Drift Auto-Healing Mechanics:**
+  - Graft fetches the current live state of all rules and managed configurations from the target SIEM API.
+  - It performs in-memory content and deployment state diffing against the entire local repository inventory.
+  - If an analyst, attacker, or automation script modifies a rule out-of-band in the SIEM console (e.g. disables alerting, modifies filter logic, or removes an exclusion):
+    1. `diff` flags the rule as drifted (`rules_to_update`).
+    2. `apply` automatically issues API update calls (`PATCH`) to overwrite the SIEM state and restore Git's desired state.
+- **Zero-Cost No-Op Guarantee:**
+  - Even though Graft compares the entire catalog, **it only invokes write APIs for rules that have drifted or changed**.
+  - Rules whose live state matches the repository definition trigger zero API requests, minimizing network latency, rate limits, and SIEM revision churn.
+
+### Mode B: Scoped Change Reconciliation (`--changed-only`)
+
+- **Purpose:** Restricts reconciliation to detection files modified within the current working branch or pull request.
+- **When Used:**
+  - **Pull Request Review & Validation:** Executed during PR validation workflows ([`pr-validation.yml`](file:///usr/local/google/home/joelopes/Projects/graft/.github/workflows/pr-validation.yml)) and local pre-commit checks.
+  - **Targeted Operations:** Used by operators executing tactical hotfixes on specific rule files via `--changed-only` or `--files <path>...`.
+- **Operational Rationale:**
+  - **Narrow Blast Radius:** Prevents a PR targeting rule `A` from inadvertently reverting an active, temporary out-of-band hotfix on rule `B` in the SIEM console.
+  - **Review Ergonomics:** The PR plan diff comment displays only the changes introduced by the author's branch, avoiding noise from unrelated tenant drifts.
+
+### Summary Comparison
+
+| Capability | Mode A: Full Reconciliation (Default) | Mode B: Scoped Reconciliation (`--changed-only`) |
+| :--- | :--- | :--- |
+| **Trigger Pipeline** | `push` to `main`, Scheduled Drift Cron | `pull_request`, local branch checks |
+| **Evaluation Scope** | Complete repository catalog (`rules/`) | Modified files in `git diff` against base |
+| **Drift Behavior** | Overwrites and heals out-of-band SIEM edits | Ignores untouched drifted rules |
+| **API Cost** | 1 read batch + N writes for drifted rules | 1 read batch + N writes for touched rules |
+| **Guaranteed State** | Complete SIEM alignment with `main` | Author's changes verified & previewed |
+
