@@ -8,6 +8,14 @@ name: PR Quality & Verification Gates
       - opened
       - synchronize
       - reopened
+    paths:
+      - "src/**"
+      - "rules/**"
+      - "schemas/**"
+      - "tests/**"
+      - "pyproject.toml"
+      - "uv.lock"
+      - ".github/workflows/pr-validation.yml"
 
 permissions:
   contents: read

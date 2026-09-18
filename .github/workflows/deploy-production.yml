@@ -4,6 +4,14 @@ name: Deploy Production & Publish Catalogs
   push:
     branches:
       - main
+    paths:
+      - "src/**"
+      - "rules/**"
+      - "schemas/**"
+      - "tests/**"
+      - "pyproject.toml"
+      - "uv.lock"
+      - ".github/workflows/deploy-production.yml"
 
 permissions:
   contents: write
