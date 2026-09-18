@@ -502,3 +502,95 @@ When an exclusion is no longer needed:
    ```
 3. Push to `main`. During deployment, Graft detects the removed exclusion and automatically disables and archives its deployment in Google SecOps (`enabled: false, archived: true`).
 
+---
+
+## 9. Custom Rule Reconciliation & Revision Tracking Architecture
+
+In Google SecOps, detection rules are versioned resources. Recreating a rule by deleting and re-creating it (`POST rules`) generates a new server-assigned rule ID, resets detection history, breaks SOAR playbooks tied to the original rule identifier, and creates gaps in monitoring coverage.
+
+Graft implements an in-place **Custom Rule Reconciliation Engine** ([`CustomRuleReconciler`](file:///usr/local/google/home/joelopes/Projects/graft/src/graft/core/reconciler.py#L309)) and adapter ([`SecOpsDeployerAdapter`](file:///usr/local/google/home/joelopes/Projects/graft/src/graft/engines/secops/deployer.py#L7)) that updates rule text and deployment states in-place, preserving rule continuity, audit history, and detection timelines.
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant Core as GitOpsReconciler
+    participant Adapter as SecOpsDeployerAdapter
+    participant API as Chronicle RuleService
+
+    Note over Core,API: 1. Fetch Remote State
+    Core->>Adapter: list_rules()
+    Adapter->>API: GET rules?view=FULL
+    API-->>Adapter: List of active rules & text
+    Adapter->>API: GET rules/-/deployments
+    API-->>Adapter: Deployment states (enabled, alerting)
+    Adapter-->>Core: Tuple of remote RuleEnvelopes
+
+    Note over Core,API: 2. In-Memory Diffing
+    Core->>Core: secops_rule_content_matches(desired, remote)
+    Core->>Core: Compare deployment.enabled & alerting
+
+    alt Unchanged Rule (No Drift)
+        Core->>Core: Skip rule (0 API calls)
+    else Content or Deployment Drift Detected
+        Note over Core,API: 3. In-Place Update & Revision
+        Core->>Adapter: update_rule(rule)
+        Adapter->>API: PATCH rules/{rule_id}?update_mask=text
+        API-->>Adapter: New Rule revision created (ru_...)
+        Adapter->>API: PATCH rules/{rule_id}/deployment?update_mask=enabled,alerting
+        API-->>Adapter: Deployment state synchronized
+    end
+```
+
+### Reconciliation Algorithm
+
+The custom rule reconciliation pipeline executes five discrete stages:
+
+#### 1. Inventory & Deployment Aggregation
+- **Rule Retrieval:** Fetches full rule text and metadata for all tenant rules via `GET /v1alpha/projects/{project}/locations/{location}/instances/{instance}/rules?view=FULL`.
+- **Deployment Binding:** Aggregates live deployment states via `GET /v1alpha/projects/.../rules/-/deployments` to establish the exact `(enabled: bool, alerting: bool)` status for every rule without issuing N sequential requests.
+
+#### 2. Three-Tier Content Normalization & Matching
+To prevent spurious diffs caused by whitespace differences, platform line endings, or synthesized metadata headers, [`secops_rule_content_matches`](file:///usr/local/google/home/joelopes/Projects/graft/src/graft/cli/engines/secops.py#L43) evaluates equivalence across three tiers:
+
+- **Tier 1 (Raw Logic Equivalence):** Compares the normalized rule logic text directly (`\r\n` converted to `\n` and stripped).
+- **Tier 2 (Synthesized YARA-L Equivalence):** Compares the remote rule against the locally synthesized YARA-L rule (incorporating standard metadata fields: `meta: id = ...`, `description = ...`, `status = ...`).
+- **Tier 3 (ID-Replaced Synthesis Equivalence):** Evaluates the synthesized YARA-L after binding the remote server-assigned rule ID to the local envelope. This ensures local manifests using UUIDs or human-readable IDs cleanly match the remote tenant without false-positive drift.
+
+#### 3. Deployment State Verification
+In addition to YARA-L logic, Graft verifies deployment coordinates:
+- `desired.deployment.enabled == remote.deployment.enabled`
+- `desired.deployment.alerting == remote.deployment.alerting`
+
+If either content *or* deployment state differs, the rule is scheduled for update in `rules_to_update`.
+
+#### 4. Atomic In-Place Revision Update
+When an update is required:
+1. **Rule Text Update:** Issues `PATCH /v1alpha/projects/.../rules/{rule_id}?update_mask=text` containing the synthesized YARA-L rule. Google SecOps compiles the new logic, creates a new revision identifier (`ru_<uuid>`), and preserves the primary rule identifier.
+2. **Deployment State Update:** Issues `PATCH /v1alpha/projects/.../rules/{rule_id}/deployment?update_mask=enabled,alerting` to enforce desired alert routing.
+
+#### 5. Zero-Cost No-Op Guarantee
+If the remote rule's logic and deployment state already match the Git definition:
+- No `PATCH` requests are sent.
+- Zero revisions are created in Google SecOps.
+- The step completes in-memory in sub-second time.
+
+---
+
+### Out-of-Band Drift Detection & Self-Healing
+
+When an operator, security analyst, or external integration modifies a detection directly in the Google SecOps console:
+
+1. **Drift Detection:** Running `graft secops diff` (or scheduled drift monitoring) detects the discrepancy and exits with code `2`:
+   ```text
+   === Custom Rules Diff ===
+   Rules to update:
+     ~ workspace_nrd_possible_phishing
+   ```
+2. **Authoritative Healing:** Running `graft secops apply` overwrites the out-of-band edit, reconciling the tenant back to the exact version declared in Git:
+   ```text
+   [INFO] Updating custom rule 'workspace_nrd_possible_phishing' in tenant
+   [INFO] Updated custom rule 'workspace_nrd_possible_phishing' in tenant
+   Custom rules reconciliation complete. 0 creations, 1 updates.
+   ```
+
+
