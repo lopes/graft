@@ -1,7 +1,7 @@
 metadata:
   id: "f84a1e93-61bc-4382-90ab-38f12a819003"
   name: "gcp_storage_iam_public_access_granted"
-  description: "Detects GCS IAM policy modifications that grant public access to allUsers or allAuthenticatedUsers. (v1.1 test)"
+  description: "Detects Google Cloud Storage IAM policy modifications that grant public access to allUsers or allAuthenticatedUsers."
   status: "production"
   authors:
     - "Cloud Security Operations"
