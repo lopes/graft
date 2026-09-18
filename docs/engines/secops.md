@@ -190,33 +190,33 @@ content-type: application/json; charset=UTF-8
 
 ## 4. Output & Annotate Environment Variables
 
-Once the dry-run passes, run this snippet directly in Cloud Shell to print all configured variables on screen. Annotate and save these values for your local environment and GitHub repository:
+Once the dry-run passes, run this snippet directly in Cloud Shell to print the unified configuration block on screen:
 
 ```bash
+TARGET_ENV_UPPER="${TARGET_ENV_UPPER:-PROD}"
 cat <<EOF
 
 ==============================================================================
- GRAFT CONFIGURATION VARIABLES (${TARGET_ENV_UPPER})
+ GRAFT UNIFIED CONFIGURATION (${TARGET_ENV_UPPER})
 ==============================================================================
-
-# --- 1. Local Development (.env) ---
 export GRAFT_SECOPS_${TARGET_ENV_UPPER}_PROJECT="${PROJECT_ID}"
 export GRAFT_SECOPS_${TARGET_ENV_UPPER}_LOCATION="${SECOPS_LOCATION}"
 export GRAFT_SECOPS_${TARGET_ENV_UPPER}_INSTANCE_ID="${INSTANCE_ID}"
 export GRAFT_SECOPS_${TARGET_ENV_UPPER}_SA_EMAIL="${SA_EMAIL}"
-
-# --- 2. GitHub Actions Secrets & Variables (Annotate for GitHub) ---
-Secret:    GRAFT_SECOPS_WIF_PROVIDER          = ${WIF_PROVIDER}
-Secret:    GRAFT_SECOPS_${TARGET_ENV_UPPER}_SA_EMAIL      = ${SA_EMAIL}
-Variable:  GRAFT_SECOPS_${TARGET_ENV_UPPER}_PROJECT       = ${PROJECT_ID}
-Variable:  GRAFT_SECOPS_${TARGET_ENV_UPPER}_LOCATION      = ${SECOPS_LOCATION}
-Variable:  GRAFT_SECOPS_${TARGET_ENV_UPPER}_INSTANCE_ID     = ${INSTANCE_ID}
+export GRAFT_SECOPS_WIF_PROVIDER="${WIF_PROVIDER}"
+==============================================================================
 EOF
 ```
 
 > [!IMPORTANT]
-> **Action Required: Copy and annotate these values now.**  
-> Your GCP environment and SecOps instance are now fully configured and pre-flight verified. Once you close this Cloud Shell session, these temporary environment variables will be cleared from terminal memory. Immediately copy the `.env` exports into your local `.env` file and record the GitHub repository secrets and variables before proceeding.
+> **Action Required: Copy and record these 5 values now.**  
+> Your GCP environment and SecOps instance are now fully configured and pre-flight verified. Once you close this Cloud Shell session, these session environment variables will be cleared from terminal memory.
+>
+> - **Local CLI:** Paste this block directly into your `.env` file at the root of the repository. Locally, Graft authenticates by calling `gcloud` with your personal login to impersonate `GRAFT_SECOPS_${TARGET_ENV_UPPER}_SA_EMAIL`.
+> - **GitHub Actions:** In your GitHub repository (**Settings** > **Secrets and variables** > **Actions**), register these same 5 values:
+>   - **Secrets (`${{ secrets.* }}`):** `GRAFT_SECOPS_WIF_PROVIDER` and `GRAFT_SECOPS_${TARGET_ENV_UPPER}_SA_EMAIL`
+>   - **Variables (`${{ vars.* }}`):** `GRAFT_SECOPS_${TARGET_ENV_UPPER}_PROJECT`, `GRAFT_SECOPS_${TARGET_ENV_UPPER}_LOCATION`, and `GRAFT_SECOPS_${TARGET_ENV_UPPER}_INSTANCE_ID`
+>   *(GitHub Actions uses the WIF Provider and SA Email to authenticate automatically via OIDC, eliminating static private keys).*
 
 ---
 
@@ -242,3 +242,7 @@ All variables and secrets strictly use the unified `GRAFT_SECOPS_` namespace:
 | `GRAFT_SECOPS_PROD_PROJECT` | Production (`main`) | GCP Project ID hosting the Production SecOps tenant |
 | `GRAFT_SECOPS_PROD_LOCATION` | Production (`main`) | Multi-region location (`us`, `europe-west3`, etc.) |
 | `GRAFT_SECOPS_PROD_INSTANCE_ID` | Production (`main`) | Production Customer ID (UUID from SecOps Organization Details) |
+
+> [!NOTE]
+> **Single-Tenant Mode:** When operating with a single SecOps instance shared between testing and production, you only need to register the 5 Production items (`GRAFT_SECOPS_PROD_*` and `GRAFT_SECOPS_WIF_PROVIDER`). Graft automatically falls back to the production instance coordinates for PR validation and replay tests when staging variables are not defined.
+
