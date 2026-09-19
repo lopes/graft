@@ -87,3 +87,12 @@ def test_scaffold_rule_custom_destination(tmp_path: Path) -> None:
     rule_path = scaffold_rule("secops", "custom_rule", project_root=tmp_path, out_path=custom_out)
     assert rule_path == custom_out
     assert custom_out.exists()
+
+
+def test_scaffold_rule_custom_destination_string(tmp_path: Path) -> None:
+    custom_out_str = str(tmp_path / "str_dir" / "my_str_rule.yaml")
+    rule_path = scaffold_rule(
+        "secops", "custom_rule_str", project_root=tmp_path, out_path=custom_out_str
+    )
+    assert str(rule_path) == custom_out_str
+    assert rule_path.exists()

@@ -327,3 +327,27 @@ def test_main_secops_diff_all_targets_drift() -> None:
 
         exit_code = main(["secops", "diff", "--all", "--env", "staging"])
         assert exit_code == 2
+
+
+def test_main_new_rule_execution(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    custom_target = tmp_path / "custom_out.yaml"
+    exit_code = main(
+        ["new", "rule", "my_new_rule", "--engine", "secops", "--out", str(custom_target)]
+    )
+    assert exit_code == 0
+    assert custom_target.exists()
+    captured = capsys.readouterr()
+    assert "Scaffolded rule template at:" in captured.out
+
+
+def test_main_new_rule_json_output(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    custom_target = tmp_path / "custom_out.yaml"
+    exit_code = main(
+        ["--json", "new", "rule", "json_rule", "--engine", "secops", "--out", str(custom_target)]
+    )
+    assert exit_code == 0
+    assert custom_target.exists()
+    captured = capsys.readouterr()
+    data = json.loads(captured.out)
+    assert data["success"] is True
+    assert data["path"] == str(custom_target)

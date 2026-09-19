@@ -3,6 +3,7 @@ import json
 import logging
 import sys
 from collections.abc import Sequence
+from pathlib import Path
 
 from graft.cli.commands_core import execute_export, execute_lint, execute_update_mitre
 from graft.cli.engines import discover_and_register_engines
@@ -130,7 +131,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                 return 0
 
             if args.new_type == "rule":
-                out_path = args.out
+                out_path = Path(args.out) if getattr(args, "out", None) else None
                 rule_path = scaffold_rule(
                     engine=args.engine,
                     rule_name=args.name,

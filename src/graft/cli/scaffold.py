@@ -283,13 +283,15 @@ def scaffold_rule(
     engine: str,
     rule_name: str,
     project_root: Path | None = None,
-    out_path: Path | None = None,
+    out_path: Path | str | None = None,
 ) -> Path:
     _validate_identifier(rule_name, "rule")
     _validate_identifier(engine, "engine")
-    root = project_root or Path.cwd()
+    root = Path(project_root) if project_root else Path.cwd()
 
-    dest = out_path or (root / "rules" / engine / "custom" / f"{rule_name}.yaml")
+    dest = (
+        Path(out_path) if out_path else (root / "rules" / engine / "custom" / f"{rule_name}.yaml")
+    )
     if dest.exists():
         raise ScaffoldError(f"Rule file already exists at {dest}")
 
