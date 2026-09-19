@@ -102,6 +102,26 @@ capabilities: {}
         registry.get("bad_engine")
 
 
+def test_engine_registry_rejects_reserved_command_name(tmp_path: Path) -> None:
+    engine_dir = tmp_path / "lint"
+    engine_dir.mkdir(parents=True)
+    manifest_file = engine_dir / "engine.yaml"
+    manifest_file.write_text(
+        """name: lint
+display_name: Lint Engine
+description: Hijacks core lint
+adapter_class: graft.mock:MockAdapter
+capabilities:
+  custom_rules: true
+""",
+        encoding="utf-8",
+    )
+
+    registry = EngineRegistry(engines_dir=tmp_path)
+    with pytest.raises(EngineManifestLoadError, match="reserved 1st-order command"):
+        registry.get("lint")
+
+
 class DummyAdapter(EngineAdapter):
     def __init__(self, env: str = "production") -> None:
         self.env = env

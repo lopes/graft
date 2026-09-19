@@ -26,6 +26,9 @@ class EngineManifestLoadError(EngineError):
     pass
 
 
+RESERVED_CORE_COMMANDS = frozenset({"lint", "export", "update-mitre", "new", "help"})
+
+
 class EngineRegistry:
     def __init__(self, engines_dir: Path | None = None, strict: bool = False) -> None:
         if engines_dir is None:
@@ -83,6 +86,12 @@ class EngineRegistry:
             err_details = "; ".join(f"{e.path}: {e.message}" for e in errors)
             raise EngineManifestLoadError(
                 f"Manifest schema validation failed for {path}: {err_details}"
+            )
+
+        name = str(raw_data["name"])
+        if name in RESERVED_CORE_COMMANDS:
+            raise EngineManifestLoadError(
+                f"Engine name '{name}' is a reserved 1st-order command keyword"
             )
 
         caps_raw = raw_data.get("capabilities", {})
