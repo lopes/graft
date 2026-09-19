@@ -15,10 +15,13 @@ class ValidationErrorDetail:
 
 
 class SchemaValidator:
-    def __init__(self, schemas_dir: Path | None = None) -> None:
+    def __init__(self, schemas_dir: Path | None = None, engines_dir: Path | None = None) -> None:
         if schemas_dir is None:
             schemas_dir = self._find_schemas_dir()
         self._schemas_dir = schemas_dir
+        if engines_dir is None:
+            engines_dir = self._find_engines_dir()
+        self._engines_dir = engines_dir
         self._registry: Registry[Any] = Registry()
         self._validators: dict[str, Draft202012Validator] = {}
         self._load_schemas()
@@ -36,12 +39,41 @@ class SchemaValidator:
             "Could not locate schemas/ directory containing base_rule.schema.json"
         )
 
-    def _load_schemas(self) -> None:
-        schema_files = list(self._schemas_dir.glob("*.schema.json"))
-        loaded_resources: dict[str, Resource[dict[str, Any]]] = {}
+    def _find_engines_dir(self) -> Path | None:
+        current = Path(__file__).resolve().parent
+        for parent in [current, *current.parents]:
+            candidate = parent / "engines"
+            if candidate.is_dir():
+                return candidate
+            candidate_src = parent / "src" / "graft" / "engines"
+            if candidate_src.is_dir():
+                return candidate_src
+        cwd_candidate = Path.cwd() / "src" / "graft" / "engines"
+        if cwd_candidate.is_dir():
+            return cwd_candidate
+        return None
 
-        for sf in schema_files:
+    def _load_schemas(self) -> None:
+        # 1. Collect all schema files with origin context: (file_path, engine_name | None)
+        schema_entries: list[tuple[Path, str | None]] = [
+            (sf, None) for sf in self._schemas_dir.glob("*.schema.json")
+        ]
+
+        if self._engines_dir and self._engines_dir.is_dir():
+            for item in sorted(self._engines_dir.iterdir()):
+                if item.is_dir() and not item.name.startswith(("_", ".")):
+                    eng_schemas = item / "schemas"
+                    if eng_schemas.is_dir():
+                        for sf in eng_schemas.glob("*.schema.json"):
+                            schema_entries.append((sf, item.name))
+
+        loaded_resources: dict[str, Resource[dict[str, Any]]] = {}
+        parsed_schemas: list[tuple[Path, str | None, dict[str, Any]]] = []
+
+        for sf, engine_name in schema_entries:
             schema_data = json.loads(sf.read_text(encoding="utf-8"))
+            parsed_schemas.append((sf, engine_name, schema_data))
+
             schema_id = str(schema_data.get("$id", sf.name))
             resource = Resource.from_contents(schema_data)
             loaded_resources[schema_id] = resource
@@ -52,20 +84,43 @@ class SchemaValidator:
             registry = registry.with_resource(uri, res)
         self._registry = registry
 
-        for sf in schema_files:
-            schema_data = json.loads(sf.read_text(encoding="utf-8"))
-            name = sf.name.replace(".schema.json", "")
+        for sf, engine_name, schema_data in parsed_schemas:
+            stem = sf.name.replace(".schema.json", "")
             validator = Draft202012Validator(schema_data, registry=self._registry)
-            self._validators[name] = validator
+
+            if engine_name is not None:
+                # Register namespaced keys: <engine>:<stem> and <engine>_<stem>
+                self._validators[f"{engine_name}:{stem}"] = validator
+                self._validators[f"{engine_name}_{stem}"] = validator
+                # Semantic aliases for rule and managed schemas
+                if stem == "rule":
+                    self._validators[f"{engine_name}_custom"] = validator
+                    self._validators[f"{engine_name}:custom"] = validator
+                elif stem == "secops_custom":
+                    self._validators[f"{engine_name}:rule"] = validator
+                    self._validators[f"{engine_name}_rule"] = validator
+                elif stem == "secops_managed":
+                    self._validators[f"{engine_name}:managed"] = validator
+                    self._validators[f"{engine_name}_managed"] = validator
+            else:
+                self._validators[stem] = validator
+
             self._validators[sf.name] = validator
+            schema_id = str(schema_data.get("$id", ""))
+            if schema_id:
+                self._validators[schema_id] = validator
+
+    def available_schemas(self) -> list[str]:
+        return sorted([k for k in self._validators if not k.endswith(".schema.json")])
 
     def validate(
-        self, instance: object, schema_name: str = "secops_custom"
+        self, instance: object, schema_name: str = "base_rule"
     ) -> list[ValidationErrorDetail]:
         validator = self._validators.get(schema_name)
         if validator is None:
-            available = [k for k in self._validators if not k.endswith(".schema.json")]
-            raise KeyError(f"Unknown schema '{schema_name}'. Available schemas: {available}")
+            raise KeyError(
+                f"Unknown schema '{schema_name}'. Available schemas: {self.available_schemas()}"
+            )
 
         errors: list[ValidationErrorDetail] = []
         for err in validator.iter_errors(instance):
@@ -79,5 +134,5 @@ class SchemaValidator:
             )
         return errors
 
-    def is_valid(self, instance: object, schema_name: str = "secops_custom") -> bool:
+    def is_valid(self, instance: object, schema_name: str = "base_rule") -> bool:
         return len(self.validate(instance, schema_name=schema_name)) == 0

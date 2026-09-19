@@ -337,12 +337,26 @@ def scaffold_rule(
 
     # Validate against schema if schema is available
     schema_dir = root / "schemas"
-    if (schema_dir / f"{engine}_custom.schema.json").exists():
-        validator = SchemaValidator(schemas_dir=schema_dir)
-        errors = validator.validate(doc, schema_name=f"{engine}_custom")
-        if errors:
-            err_msg = "; ".join(f"{e.path}: {e.message}" for e in errors)
-            raise ScaffoldError(f"Scaffolded rule template failed schema validation: {err_msg}")
+    engines_dir = root / "src" / "graft" / "engines"
+    try:
+        validator = SchemaValidator(
+            schemas_dir=schema_dir if schema_dir.is_dir() else None,
+            engines_dir=engines_dir if engines_dir.is_dir() else None,
+        )
+        avail = validator.available_schemas()
+        target_schema = None
+        for candidate in (f"{engine}:rule", f"{engine}_rule", f"{engine}_custom"):
+            if candidate in avail:
+                target_schema = candidate
+                break
+
+        if target_schema:
+            errors = validator.validate(doc, schema_name=target_schema)
+            if errors:
+                err_msg = "; ".join(f"{e.path}: {e.message}" for e in errors)
+                raise ScaffoldError(f"Scaffolded rule template failed schema validation: {err_msg}")
+    except (FileNotFoundError, KeyError):
+        pass
 
     dumped = yaml.safe_dump(doc, sort_keys=False, indent=2)
     dest.write_text(dumped, encoding="utf-8")

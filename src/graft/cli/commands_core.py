@@ -3,6 +3,8 @@ import sys
 from pathlib import Path
 from typing import Any
 
+import yaml
+
 from graft.core.catalog import (
     build_catalog_entry_from_rule,
     export_catalog_csv,
@@ -17,10 +19,7 @@ from graft.core.matrix import (
 )
 from graft.core.models.rule import RuleEnvelope
 from graft.core.validation import RuleUniquenessValidator
-from graft.engines.secops.managed_loader import (
-    ManagedManifestLoadError,
-    load_managed_manifest_from_yaml,
-)
+from graft.core.validation.schema_validator import SchemaValidator
 
 
 def execute_lint(
@@ -51,8 +50,8 @@ def execute_lint(
     results: list[dict[str, Any]] = []
     has_errors = False
     uniqueness_validator = RuleUniquenessValidator()
+    schema_validator = SchemaValidator()
 
-    schemas_dir = Path("schemas")
     target_set = {f.resolve() for f in target_files if f.exists()}
     root_rules = Path(rules_dir)
     if root_rules.is_dir():
@@ -69,12 +68,7 @@ def execute_lint(
                     idx = parts.index("rules")
                     if idx + 1 < len(parts):
                         engine = parts[idx + 1]
-                schema = f"{engine}_custom"
-                if not (schemas_dir / f"{schema}.schema.json").exists():
-                    schema = "base_rule"
-                other_rule = load_rule_from_yaml(
-                    other_path, schema_name=schema, validate_mitre=False
-                )
+                other_rule = load_rule_from_yaml(other_path, validate_mitre=False)
                 uniqueness_validator.add_and_validate(other_rule, engine=engine, path=other_path)
             except (RuleLoadError, ValueError, OSError):
                 continue
@@ -89,21 +83,37 @@ def execute_lint(
         }
 
         try:
+            parts = file_path.parts
+            engine = "secops"
+            if "rules" in parts:
+                idx = parts.index("rules")
+                if idx + 1 < len(parts):
+                    engine = parts[idx + 1]
+
             if is_managed:
-                load_managed_manifest_from_yaml(file_path)
+                raw_text = file_path.read_text(encoding="utf-8")
+                manifest_data: Any = yaml.safe_load(raw_text)
+                if not isinstance(manifest_data, dict):
+                    raise ValueError("Managed manifest content must be a YAML mapping")
+
+                avail = schema_validator.available_schemas()
+                schema_to_use = None
+                for candidate in (f"{engine}:managed", f"{engine}_managed", "managed"):
+                    if candidate in avail:
+                        schema_to_use = candidate
+                        break
+
+                if schema_to_use is None:
+                    raise ValueError(
+                        f"Engine '{engine}' does not provide a managed manifest schema"
+                    )
+
+                errs = schema_validator.validate(manifest_data, schema_name=schema_to_use)
+                if errs:
+                    err_details = "; ".join(f"{e.path}: {e.message}" for e in errs)
+                    raise ValueError(f"Managed manifest validation failed: {err_details}")
             else:
-                # Infer engine from path (e.g. rules/<engine>/custom/rule.yaml)
-                parts = file_path.parts
-                engine = "secops"
-                schema = "secops_custom"
-                if "rules" in parts:
-                    idx = parts.index("rules")
-                    if idx + 1 < len(parts):
-                        engine = parts[idx + 1]
-                        schema = f"{engine}_custom"
-                if not (schemas_dir / f"{schema}.schema.json").exists():
-                    schema = "base_rule"
-                rule = load_rule_from_yaml(file_path, schema_name=schema)
+                rule = load_rule_from_yaml(file_path)
                 uniqueness_violations = uniqueness_validator.add_and_validate(
                     rule, engine=engine, path=file_path
                 )
@@ -122,7 +132,7 @@ def execute_lint(
             file_result["valid"] = True
             if not json_output:
                 sys.stdout.write(f"[PASS] {file_path}\n")
-        except (RuleLoadError, ManagedManifestLoadError, Exception) as exc:
+        except (RuleLoadError, ValueError, Exception) as exc:
             has_errors = True
             file_result["valid"] = False
             file_result["errors"].append(str(exc))
@@ -182,8 +192,7 @@ def _load_all_rules(rules_dir: Path | str = "rules") -> list[tuple[RuleEnvelope,
                 idx = parts.index("rules")
                 if idx + 1 < len(parts):
                     engine = parts[idx + 1]
-            schema = f"{engine}_custom"
-            rule = load_rule_from_yaml(yaml_path, schema_name=schema, validate_mitre=False)
+            rule = load_rule_from_yaml(yaml_path, validate_mitre=False)
             loaded.append((rule, engine, yaml_path))
         except (RuleLoadError, ValueError, OSError):
             continue

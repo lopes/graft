@@ -21,7 +21,7 @@ class RuleLoadError(Exception):
 
 def load_rule_from_str(
     content: str,
-    schema_name: str = "secops_custom",
+    schema_name: str = "base_rule",
     validate_mitre: bool = True,
 ) -> RuleEnvelope:
     try:
@@ -119,13 +119,29 @@ def load_rule_from_str(
 
 def load_rule_from_yaml(
     path: Path | str,
-    schema_name: str = "secops_custom",
+    schema_name: str | None = None,
     validate_mitre: bool = True,
 ) -> RuleEnvelope:
     file_path = Path(path)
     if not file_path.is_file():
         raise RuleLoadError(f"Rule file not found: {file_path}")
     content = file_path.read_text(encoding="utf-8")
+
+    if schema_name is None:
+        parts = file_path.parts
+        if "rules" in parts:
+            idx = parts.index("rules")
+            if idx + 1 < len(parts):
+                engine = parts[idx + 1]
+                validator = SchemaValidator()
+                avail = validator.available_schemas()
+                if f"{engine}:rule" in avail:
+                    schema_name = f"{engine}:rule"
+                elif f"{engine}_custom" in avail:
+                    schema_name = f"{engine}_custom"
+        if schema_name is None:
+            schema_name = "base_rule"
+
     return load_rule_from_str(content, schema_name=schema_name, validate_mitre=validate_mitre)
 
 
