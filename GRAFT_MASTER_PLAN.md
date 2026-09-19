@@ -195,6 +195,7 @@ To guarantee state preservation, eliminate hallucination, and prevent context sa
 | **Engine Adoption & Ingestion Protocol** | `[x]` | Formal 3-epoch lifecycle documentation (discovery -> enrich -> Git SoT) | `docs/adoption.md` |
 | **CI Workflow Path Filtering** | `[x]` | Restrict CI pipelines to functional code; skip docs/assets runs | `.github/workflows/` |
 | **Documentation & Didactic Overhaul** | `[x]` | Expand CLI reference, add realistic outputs, 100% link & list validation | `docs/`, `README.md` |
+| **Pluggable Engine Adapter Framework** | `[x]` | Encapsulated engine modules, dynamic manifest discovery, and capabilities-driven CLI routing | `src/graft/engines/`, `docs/architecture.md` |
 
 ---
 

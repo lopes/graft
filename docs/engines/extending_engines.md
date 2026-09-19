@@ -1,6 +1,6 @@
 # Extending Graft: Adding New Detection Engines
 
-Graft's hexagonal architecture makes adding support for a new SIEM, EDR, or cloud analytics platform straightforward. This guide walks through scaffolding and implementing a new engine adapter.
+Graft's hexagonal architecture makes adding support for a new SIEM, EDR, or cloud analytics platform straightforward. Each engine exists as a completely self-contained, encapsulated package under `src/graft/engines/<engine>/` with its own manifest, adapter, schemas, documentation, and in-tree tests.
 
 ---
 
@@ -12,68 +12,107 @@ To bootstrap an engine, run:
 graft new engine sentinel
 ```
 
-This single command automatically generates:
-1. **Engine Source (`src/graft/engines/sentinel/`):**
-   - `__init__.py`: Package entrypoint.
-   - `config.py`: Credentials and environment coordinate resolution.
-   - `client.py`: Stdlib REST client for vendor API.
-   - `compiler.py`: Syntax verification implementing `RuleCompilerPort`.
-   - `deployer.py`: Rule CRUD implementing `RuleDeployerPort`.
-   - `managed.py`: Managed state sync implementing `ManagedEnginePort`.
-   - `replay.py`: Synthetic test harness implementing `ReplayHarnessPort`.
-2. **CLI Engine Command Hook (`src/graft/cli/engines/sentinel.py`):**
-   - Registers `graft sentinel ...` subcommands with `argparse`.
-3. **Engine Schema (`schemas/sentinel_custom.schema.json`):**
-   - Inherits `base_rule.schema.json` via JSON Schema `$ref` and `allOf`.
-4. **Rule Directory (`rules/sentinel/custom/` & `rules/sentinel/managed.yaml`):**
-   - Directory structure for custom rules and vendor-managed content.
-5. **Environment Template (`.env.example`):**
-   - Appends a namespaced configuration block (e.g. `GRAFT_SENTINEL_*`).
+This single command automatically generates a fully encapsulated engine package:
+
+```text
+src/graft/engines/sentinel/
+├── __init__.py           # Package entrypoint
+├── engine.yaml           # Declarative manifest (conforming to engine_manifest.schema.json)
+├── adapter.py            # Primary EngineAdapter protocol implementation
+├── config.py             # Credentials and environment coordinate resolution
+├── compiler.py           # Syntax verification implementing RuleCompilerPort
+├── deployer.py           # Custom rule CRUD implementing RuleDeployerPort
+├── README.md             # Engine-specific documentation and usage guides
+├── schemas/
+│   └── rule.schema.json  # Co-located rule schema inheriting from base_rule.schema.json
+└── tests/
+    ├── __init__.py
+    ├── test_compiler.py  # In-tree compiler unit tests
+    └── test_adapter.py   # In-tree adapter protocol conformance tests
+```
+
+Additionally, it configures:
+- **Rule Directory (`rules/sentinel/custom/`):** Target directory for organizational detection rules.
+- **Environment Template (`.env.example`):** Appends namespaced configuration variables (e.g., `GRAFT_SENTINEL_*`).
 
 ---
 
-## 2. Implementing the Port Interfaces
+## 2. Engine Manifest (`engine.yaml`)
 
-Every engine adapter implements one or more interfaces defined in `src/graft/core/ports/`:
+Every engine must declare an `engine.yaml` manifest at its root. This manifest is validated against `schemas/engine_manifest.schema.json` and discovered dynamically at runtime by [`EngineRegistry`](file:///usr/local/google/home/joelopes/Projects/graft/src/graft/core/engine_registry.py):
+
+```yaml
+name: sentinel
+display_name: Microsoft Sentinel
+description: Microsoft Sentinel Detection Engine Adapter
+adapter_class: graft.engines.sentinel.adapter:SentinelAdapter
+
+capabilities:
+  custom_rules: true
+  syntax_verification: true
+  managed_rules: false
+  replay_testing: false
+
+environments:
+  - staging
+  - production
+
+env_vars:
+  required:
+    - GRAFT_SENTINEL_API_KEY
+  optional: []
+```
+
+### Manifest Fields
+- `name`: Technical engine slug (lowercase `^[a-z0-9_]+$`). Forms the CLI subcommand namespace (e.g. `graft sentinel ...`).
+- `display_name`: Human-readable title used in CLI headers, drift diffs, and catalog exports.
+- `adapter_class`: Python entrypoint in `<module>:<Class>` format implementing [`EngineAdapter`](file:///usr/local/google/home/joelopes/Projects/graft/src/graft/core/ports/engine.py#L10).
+- `capabilities`: Feature flags (`custom_rules`, `syntax_verification`, `managed_rules`, `replay_testing`). Graft's generic CLI controller automatically provisions only the subcommands supported by the engine's capabilities.
+- `environments`: Target environment profiles supported (e.g., `staging`, `production`).
+- `env_vars`: Explicit manifest of required and optional environment variables.
+
+---
+
+## 3. Implementing the `EngineAdapter` Protocol
+
+Engine integration is governed by the composite [`EngineAdapter`](file:///usr/local/google/home/joelopes/Projects/graft/src/graft/core/ports/engine.py#L10) protocol:
 
 ```mermaid
 flowchart TD
-    CORE["<b>Graft Core Interfaces</b><br/><code>src/graft/core/ports/</code>"]
-    CORE --> P1["<b>RuleCompilerPort</b><br/><code>verify_syntax(str)</code><br/><code>verify_rule(RuleEnvelope)</code>"]
-    CORE --> P2["<b>RuleDeployerPort</b><br/><code>create_rule(RuleEnvelope)</code><br/><code>update_rule(id, RuleEnvelope)</code><br/><code>delete_rule(id)</code><br/><code>set_rule_state(id, enabled, alerting)</code>"]
-    CORE --> P3["<b>ManagedEnginePort</b><br/><code>fetch_managed_state()</code><br/><code>set_ruleset_deployment(...)</code><br/><code>create_exclusion(...)</code>"]
-    CORE --> P4["<b>ReplayHarnessPort</b><br/><code>run_test_vector(RuleEnvelope, TestVector)</code>"]
+    REGISTRY["<b>EngineRegistry</b><br/><code>src/graft/core/engine_registry.py</code>"]
+    CONTROLLER["<b>EngineCommandController</b><br/><code>src/graft/cli/engine_controller.py</code>"]
+    ADAPTER["<b>EngineAdapter Protocol</b><br/><code>src/graft/core/ports/engine.py</code>"]
 
-    ENGINE["<b>Your New Engine Adapter</b><br/><code>src/graft/engines/&lt;name&gt;/</code>"]
-    P1 -. Implemented by .-> ENGINE
-    P2 -. Implemented by .-> ENGINE
-    P3 -. Implemented by .-> ENGINE
-    P4 -. Implemented by .-> ENGINE
+    P1["<b>RuleCompilerPort</b><br/><code>get_compiler()</code>"]
+    P2["<b>RuleDeployerPort</b><br/><code>get_deployer()</code>"]
+    P3["<b>ManagedEnginePort</b><br/><code>get_managed()</code>"]
+    P4["<b>ReplayHarnessPort</b><br/><code>get_replay()</code>"]
+
+    REGISTRY -->|discovers & loads| ADAPTER
+    CONTROLLER -->|routes commands via| ADAPTER
+    ADAPTER --> P1
+    ADAPTER --> P2
+    ADAPTER --> P3
+    ADAPTER --> P4
 ```
 
-### 1. `RuleCompilerPort`
-Translates the rule envelope into native vendor syntax and submits it to a pre-merge compilation dry-run endpoint. Returns structured `CompilationResult` with any line/column diagnostics.
-
-### 2. `RuleDeployerPort`
-Performs live rule provisioning. Encapsulates vendor-specific API mutations for creating, updating, activating, and deleting detections.
-
-### 3. `ManagedEnginePort`
-Translates vendor-curated detection content and exclusion lists between the local `managed.yaml` domain models and the remote vendor state.
-
-### 4. `ReplayHarnessPort`
-Coordinates synthetic event injection and quarantined ad-hoc evaluation, ensuring zero live alerts are produced during verification runs.
+### Granular Port Responsibilities
+1. **`RuleCompilerPort` (`get_compiler()`):** Translates rule logic into native vendor queries and executes pre-merge dry-run compilation against the vendor API. Returns structured `CompilationResult`.
+2. **`RuleDeployerPort` (`get_deployer()`):** Manages remote custom rule lifecycle: `list_rules()`, `create_rule()`, `update_rule()`, `delete_rule()`, and `set_rule_state()`.
+3. **`ManagedEnginePort` (`get_managed()`):** Synchronizes vendor-managed curated content and rule exclusion filters between `rules/<engine>/managed.yaml` and the remote tenant.
+4. **`ReplayHarnessPort` (`get_replay()`):** Coordinates synthetic telemetry replay in isolated staging environments with automatic quarantine and cleanup.
 
 ---
 
-## 3. Developing with Strict TDD
+## 4. Developing with Strict TDD
 
-When developing an engine adapter:
-1. **Never import third-party HTTP clients:** Use `urllib.request` or standard library tooling.
-2. **Mock-transport unit tests:** Write 100% mocked contract tests under `tests/engines/<name>/` using `unittest.mock` to verify payload serialization and error handling.
+When implementing an engine adapter:
+1. **Never import third-party HTTP clients:** Use `urllib.request` or Python standard libraries.
+2. **Co-locate tests inside the engine directory:** Write 100% mock-isolated contract tests in `src/graft/engines/<engine>/tests/`. Pytest automatically discovers tests across both `tests/` and `src/`.
 3. **Verify Quality Gates:**
    ```bash
    uv run ruff check .
    uv run ruff format --check .
    uv run mypy --strict src tests
-   uv run pytest tests/engines/<name>/
+   uv run pytest
    ```

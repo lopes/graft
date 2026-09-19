@@ -155,7 +155,10 @@ def test_main_new_engine(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Non
     Path("schemas/base_rule.schema.json").write_text(base_schema_content, encoding="utf-8")
     exit_code = main(["new", "engine", "testengine"])
     assert exit_code == 0
-    assert (tmp_path / "src" / "graft" / "engines" / "testengine").is_dir()
+    engine_dir = tmp_path / "src" / "graft" / "engines" / "testengine"
+    assert engine_dir.is_dir()
+    assert (engine_dir / "engine.yaml").is_file()
+    assert (engine_dir / "adapter.py").is_file()
 
 
 def test_main_secops_new_rule(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

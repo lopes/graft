@@ -165,4 +165,58 @@ flowchart TD
 | **API Cost** | 1 read batch + N writes for touched rules | 1 read batch + N writes for drifted rules |
 | **Guaranteed State** | Author's changes verified & previewed | Complete SIEM alignment with `main` |
 
+---
+
+## 5. Pluggable Engine Adapter Framework & Encapsulation
+
+Graft features a fully encapsulated, pluggable engine adapter architecture. Rather than scattering engine schemas, CLI commands, documentation, and tests across disparate top-level directories, every engine adapter is packaged as a self-contained module under `src/graft/engines/<engine>/`.
+
+```mermaid
+flowchart TD
+    subgraph CoreDiscovery["Engine Discovery & Loading"]
+        REGISTRY["EngineRegistry<br/><code>src/graft/core/engine_registry.py</code>"]
+        VALIDATOR["SchemaValidator<br/><code>engine_manifest.schema.json</code>"]
+        REGISTRY -->|validates manifest| VALIDATOR
+    end
+
+    subgraph DynamicCLI["Capabilities-Driven CLI"]
+        CONTROLLER["EngineCommandController<br/><code>src/graft/cli/engine_controller.py</code>"]
+        SUBPARSERS["Dynamic Subparsers<br/><code>new, verify, test, diff, apply, managed, pull</code>"]
+        CONTROLLER -->|provisions based on capabilities| SUBPARSERS
+    end
+
+    subgraph EnginePackage["Encapsulated Engine Package (src/graft/engines/&lt;engine&gt;/)"]
+        MANIFEST["engine.yaml<br/>Metadata, Capabilities, Envs, Vars"]
+        ADAPTER["adapter.py<br/>EngineAdapter Protocol Implementation"]
+        SCHEMAS["schemas/rule.schema.json<br/>Inherits from base_rule.schema.json"]
+        TESTS["tests/<br/>In-Tree Mock & Contract Tests"]
+        README["README.md<br/>Engine Architecture & Operations"]
+    end
+
+    REGISTRY -->|discovers| MANIFEST
+    REGISTRY -->|loads| ADAPTER
+    CONTROLLER -->|queries capabilities from| MANIFEST
+    CONTROLLER -->|executes commands via| ADAPTER
+```
+
+### 1. Autonomous Engine Encapsulation
+Every engine adapter contains everything required for its lifecycle:
+- **`engine.yaml`:** Declarative manifest defining metadata, capabilities, supported environments, and required/optional environment variables.
+- **`adapter.py`:** Primary entrypoint implementing the composite [`EngineAdapter`](file:///usr/local/google/home/joelopes/Projects/graft/src/graft/core/ports/engine.py#L10) protocol. Lazily initializes underlying compilers, deployers, managed adapters, and replay harnesses without synchronous network calls.
+- **`schemas/rule.schema.json`:** Engine-specific rule schema extending `base_rule.schema.json`. Discovered dynamically by [`SchemaValidator`](file:///usr/local/google/home/joelopes/Projects/graft/src/graft/core/validation/schema_validator.py).
+- **`README.md`:** Authoritative documentation covering engine architecture, credentials, and API reconciliation specifics.
+- **`tests/`:** In-tree unit and mock-transport contract tests, automatically executed by `pytest`.
+
+### 2. Capabilities-Driven CLI Dispatch
+Core never hardcodes engine commands. Instead, [`EngineCommandController`](file:///usr/local/google/home/joelopes/Projects/graft/src/graft/cli/engine_controller.py) dynamically configures subparsers based on declared manifest capabilities:
+
+| Manifest Capability | CLI Subcommands Provisioned |
+| :--- | :--- |
+| `custom_rules: true` | `graft <engine> new <rule_name>`, `diff`, `apply`, `pull` |
+| `syntax_verification: true` | `graft <engine> verify [paths...]` |
+| `managed_rules: true` | `graft <engine> managed <diff\|apply\|pull>` |
+| `replay_testing: true` | `graft <engine> test [paths...] [--require-staging]` |
+
+Reserved first-order command names (`lint`, `export`, `update-mitre`, `new`, `help`) are enforced to guarantee unambiguous command routing.
+
 
