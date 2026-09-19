@@ -25,13 +25,17 @@
 
 - **Hexagonal Architecture (Ports & Adapters):**
   - **`src/graft/core/` (Driving Core):** 100% engine-agnostic. Contains domain models, port interfaces (`typing.Protocol`), base schema validation, STIX MITRE evaluation, Git blame extraction, and exporters. **Zero imports of cloud SDKs, SIEM libraries, or HTTP clients.**
-  - **`src/graft/adapters/` (Driven Adapters):** Concrete engine implementations (e.g., `src/graft/adapters/secops/`). **Adapters carry the entire burden** of translating external SIEM APIs, authenticating, compiling queries, and handling synthetic replay vectors. Core never adapts to an engine; engines adapt to Core.
+  - **`src/graft/engines/` (Driven Adapters):** Concrete engine implementations (e.g., `src/graft/engines/secops/`). **Engines carry the entire burden** of translating external SIEM APIs, authenticating, compiling queries, and handling synthetic replay vectors. Core never adapts to an engine; engines adapt to Core.
   - **`src/graft/cli/` (Driving Adapter):** Standard library `argparse` CLI routing commands to core services and engine adapters.
 - **Ruleset Taxonomy:**
   - `rules/<engine>/custom/`: 5-block envelope YAML files (`metadata`, `logic`, `deployment`, `runbook`, `tests`) authored and owned by the organization.
   - `rules/<engine>/managed.yaml`: Single consolidated manifest tracking vendor-managed content state (e.g., Google Curated Rule Sets: `PRECISE` vs `BROAD` deployments, `enabled`, `alerting`) and active exclusions.
 - **Environment Topologies:**
-  - All SecOps credentials and tenant coordinates are split into Staging and Production according to `docs/adapters/secops.md`.
+  - All SecOps credentials and tenant coordinates are split into Staging and Production according to `docs/engines/secops.md`.
+- **Three-Epoch Engine Lifecycle & Ingestion Protocol:**
+  - **Epoch 1 (Discovery & Reverse Sync):** When bootstrapping an existing SIEM tenant, the SIEM is the temporary initial Source of Truth. Run `graft <engine> pull` to extract live custom rules and managed curated configurations into local YAML artifacts.
+  - **Epoch 2 (Baseline Enrichment & Validation):** Operators document runbooks, map MITRE ATT&CK techniques, add test vectors, validate via `graft lint`, and commit the baseline to Git.
+  - **Epoch 3 (Steady-State GitOps):** Git is declared the authoritative Source of Truth. `graft <engine> diff/apply` synchronizes changes forward. Mode B (default) evaluates scoped branch changes; Mode A (`--all`) enforces full catalog convergence, healing out-of-band console drift.
 
 ---
 
@@ -91,7 +95,7 @@
   3. **Refactor:** Clean up code, enforce strict types, and ensure all linter rules pass.
 - **Partitioned Test Hierarchy:**
   - `tests/unit/`: 100% mock-isolated, sub-second execution (<1s total). Never makes real network or disk calls outside temp directories.
-  - `tests/adapters/`: Mock-transport contract tests verifying API payload encoding/decoding.
+  - `tests/engines/`: Mock-transport contract tests verifying API payload encoding/decoding.
   - `tests/integration/`: Live API tests targeting the dedicated staging tenant, strictly gated behind `@pytest.mark.integration` and `--run-integration`.
 - **Graceful Degradation for Replay Tests:**
   - If a rule defines a `test:` block, but staging credentials (`GRAFT_STAGING_*`) are absent: emit `[WARNING]` and exit with code `0`. Never block developers locally.
@@ -105,7 +109,7 @@ Before declaring any work complete, the following checks must return 0 errors:
 1. `uv run ruff check .` — Strict rules: `E, F, B, I, UP, S, RUF, SIM, T20`. Stray `print()` calls in production source are strictly prohibited.
 2. `uv run ruff format --check .` — Enforces consistent code formatting.
 3. `uv run mypy --strict src tests` — Zero untyped definitions, zero implicit optionals, zero `Any`.
-4. `uv run pytest tests/unit tests/adapters` — 100% passing tests in <1 second.
+4. `uv run pytest tests/unit tests/engines` — 100% passing tests in <1 second.
 
 ---
 
@@ -115,6 +119,12 @@ Before declaring any work complete, the following checks must return 0 errors:
   - Scope first, lowercase, one-sentence imperative description.
   - Commit frequently during the phase as logical increments pass tests.
   - Banned prefixes: `feat:`, `fix:`, `chore:`, `update:`.
+- **CI Workflow Path Filtering:**
+  - Mainline deployment (`deploy-production.yml`) and PR validation (`pr-validation.yml`) enforce strict path filters (`src/**`, `rules/**`, `schemas/**`, `tests/**`, `pyproject.toml`, `uv.lock`, `.github/workflows/**`).
+  - Changes touching exclusively documentation (`.md`, `docs/`) or visual assets (`assets/`) intentionally skip CI execution to prevent redundant runner executions.
+- **Workflow Push Permission Requirements:**
+  - GitHub OAuth tokens (`gh auth token`) reject pushing changes to `.github/workflows/` unless the token possesses the `workflow` scope (`gh auth refresh -s workflow`).
+  - In environments where `gh` lacks `workflow` scope, pushes modifying workflow files must be executed via SSH (`git push origin <branch>`).
 - **Mandatory Remote Push at Phase Completion:**
   - At the conclusion of each phase—after all quality gates pass, the progress tracker is updated, and the phase commit is created—**push changes to the remote repository**:
     ```bash

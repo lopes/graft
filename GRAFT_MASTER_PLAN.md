@@ -133,7 +133,7 @@ graft/
 │       │   ├── reconciler.py          # Managed & Custom State Diff / Plan Generator
 │       │   ├── exporter.py            # CSV / JSON ruleset catalog builder (with Git blame)
 │       │   └── navigator.py           # MITRE ATT&CK Navigator v4.5 Layer generator
-│       ├── adapters/                  # Concrete Engine Implementations
+│       ├── engines/                   # Concrete Engine Implementations
 │       │   ├── __init__.py
 │       │   └── secops/                # Google SecOps Adapter (Carries API/UDM burden)
 │       │       ├── __init__.py
@@ -147,7 +147,7 @@ graft/
 │       │   ├── __init__.py
 │       │   ├── main.py                # Top-level argparse router
 │       │   ├── commands_core.py       # graft lint, graft export, graft update-mitre
-│       │   └── commands_secops.py     # graft secops verify, test, diff, apply, managed
+│       │   └── commands_secops.py     # graft secops verify, test, diff, apply, managed, pull
 │       └── data/                      # Bundled Static Assets
 │           └── mitre_attack.json      # Pre-indexed MITRE Enterprise ATT&CK matrix
 ├── rules/
@@ -159,9 +159,8 @@ graft/
     ├── conftest.py                    # Shared pytest fixtures and CLI runner helpers
     ├── unit/                          # 100% Mocked, Sub-Second Unit Tests
     │   ├── core/
-    │   ├── cli/
-    │   └── adapters/
-    ├── adapters/                      # Mock-Transport Contract Tests
+    │   └── cli/
+    ├── engines/                       # Mock-Transport Contract Tests
     │   └── secops/
     └── integration/                   # Live API Tests (Gated by --run-integration)
         └── secops/
@@ -187,6 +186,15 @@ To guarantee state preservation, eliminate hallucination, and prevent context sa
 | **7** | Visibility & Value Tooling | `[x]` | `9953dac` | 2026-09-17 19:29 UTC | Section 6.9 |
 | **8** | Comprehensive Documentation & Repo Hygiene | `[x]` | `5bf68bf` | 2026-09-17 19:57 UTC | Section 6.10 |
 | **9** | CI/CD Pipeline & Branch Governance | `[x]` | `1109fe8` | 2026-09-18 11:54 UTC | All Phases Complete (v1.0.0) |
+
+### Post-v1.0.0 Refinements & Platform Enhancements
+
+| Enhancement / Milestone | Status | Description | Reference |
+| :--- | :---: | :--- | :--- |
+| **SecOps Reverse Sync (`pull`)** | `[x]` | Reverse-synchronize custom rules and managed curated state from live SIEM | `graft secops pull`, `docs/adoption.md` |
+| **Engine Adoption & Ingestion Protocol** | `[x]` | Formal 3-epoch lifecycle documentation (discovery -> enrich -> Git SoT) | `docs/adoption.md` |
+| **CI Workflow Path Filtering** | `[x]` | Restrict CI pipelines to functional code; skip docs/assets runs | `.github/workflows/` |
+| **Documentation & Didactic Overhaul** | `[x]` | Expand CLI reference, add realistic outputs, 100% link & list validation | `docs/`, `README.md` |
 
 ---
 
