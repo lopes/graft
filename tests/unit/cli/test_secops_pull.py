@@ -121,7 +121,7 @@ def test_secops_pull_custom_rules(
 ) -> None:
     custom_dir = tmp_path / "custom"
 
-    with patch("graft.cli.engines.secops.SecOpsClient", return_value=mock_secops_client):
+    with patch("graft.engines.secops.adapter.SecOpsClient", return_value=mock_secops_client):
         exit_code = main(
             [
                 "secops",
@@ -160,7 +160,7 @@ def test_secops_pull_managed_manifest(
 ) -> None:
     manifest_path = tmp_path / "managed.yaml"
 
-    with patch("graft.cli.engines.secops.SecOpsClient", return_value=mock_secops_client):
+    with patch("graft.engines.secops.adapter.SecOpsClient", return_value=mock_secops_client):
         exit_code = main(
             [
                 "secops",
@@ -184,7 +184,7 @@ def test_secops_pull_all_json(
     custom_dir = tmp_path / "custom"
     manifest_path = tmp_path / "managed.yaml"
 
-    with patch("graft.cli.engines.secops.SecOpsClient", return_value=mock_secops_client):
+    with patch("graft.engines.secops.adapter.SecOpsClient", return_value=mock_secops_client):
         exit_code = main(
             [
                 "--json",
@@ -217,7 +217,7 @@ def test_secops_pull_skip_existing_without_force(
     existing_rule = custom_dir / "workspace_nrd_phishing.yaml"
     existing_rule.write_text("existing content", encoding="utf-8")
 
-    with patch("graft.cli.engines.secops.SecOpsClient", return_value=mock_secops_client):
+    with patch("graft.engines.secops.adapter.SecOpsClient", return_value=mock_secops_client):
         exit_code = main(
             [
                 "secops",
@@ -237,7 +237,7 @@ def test_secops_pull_skip_existing_without_force(
     assert existing_rule.read_text(encoding="utf-8") == "existing content"
 
     # With --force, it should overwrite
-    with patch("graft.cli.engines.secops.SecOpsClient", return_value=mock_secops_client):
+    with patch("graft.engines.secops.adapter.SecOpsClient", return_value=mock_secops_client):
         exit_code_force = main(
             [
                 "secops",

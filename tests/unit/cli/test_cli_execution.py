@@ -212,8 +212,8 @@ def test_main_export(capsys: pytest.CaptureFixture[str]) -> None:
 
 def test_main_secops_managed_diff_returns_2_on_drift() -> None:
     with (
-        patch("graft.cli.engines.secops.SecOpsClient"),
-        patch("graft.cli.engines.secops.SecOpsManagedAdapter") as mock_adapter_cls,
+        patch("graft.engines.secops.adapter.SecOpsClient"),
+        patch("graft.engines.secops.adapter.SecOpsManagedAdapter") as mock_adapter_cls,
     ):
         mock_adapter = MagicMock()
         mock_adapter.fetch_managed_state.return_value = ManagedState(
@@ -238,8 +238,8 @@ def test_main_secops_managed_diff_returns_2_on_drift() -> None:
 
 def test_main_secops_managed_diff_returns_0_when_in_sync() -> None:
     with (
-        patch("graft.cli.engines.secops.SecOpsClient"),
-        patch("graft.cli.engines.secops.SecOpsManagedAdapter") as mock_adapter_cls,
+        patch("graft.engines.secops.adapter.SecOpsClient"),
+        patch("graft.engines.secops.adapter.SecOpsManagedAdapter") as mock_adapter_cls,
     ):
         from graft.engines.secops.managed_loader import load_managed_manifest_from_yaml
 
@@ -254,8 +254,8 @@ def test_main_secops_managed_diff_returns_0_when_in_sync() -> None:
 
 def test_main_secops_diff_custom_target_returns_2_when_drift() -> None:
     with (
-        patch("graft.cli.engines.secops.SecOpsClient"),
-        patch("graft.cli.engines.secops.SecOpsDeployerAdapter") as mock_deployer_cls,
+        patch("graft.engines.secops.adapter.SecOpsClient"),
+        patch("graft.engines.secops.adapter.SecOpsDeployerAdapter") as mock_deployer_cls,
     ):
         mock_deployer = MagicMock()
         mock_deployer.list_rules.return_value = ()
@@ -267,8 +267,8 @@ def test_main_secops_diff_custom_target_returns_2_when_drift() -> None:
 
 def test_main_secops_diff_custom_target_returns_0_when_in_sync() -> None:
     with (
-        patch("graft.cli.engines.secops.SecOpsClient"),
-        patch("graft.cli.engines.secops.SecOpsDeployerAdapter") as mock_deployer_cls,
+        patch("graft.engines.secops.adapter.SecOpsClient"),
+        patch("graft.engines.secops.adapter.SecOpsDeployerAdapter") as mock_deployer_cls,
     ):
         from graft.core.loader import load_rule_from_yaml
 
@@ -286,9 +286,9 @@ def test_main_secops_diff_custom_target_returns_0_when_in_sync() -> None:
 
 def test_main_secops_apply_all_targets() -> None:
     with (
-        patch("graft.cli.engines.secops.SecOpsClient"),
-        patch("graft.cli.engines.secops.SecOpsDeployerAdapter") as mock_deployer_cls,
-        patch("graft.cli.engines.secops.SecOpsManagedAdapter") as mock_managed_cls,
+        patch("graft.engines.secops.adapter.SecOpsClient"),
+        patch("graft.engines.secops.adapter.SecOpsDeployerAdapter") as mock_deployer_cls,
+        patch("graft.engines.secops.adapter.SecOpsManagedAdapter") as mock_managed_cls,
     ):
         mock_deployer = MagicMock()
         mock_deployer.list_rules.return_value = ()
@@ -306,9 +306,9 @@ def test_main_secops_apply_all_targets() -> None:
 
 def test_main_secops_diff_all_targets_drift() -> None:
     with (
-        patch("graft.cli.engines.secops.SecOpsClient"),
-        patch("graft.cli.engines.secops.SecOpsDeployerAdapter") as mock_deployer_cls,
-        patch("graft.cli.engines.secops.SecOpsManagedAdapter") as mock_managed_cls,
+        patch("graft.engines.secops.adapter.SecOpsClient"),
+        patch("graft.engines.secops.adapter.SecOpsDeployerAdapter") as mock_deployer_cls,
+        patch("graft.engines.secops.adapter.SecOpsManagedAdapter") as mock_managed_cls,
     ):
         mock_deployer = MagicMock()
         mock_deployer.list_rules.return_value = ()

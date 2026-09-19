@@ -144,7 +144,7 @@ def test_verify_rule_envelope_line_offset_translation(
 def test_secops_rule_content_matches(sample_rule: RuleEnvelope) -> None:
     import dataclasses
 
-    from graft.cli.engines.secops import secops_rule_content_matches
+    from graft.engines.secops.adapter import secops_rule_content_matches
 
     # Direct identical logic
     assert secops_rule_content_matches(sample_rule, sample_rule) is True

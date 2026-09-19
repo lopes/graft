@@ -56,7 +56,7 @@ jobs:
         run: uv run mypy --strict src tests
 
       - name: Gate 4 - Unit and engine test suite (pytest)
-        run: uv run pytest tests/unit tests/engines
+        run: uv run pytest
 
       - name: Gate 5 - Rules & manifests linting (schema + MITRE)
         run: uv run graft lint

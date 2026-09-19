@@ -226,19 +226,36 @@ class EngineCommandController:
             return 0
 
         if replay is None or not replay.is_available():
-            msg = f"Replay harness is not available for {self.manifest.display_name} in {env}."
+            reason = getattr(replay, "unavailable_reason", None)
+            if not reason:
+                reason = f"Staging tenant not configured for {self.manifest.display_name} in {env}."
             if require_staging:
+                err_msg = f"--require-staging was specified but {reason}"
+                if "production" in reason.lower():
+                    err_msg = (
+                        "--require-staging was specified but only production tenant is configured"
+                    )
                 if json_output:
-                    sys.stdout.write(json.dumps({"success": False, "error": msg}) + "\n")
+                    sys.stdout.write(json.dumps({"success": False, "error": err_msg}) + "\n")
                 else:
-                    sys.stderr.write(f"Error: {msg}\n")
+                    sys.stderr.write(f"Error: {err_msg}.\n")
                 return 1
+
             if json_output:
                 sys.stdout.write(
-                    json.dumps({"success": True, "skipped": True, "reason": msg}) + "\n"
+                    json.dumps(
+                        {
+                            "success": True,
+                            "skipped": True,
+                            "reason": reason,
+                            "total": 0,
+                            "results": [],
+                        }
+                    )
+                    + "\n"
                 )
             else:
-                sys.stdout.write(f"[WARNING] {msg}\n")
+                sys.stdout.write(f"[WARNING] Skipping replay tests: {reason}\n")
             return 0
 
         failed = 0
@@ -260,8 +277,10 @@ class EngineCommandController:
                     }
                 )
                 if not json_output:
-                    status = "[PASS]" if res.passed else "[FAIL]"
-                    sys.stdout.write(f"{status} {rule.metadata.name} :: {res.test_id}\n")
+                    if res.passed:
+                        sys.stdout.write(f"[PASS] {rule.metadata.name} :: {res.test_id}\n")
+                    else:
+                        sys.stderr.write(f"[FAIL] {rule.metadata.name} :: {res.test_id}\n")
 
         if json_output:
             sys.stdout.write(
@@ -288,19 +307,56 @@ class EngineCommandController:
         all_rules = getattr(args, "all_rules", False)
         adapter = self.registry.load_adapter(self.manifest.name, env=env)
 
+        run_custom = target in ("custom", "all")
+        run_managed = target in ("managed", "all") and self.manifest.capabilities.managed_rules
+
+        if not all_rules:
+            changed = get_changed_files()
+            manifest_path = Path(f"rules/{self.manifest.name}/managed.yaml").resolve()
+            if (
+                run_managed
+                and manifest_path not in changed
+                and Path(f"rules/{self.manifest.name}/managed.yaml") not in changed
+            ):
+                run_managed = False
+
+            if run_custom:
+                custom_rules = self._load_custom_rules(filter_paths=changed)
+                if not custom_rules:
+                    run_custom = False
+            else:
+                custom_rules = ()
+
+            if not run_custom and not run_managed:
+                if json_output:
+                    sys.stdout.write(
+                        json.dumps(
+                            {
+                                "has_changes": False,
+                                "scoped": True,
+                                "message": _NO_CHANGES_MSG,
+                            }
+                        )
+                        + "\n"
+                    )
+                else:
+                    sys.stdout.write(
+                        f"{_NO_CHANGES_MSG}\n"
+                        f"To scan the entire catalog for tenant drift, "
+                        f"run: graft {self.manifest.name} diff --all\n"
+                    )
+                return 0
+        else:
+            custom_rules = self._load_custom_rules() if run_custom else ()
+
         has_drift = False
-        payload: dict[str, Any] = {"success": True, "target": target, "env": env, "diff": {}}
+        payload: dict[str, Any] = {}
 
         # Custom rules diff
-        if target in ("custom", "all"):
+        if run_custom:
             deployer = adapter.get_deployer()
             if deployer is not None:
-                filter_files = None
-                if not all_rules:
-                    changed = get_changed_files()
-                    filter_files = changed
-
-                desired = self._load_custom_rules(filter_paths=filter_files)
+                desired = custom_rules
                 remote = deployer.list_rules()
 
                 comparator = getattr(deployer, "are_rules_equal", None)
@@ -321,51 +377,32 @@ class EngineCommandController:
                 if diff.has_changes:
                     has_drift = True
 
-                payload["diff"]["custom"] = {
+                payload["custom"] = {
                     "has_changes": diff.has_changes,
-                    "to_create": [r.metadata.name for r in diff.rules_to_create],
-                    "to_update": [r.metadata.name for r in diff.rules_to_update],
-                    "untracked": [r.metadata.name for r in diff.untracked_rules],
+                    "rules_to_create": [r.metadata.name for r in diff.rules_to_create],
+                    "rules_to_update": [r.metadata.name for r in diff.rules_to_update],
+                    "untracked_rules": [r.metadata.name for r in diff.untracked_rules],
                 }
 
                 if not json_output:
-                    if not diff.has_changes:
-                        sys.stdout.write(
-                            f"Custom rules in sync with {self.manifest.display_name} ({env}).\n"
-                        )
-                    else:
-                        sys.stdout.write(
-                            f"Custom rules drift detected for {self.manifest.display_name} "
-                            f"({env}):\n"
-                        )
-                        for r in diff.rules_to_create:
-                            sys.stdout.write(f"  + [CREATE] {r.metadata.name}\n")
-                        for r in diff.rules_to_update:
-                            sys.stdout.write(f"  ~ [UPDATE] {r.metadata.name}\n")
-                        for r in diff.untracked_rules:
-                            sys.stdout.write(f"  ? [UNTRACKED] {r.metadata.name}\n")
+                    sys.stdout.write("=== Custom Rules Diff ===\n")
+                    sys.stdout.write(diff.render_summary() + "\n\n")
 
         # Managed diff
-        if target in ("managed", "all") and self.manifest.capabilities.managed_rules:
+        if run_managed:
             managed_port = adapter.get_managed()
             if managed_port is not None:
-                m_diff = self._diff_managed(managed_port)
+                m_diff = self._diff_managed(managed_port, adapter)
                 if m_diff.has_changes:
                     has_drift = True
-                payload["diff"]["managed"] = {"has_changes": m_diff.has_changes}
+                payload["managed"] = {
+                    "has_changes": m_diff.has_changes,
+                }
                 if not json_output:
-                    if not m_diff.has_changes:
-                        sys.stdout.write(
-                            f"Managed content in sync with {self.manifest.display_name} ({env}).\n"
-                        )
-                    else:
-                        sys.stdout.write(
-                            f"Managed content drift detected for {self.manifest.display_name} "
-                            f"({env}).\n"
-                        )
+                    sys.stdout.write(f"=== {self.manifest.display_name} Managed Content Diff ===\n")
+                    sys.stdout.write(m_diff.render_summary() + "\n\n")
 
         if json_output:
-            payload["has_drift"] = has_drift
             sys.stdout.write(json.dumps(payload, indent=2) + "\n")
 
         return 2 if has_drift else 0
@@ -375,17 +412,55 @@ class EngineCommandController:
         all_rules = getattr(args, "all_rules", False)
         adapter = self.registry.load_adapter(self.manifest.name, env=env)
 
-        payload: dict[str, Any] = {"success": True, "target": target, "env": env, "applied": {}}
+        run_custom = target in ("custom", "all")
+        run_managed = target in ("managed", "all") and self.manifest.capabilities.managed_rules
 
-        if target in ("custom", "all"):
+        if not all_rules:
+            changed = get_changed_files()
+            manifest_path = Path(f"rules/{self.manifest.name}/managed.yaml").resolve()
+            if (
+                run_managed
+                and manifest_path not in changed
+                and Path(f"rules/{self.manifest.name}/managed.yaml") not in changed
+            ):
+                run_managed = False
+
+            if run_custom:
+                custom_rules = self._load_custom_rules(filter_paths=changed)
+                if not custom_rules:
+                    run_custom = False
+            else:
+                custom_rules = ()
+
+            if not run_custom and not run_managed:
+                if json_output:
+                    sys.stdout.write(
+                        json.dumps(
+                            {
+                                "applied": False,
+                                "scoped": True,
+                                "message": _NO_CHANGES_MSG,
+                            }
+                        )
+                        + "\n"
+                    )
+                else:
+                    sys.stdout.write(
+                        f"{_NO_CHANGES_MSG}\n"
+                        f"To apply the entire catalog to reconcile drift, "
+                        f"run: graft {self.manifest.name} apply --all\n"
+                    )
+                return 0
+        else:
+            custom_rules = self._load_custom_rules() if run_custom else ()
+
+        payload: dict[str, Any] = {}
+
+        if run_custom:
             deployer = adapter.get_deployer()
             if deployer is not None:
-                filter_files = None
-                if not all_rules:
-                    changed = get_changed_files()
-                    filter_files = changed
+                desired = custom_rules
 
-                desired = self._load_custom_rules(filter_paths=filter_files)
                 comparator = getattr(deployer, "are_rules_equal", None)
                 if not callable(comparator):
                     comparator = getattr(adapter, "are_rules_equal", None)
@@ -400,18 +475,19 @@ class EngineCommandController:
                     content_comparator=content_comparator,
                     scoped=not all_rules,
                 )
-                payload["applied"]["custom"] = {
+                payload["custom"] = {
+                    "applied": True,
+                    "has_changes": diff.has_changes,
                     "created": len(diff.rules_to_create),
                     "updated": len(diff.rules_to_update),
                 }
                 if not json_output:
                     sys.stdout.write(
-                        f"Applied custom rules to {self.manifest.display_name} ({env}): "
-                        f"{len(diff.rules_to_create)} created, "
+                        f"Applied custom rules: {len(diff.rules_to_create)} created, "
                         f"{len(diff.rules_to_update)} updated.\n"
                     )
 
-        if target in ("managed", "all") and self.manifest.capabilities.managed_rules:
+        if run_managed:
             managed_port = adapter.get_managed()
             if managed_port is not None:
                 manifest_path = Path(f"rules/{self.manifest.name}/managed.yaml")
@@ -420,10 +496,13 @@ class EngineCommandController:
                     if target_state is not None:
                         managed_reconciler = GitOpsReconciler()
                         m_diff = managed_reconciler.apply(target_state, managed_port)
-                        payload["applied"]["managed"] = {"actions": len(m_diff.deployment_diffs)}
+                        payload["managed"] = {
+                            "applied": True,
+                            "has_changes": m_diff.has_changes,
+                        }
                         if not json_output:
                             sys.stdout.write(
-                                f"Applied managed state to {self.manifest.display_name} ({env}).\n"
+                                f"Applied managed state to {self.manifest.display_name} tenant.\n"
                             )
 
         if json_output:
@@ -441,7 +520,7 @@ class EngineCommandController:
         manifest_path = Path(getattr(args, "out", f"rules/{self.manifest.name}/managed.yaml"))
 
         if cmd == "diff":
-            m_diff = self._diff_managed(managed_port)
+            m_diff = self._diff_managed(managed_port, adapter)
             if json_output:
                 sys.stdout.write(json.dumps({"has_changes": m_diff.has_changes}, indent=2) + "\n")
             else:
@@ -486,42 +565,69 @@ class EngineCommandController:
         )
 
         adapter = self.registry.load_adapter(self.manifest.name, env=env)
-        pulled_custom = 0
+        imported_files: list[str] = []
+        skipped_count = 0
+        pulled_state: ManagedState | None = None
+        deployer = adapter.get_deployer()
+        managed_port = adapter.get_managed()
 
-        if target in ("all", "custom"):
-            deployer = adapter.get_deployer()
-            if deployer is not None:
-                out_dir.mkdir(parents=True, exist_ok=True)
-                remote_rules = deployer.list_rules()
-                for rule in remote_rules:
-                    dest_file = out_dir / f"{rule.metadata.name}.yaml"
-                    if dest_file.exists() and not force:
-                        continue
-                    dump_rule_to_yaml(rule, dest_file)
-                    pulled_custom += 1
+        if (
+            target in ("all", "managed")
+            and self.manifest.capabilities.managed_rules
+            and managed_port is not None
+        ):
+            out_manifest.parent.mkdir(parents=True, exist_ok=True)
+            reconciler = GitOpsReconciler()
+            pulled_state = reconciler.pull(managed_port)
+            self._write_managed_state(out_manifest, pulled_state, adapter)
 
-        if target in ("all", "managed") and self.manifest.capabilities.managed_rules:
-            managed_port = adapter.get_managed()
-            if managed_port is not None:
-                reconciler = GitOpsReconciler()
-                state = reconciler.pull(managed_port)
-                self._write_managed_state(out_manifest, state, adapter)
+        if target in ("all", "custom") and deployer is not None:
+            out_dir.mkdir(parents=True, exist_ok=True)
+            remote_rules = deployer.list_rules()
+            deconstruct = getattr(adapter, "deconstruct_rule", None)
+            for r in remote_rules:
+                rule = deconstruct(r) if callable(deconstruct) else r
+                dest_file = out_dir / f"{rule.metadata.name}.yaml"
+                if dest_file.exists() and not force:
+                    skipped_count += 1
+                    continue
+                dump_rule_to_yaml(rule, dest_file)
+                imported_files.append(rule.metadata.name)
 
         if json_output:
-            sys.stdout.write(
-                json.dumps(
-                    {"success": True, "pulled_custom": pulled_custom, "out_dir": str(out_dir)}
-                )
-                + "\n"
-            )
+            payload: dict[str, Any] = {}
+            if target in ("all", "managed") and pulled_state is not None:
+                payload["managed"] = {
+                    "pulled": True,
+                    "destination": str(out_manifest),
+                    "rulesets": len(pulled_state.rulesets),
+                    "exclusions": len(pulled_state.exclusions),
+                }
+            if target in ("all", "custom"):
+                payload["custom"] = {
+                    "pulled": True,
+                    "count": len(imported_files),
+                    "rules": imported_files,
+                }
+            sys.stdout.write(json.dumps(payload, indent=2) + "\n")
         else:
-            sys.stdout.write(
-                f"Successfully pulled {pulled_custom} custom rule(s) from "
-                f"{self.manifest.display_name}.\n"
-            )
+            if target in ("all", "managed") and pulled_state is not None:
+                sys.stdout.write(
+                    f"Pulled managed state: {len(pulled_state.rulesets)} rulesets, "
+                    f"{len(pulled_state.exclusions)} exclusions written to {out_manifest}\n"
+                )
+            if target in ("all", "custom"):
+                skip_msg = (
+                    f" (Skipped {skipped_count} existing files. Use --force to overwrite)"
+                    if skipped_count > 0
+                    else ""
+                )
+                sys.stdout.write(
+                    f"Pulled {len(imported_files)} custom rules into {out_dir}{skip_msg}\n"
+                )
         return 0
 
-    def _diff_managed(self, port: ManagedEnginePort) -> ReconciliationDiff:
+    def _diff_managed(self, port: ManagedEnginePort, adapter: Any) -> ReconciliationDiff:
         manifest_path = Path(f"rules/{self.manifest.name}/managed.yaml")
         reconciler = GitOpsReconciler()
         if not manifest_path.is_file():
@@ -532,9 +638,17 @@ class EngineCommandController:
                 exclusions_to_update=(),
                 untracked_rulesets=(),
             )
-        # Generic diff using reconciler
-        live_state = reconciler.pull(port)
-        return reconciler.diff(live_state, live_state)
+        target_state = self._load_managed_state(manifest_path, adapter)
+        if target_state is None:
+            return ReconciliationDiff(
+                deployment_diffs=(),
+                exclusions_to_create=(),
+                exclusions_to_delete=(),
+                exclusions_to_update=(),
+                untracked_rulesets=(),
+            )
+        current = port.fetch_managed_state()
+        return reconciler.diff(current=current, desired=target_state)
 
     def _load_managed_state(self, path: Path, adapter: Any) -> ManagedState | None:
         if hasattr(adapter, "load_managed_manifest"):

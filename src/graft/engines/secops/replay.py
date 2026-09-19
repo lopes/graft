@@ -26,10 +26,33 @@ class SecOpsReplayAdapter(ReplayHarnessPort):
         self._deployer = deployer or SecOpsDeployerAdapter(client=client)
         self._config = config
 
+    @property
+    def unavailable_reason(self) -> str | None:
+        if self._config is None or not self._config.project or self._config.project == "mock":
+            return "Staging tenant not configured"
+        try:
+            prod_config = SecOpsConfig.from_env(target="prod")
+            if self._config.is_same_instance(prod_config):
+                return (
+                    "Replay tests require a dedicated staging tenant and cannot "
+                    "run against production coordinates."
+                )
+        except Exception as exc:
+            logger.debug("Failed checking prod config for replay coordinates: %s", exc)
+        return None
+
     def is_available(self) -> bool:
         if self._config is None:
             return False
-        return bool(self._config.project and self._config.project != "mock")
+        if not (self._config.project and self._config.project != "mock"):
+            return False
+        try:
+            prod_config = SecOpsConfig.from_env(target="prod")
+            if self._config.is_same_instance(prod_config):
+                return False
+        except Exception as exc:
+            logger.debug("Failed checking prod config for replay coordinates: %s", exc)
+        return True
 
     def run_test_vector(self, rule: RuleEnvelope, vector: TestVector) -> ReplayResult:
         rule_id: str | None = None
