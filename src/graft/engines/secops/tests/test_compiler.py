@@ -81,6 +81,22 @@ def test_verify_syntax_success(mock_client: MagicMock) -> None:
     )
 
 
+def test_verify_syntax_raw_logic_synthesizes_wrapper(mock_client: MagicMock) -> None:
+    mock_client.request.return_value = {"success": True}
+
+    adapter = SecOpsCompilerAdapter(client=mock_client)
+    raw_logic = 'events:\n  $e.metadata.event_type = "USER_LOGIN"\ncondition:\n  $e'
+    result = adapter.verify_syntax(raw_logic)
+
+    assert result.success is True
+    # Verify request payload contains synthetic rule header and closing brace
+    called_body = mock_client.request.call_args[1]["body"]
+    rule_text = called_body["ruleText"]
+    assert "rule verify_syntax_rule {" in rule_text
+    assert raw_logic in rule_text
+    assert rule_text.strip().endswith("}")
+
+
 def test_verify_syntax_compilation_error(mock_client: MagicMock) -> None:
     mock_client.request.return_value = {
         "success": False,

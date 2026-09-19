@@ -23,6 +23,9 @@ class MockCompilerAdapter(RuleCompilerPort):
             return CompilationResult(success=False, diagnostics=())
         return CompilationResult(success=True)
 
+    def verify_rule(self, rule: RuleEnvelope) -> CompilationResult:
+        return self.verify_syntax(rule.logic)
+
 
 class MockDeployerAdapter(RuleDeployerPort):
     def __init__(self) -> None:

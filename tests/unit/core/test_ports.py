@@ -24,6 +24,9 @@ class MockCompiler:
             return CompilationResult(success=False)
         return CompilationResult(success=True)
 
+    def verify_rule(self, rule: RuleEnvelope) -> CompilationResult:
+        return self.verify_syntax(rule.logic)
+
 
 class MockDeployer:
     def __init__(self) -> None:

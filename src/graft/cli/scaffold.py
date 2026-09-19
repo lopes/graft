@@ -123,12 +123,16 @@ class {class_prefix}Config:
     compiler_py = engine_dir / "compiler.py"
     compiler_py.write_text(
         f"""from graft.core.models.compiler import CompilationResult
+from graft.core.models.rule import RuleEnvelope
 from graft.core.ports.compiler import RuleCompilerPort
 
 
 class {class_prefix}CompilerAdapter(RuleCompilerPort):
     def verify_syntax(self, rule_text: str) -> CompilationResult:
         return CompilationResult(success=True)
+
+    def verify_rule(self, rule: RuleEnvelope) -> CompilationResult:
+        return self.verify_syntax(rule.logic)
 """,
         encoding="utf-8",
     )

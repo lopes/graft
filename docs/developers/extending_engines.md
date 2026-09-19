@@ -236,6 +236,10 @@ class SentinelCompilerAdapter(RuleCompilerPort):
                 success=False,
                 errors=(CompilationError(line=1, message=f"API error: {exc}"),),
             )
+
+    def verify_rule(self, rule: RuleEnvelope) -> CompilationResult:
+        """Verifies rule envelope syntax."""
+        return self.verify_syntax(rule.logic)
 ```
 
 ---

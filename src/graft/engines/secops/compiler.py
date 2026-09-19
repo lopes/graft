@@ -142,12 +142,25 @@ class SecOpsCompilerAdapter(RuleCompilerPort):
         self._client = client
 
     def verify_syntax(self, rule_text: str) -> CompilationResult:
+        rule_match = _RULE_HEADER_REGEX.search(rule_text)
+        if rule_match:
+            final_text = rule_text
+            header_offset = 0
+        else:
+            header_lines = [
+                "rule verify_syntax_rule {",
+                "  meta:",
+                '    id = "00000000-0000-0000-0000-000000000000"',
+            ]
+            header_offset = len(header_lines)
+            final_text = "\n".join(header_lines) + "\n" + rule_text.strip() + "\n}\n"
+
         response = self._client.request(
             "POST",
             ":verifyRuleText",
-            body={"ruleText": rule_text},
+            body={"ruleText": final_text},
         )
-        return self._parse_response(response, header_offset=0, rule_text=rule_text)
+        return self._parse_response(response, header_offset=header_offset, rule_text=final_text)
 
     def verify_rule(self, rule: RuleEnvelope) -> CompilationResult:
         rule_text, header_offset = synthesize_yaral_rule(rule)

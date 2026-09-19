@@ -122,7 +122,11 @@ class EngineCommandController:
         for path in verify_paths:
             try:
                 rule = load_rule_from_yaml(path)
-                result = compiler.verify_syntax(rule.logic)
+                result = (
+                    compiler.verify_rule(rule)
+                    if hasattr(compiler, "verify_rule")
+                    else compiler.verify_syntax(rule.logic)
+                )
                 if not result.success:
                     failed_count += 1
                     err_lines = "; ".join(
