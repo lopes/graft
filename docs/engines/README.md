@@ -51,5 +51,6 @@ For example, the Google SecOps engine mounts:
 
 ## 3. Available Documentation
 
-- **[Google SecOps Engine (`secops.md`)](secops.md):** Configuration, IAM permissions, dual-tenant staging vs prod topologies, single-tenant lab mode, and API mechanics.
-- **[Extending & Bootstrapping Engines (`extending_engines.md`)](extending_engines.md):** Step-by-step developer tutorial on bootstrapping a new engine adapter (e.g. CrowdStrike, Microsoft Sentinel, Splunk) via `graft new engine`.
+- **[Google SecOps Engine Reference (`secops.md`)](secops.md):** Configuration, IAM permissions, dual-tenant staging vs prod topologies, single-tenant lab mode, and API mechanics.
+- **[Pluggable Engine Adapter Framework](../developers/framework.md):** Architectural specification, abstraction layers, Core ports, and dynamic capabilities-driven routing.
+- **[Extending & Bootstrapping Engines](../developers/extending_engines.md):** Step-by-step developer tutorial on bootstrapping a new engine adapter (e.g. CrowdStrike, Microsoft Sentinel, Splunk) via `graft new engine`.

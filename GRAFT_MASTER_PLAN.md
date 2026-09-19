@@ -95,15 +95,29 @@ graft/
 ├── SECURITY.md                        # Vulnerability disclosure policy
 ├── pyproject.toml                     # uv_build backend, dependencies, ruff/mypy configs
 ├── uv.lock
-├── docs/                              # Comprehensive Documentation & Runbooks
-│   ├── quickstart.md                  # Developer & Engineer Onboarding Guide
-│   ├── architecture.md                # Hexagonal Architecture & Port Contracts
-│   ├── adapters/
-│   │   └── secops.md                  # SecOps API, IAM, Coordinates & Endpoints
-│   └── runbooks/
-│       ├── authoring-custom-rules.md  # 5-Block Envelope & YARA-L Authoring
-│       ├── managing-curated-rules.md  # Managed Manifest & Exclusion Tuning
-│       └── staging-replay-testing.md  # Replay Harness & Triage
+├── docs/                              # Persona-Driven Documentation Hub
+│   ├── README.md                      # Master Documentation Hub & Journey Routing
+│   ├── architecture.md                # System Design & Architecture Reference
+│   ├── analysts/                      # Detection Engineer / Analyst Track
+│   │   ├── README.md                  # Analyst Overview & Daily Lifecycle
+│   │   ├── recipes.md                 # Detection Recipes Cookbook (CRUD, Testing, Runbooks)
+│   │   ├── rule_authoring.md          # 5-Block Envelope Specification
+│   │   ├── replay_testing.md          # Synthetic Replay Testing Guide
+│   │   └── visibility_and_matrix.md   # ATT&CK Navigator & Catalog Generation
+│   ├── operators/                     # Platform & SecOps Engineer Track
+│   │   ├── README.md                  # Operations Lifecycle Overview
+│   │   ├── adoption.md                # 3-Epoch Brownfield Ingestion & Cutover
+│   │   ├── gitops_reconciliation.md   # Scoped vs. Full Catalog Reconciliation
+│   │   ├── cicd_and_infrastructure.md # WIF OIDC Setup & Pipeline Automation
+│   │   └── security.md                # Zero-Trust Security & Staging Isolation
+│   ├── developers/                    # Core Developer Track
+│   │   ├── README.md                  # Developer Onboarding & Environment Setup
+│   │   ├── framework.md               # Pluggable Engine Adapter Framework & Protocols
+│   │   ├── extending_engines.md       # Building New Engines Tutorial (graft new engine)
+│   │   └── quality_and_standards.md   # Strict Stdlib-First Discipline, TDD & Commits
+│   └── engines/
+│       ├── README.md                  # Engine Taxonomy & Capabilities Routing
+│       └── secops.md                  # Google SecOps Engine Reference Guide
 ├── schemas/
 │   ├── base_rule.schema.json          # Engine-agnostic 5-block base envelope schema
 │   ├── secops_custom.schema.json      # Google SecOps custom rule extension (UDM test vectors, deployment)
@@ -196,6 +210,7 @@ To guarantee state preservation, eliminate hallucination, and prevent context sa
 | **CI Workflow Path Filtering** | `[x]` | Restrict CI pipelines to functional code; skip docs/assets runs | `.github/workflows/` |
 | **Documentation & Didactic Overhaul** | `[x]` | Expand CLI reference, add realistic outputs, 100% link & list validation | `docs/`, `README.md` |
 | **Pluggable Engine Adapter Framework** | `[x]` | Encapsulated engine modules, dynamic manifest discovery, and capabilities-driven CLI routing | `src/graft/engines/`, `docs/architecture.md` |
+| **Documentation Persona Reorganization** | `[x]` | 3-track persona documentation (analysts, operators, developers), framework spec, recipes cookbook | `docs/`, `README.md` |
 
 ---
 
