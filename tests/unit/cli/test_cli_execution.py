@@ -155,16 +155,24 @@ def test_main_new_engine(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Non
     Path("schemas/base_rule.schema.json").write_text(base_schema_content, encoding="utf-8")
     exit_code = main(["new", "engine", "testengine"])
     assert exit_code == 0
-    assert (tmp_path / "src" / "graft" / "engines" / "testengine").is_dir()
+    engine_dir = tmp_path / "src" / "graft" / "engines" / "testengine"
+    assert engine_dir.is_dir()
+    assert (engine_dir / "engine.yaml").is_file()
+    assert (engine_dir / "adapter.py").is_file()
 
 
 def test_main_secops_new_rule(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     base_schema_content = Path("schemas/base_rule.schema.json").read_text(encoding="utf-8")
-    secops_schema_content = Path("schemas/secops_custom.schema.json").read_text(encoding="utf-8")
+    secops_schema_content = Path("src/graft/engines/secops/schemas/rule.schema.json").read_text(
+        encoding="utf-8"
+    )
     monkeypatch.chdir(tmp_path)
     (tmp_path / "schemas").mkdir(parents=True)
+    (tmp_path / "src" / "graft" / "engines" / "secops" / "schemas").mkdir(parents=True)
     Path("schemas/base_rule.schema.json").write_text(base_schema_content, encoding="utf-8")
-    Path("schemas/secops_custom.schema.json").write_text(secops_schema_content, encoding="utf-8")
+    Path("src/graft/engines/secops/schemas/rule.schema.json").write_text(
+        secops_schema_content, encoding="utf-8"
+    )
     exit_code = main(["secops", "new", "test_login_anomaly"])
     assert exit_code == 0
     rule_file = tmp_path / "rules" / "secops" / "custom" / "test_login_anomaly.yaml"
@@ -173,11 +181,16 @@ def test_main_secops_new_rule(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -
 
 def test_main_new_rule_via_root_command(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     base_schema_content = Path("schemas/base_rule.schema.json").read_text(encoding="utf-8")
-    secops_schema_content = Path("schemas/secops_custom.schema.json").read_text(encoding="utf-8")
+    secops_schema_content = Path("src/graft/engines/secops/schemas/rule.schema.json").read_text(
+        encoding="utf-8"
+    )
     monkeypatch.chdir(tmp_path)
     (tmp_path / "schemas").mkdir(parents=True)
+    (tmp_path / "src" / "graft" / "engines" / "secops" / "schemas").mkdir(parents=True)
     Path("schemas/base_rule.schema.json").write_text(base_schema_content, encoding="utf-8")
-    Path("schemas/secops_custom.schema.json").write_text(secops_schema_content, encoding="utf-8")
+    Path("src/graft/engines/secops/schemas/rule.schema.json").write_text(
+        secops_schema_content, encoding="utf-8"
+    )
     exit_code = main(["new", "rule", "test_root_new_rule", "--engine", "secops"])
     assert exit_code == 0
     rule_file = tmp_path / "rules" / "secops" / "custom" / "test_root_new_rule.yaml"
@@ -202,8 +215,8 @@ def test_main_export(capsys: pytest.CaptureFixture[str]) -> None:
 
 def test_main_secops_managed_diff_returns_2_on_drift() -> None:
     with (
-        patch("graft.cli.engines.secops.SecOpsClient"),
-        patch("graft.cli.engines.secops.SecOpsManagedAdapter") as mock_adapter_cls,
+        patch("graft.engines.secops.adapter.SecOpsClient"),
+        patch("graft.engines.secops.adapter.SecOpsManagedAdapter") as mock_adapter_cls,
     ):
         mock_adapter = MagicMock()
         mock_adapter.fetch_managed_state.return_value = ManagedState(
@@ -228,8 +241,8 @@ def test_main_secops_managed_diff_returns_2_on_drift() -> None:
 
 def test_main_secops_managed_diff_returns_0_when_in_sync() -> None:
     with (
-        patch("graft.cli.engines.secops.SecOpsClient"),
-        patch("graft.cli.engines.secops.SecOpsManagedAdapter") as mock_adapter_cls,
+        patch("graft.engines.secops.adapter.SecOpsClient"),
+        patch("graft.engines.secops.adapter.SecOpsManagedAdapter") as mock_adapter_cls,
     ):
         from graft.engines.secops.managed_loader import load_managed_manifest_from_yaml
 
@@ -244,8 +257,8 @@ def test_main_secops_managed_diff_returns_0_when_in_sync() -> None:
 
 def test_main_secops_diff_custom_target_returns_2_when_drift() -> None:
     with (
-        patch("graft.cli.engines.secops.SecOpsClient"),
-        patch("graft.cli.engines.secops.SecOpsDeployerAdapter") as mock_deployer_cls,
+        patch("graft.engines.secops.adapter.SecOpsClient"),
+        patch("graft.engines.secops.adapter.SecOpsDeployerAdapter") as mock_deployer_cls,
     ):
         mock_deployer = MagicMock()
         mock_deployer.list_rules.return_value = ()
@@ -257,8 +270,8 @@ def test_main_secops_diff_custom_target_returns_2_when_drift() -> None:
 
 def test_main_secops_diff_custom_target_returns_0_when_in_sync() -> None:
     with (
-        patch("graft.cli.engines.secops.SecOpsClient"),
-        patch("graft.cli.engines.secops.SecOpsDeployerAdapter") as mock_deployer_cls,
+        patch("graft.engines.secops.adapter.SecOpsClient"),
+        patch("graft.engines.secops.adapter.SecOpsDeployerAdapter") as mock_deployer_cls,
     ):
         from graft.core.loader import load_rule_from_yaml
 
@@ -276,9 +289,9 @@ def test_main_secops_diff_custom_target_returns_0_when_in_sync() -> None:
 
 def test_main_secops_apply_all_targets() -> None:
     with (
-        patch("graft.cli.engines.secops.SecOpsClient"),
-        patch("graft.cli.engines.secops.SecOpsDeployerAdapter") as mock_deployer_cls,
-        patch("graft.cli.engines.secops.SecOpsManagedAdapter") as mock_managed_cls,
+        patch("graft.engines.secops.adapter.SecOpsClient"),
+        patch("graft.engines.secops.adapter.SecOpsDeployerAdapter") as mock_deployer_cls,
+        patch("graft.engines.secops.adapter.SecOpsManagedAdapter") as mock_managed_cls,
     ):
         mock_deployer = MagicMock()
         mock_deployer.list_rules.return_value = ()
@@ -296,9 +309,9 @@ def test_main_secops_apply_all_targets() -> None:
 
 def test_main_secops_diff_all_targets_drift() -> None:
     with (
-        patch("graft.cli.engines.secops.SecOpsClient"),
-        patch("graft.cli.engines.secops.SecOpsDeployerAdapter") as mock_deployer_cls,
-        patch("graft.cli.engines.secops.SecOpsManagedAdapter") as mock_managed_cls,
+        patch("graft.engines.secops.adapter.SecOpsClient"),
+        patch("graft.engines.secops.adapter.SecOpsDeployerAdapter") as mock_deployer_cls,
+        patch("graft.engines.secops.adapter.SecOpsManagedAdapter") as mock_managed_cls,
     ):
         mock_deployer = MagicMock()
         mock_deployer.list_rules.return_value = ()
@@ -314,3 +327,27 @@ def test_main_secops_diff_all_targets_drift() -> None:
 
         exit_code = main(["secops", "diff", "--all", "--env", "staging"])
         assert exit_code == 2
+
+
+def test_main_new_rule_execution(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    custom_target = tmp_path / "custom_out.yaml"
+    exit_code = main(
+        ["new", "rule", "my_new_rule", "--engine", "secops", "--out", str(custom_target)]
+    )
+    assert exit_code == 0
+    assert custom_target.exists()
+    captured = capsys.readouterr()
+    assert "Scaffolded rule template at:" in captured.out
+
+
+def test_main_new_rule_json_output(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    custom_target = tmp_path / "custom_out.yaml"
+    exit_code = main(
+        ["--json", "new", "rule", "json_rule", "--engine", "secops", "--out", str(custom_target)]
+    )
+    assert exit_code == 0
+    assert custom_target.exists()
+    captured = capsys.readouterr()
+    data = json.loads(captured.out)
+    assert data["success"] is True
+    assert data["path"] == str(custom_target)

@@ -214,9 +214,9 @@ sequenceDiagram
 
 Graft provides two operating modes to manage out-of-band modifications made directly in the SIEM web console:
 
-- **Mode B (Scoped PR Operations &mdash; Default):**
+- **Scoped Reconciliation (Default):**
   Commands like `graft secops diff` and `graft secops apply` inspect Git diffs (`HEAD~1` or branch diff) and evaluate only rules modified in the current change scope. This keeps daily CI/CD operations fast and lightweight.
-- **Mode A (Full Catalog Reconciliation &mdash; `--all`):**
+- **Full Catalog Reconciliation (`--all`):**
   Running `graft secops diff --all` or `graft secops apply --all` ignores Git change history and evaluates every single rule and managed deployment against the live tenant:
   - **Drift Discovery:** `graft secops diff --all --env production` detects discrepancies and exits with code `2`.
   - **Authoritative Healing:** `graft secops apply --all --env production` overwrites any console edits, reconciling the tenant back to the exact version declared in Git.

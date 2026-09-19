@@ -14,33 +14,38 @@ def test_scaffold_engine_creates_structure_and_files(tmp_path: Path) -> None:
     env_example = tmp_path / ".env.example"
     env_example.write_text("# Base .env.example\n", encoding="utf-8")
 
+    from graft.core.engine_registry import EngineRegistry
+
     scaffold_engine("sentinel", project_root=tmp_path)
 
-    # 1. Engine code in src/graft/engines/sentinel
+    # 1. Encapsulated engine package in src/graft/engines/sentinel
     engine_dir = tmp_path / "src" / "graft" / "engines" / "sentinel"
     assert (engine_dir / "__init__.py").exists()
+    assert (engine_dir / "engine.yaml").exists()
+    assert (engine_dir / "adapter.py").exists()
     assert (engine_dir / "config.py").exists()
     assert (engine_dir / "compiler.py").exists()
     assert (engine_dir / "deployer.py").exists()
-    assert (engine_dir / "managed.py").exists()
+    assert (engine_dir / "README.md").exists()
 
-    # 2. Schema in schemas/sentinel_custom.schema.json
-    schema_file = tmp_path / "schemas" / "sentinel_custom.schema.json"
+    # 2. Co-located schema in src/graft/engines/sentinel/schemas/rule.schema.json
+    schema_file = engine_dir / "schemas" / "rule.schema.json"
     assert schema_file.exists()
 
-    # 3. Rules directories and managed manifest
+    # 3. Rules directory
     rules_dir = tmp_path / "rules" / "sentinel" / "custom"
     assert rules_dir.is_dir()
-    managed_file = tmp_path / "rules" / "sentinel" / "managed.yaml"
-    assert managed_file.exists()
 
-    # 4. CLI router in src/graft/cli/engines/sentinel.py
-    cli_file = tmp_path / "src" / "graft" / "cli" / "engines" / "sentinel.py"
-    assert cli_file.exists()
+    # 4. In-tree tests in src/graft/engines/sentinel/tests/
+    assert (engine_dir / "tests" / "test_compiler.py").exists()
+    assert (engine_dir / "tests" / "test_adapter.py").exists()
 
-    # 5. Tests skeleton in tests/engines/sentinel/test_compiler.py
-    test_file = tmp_path / "tests" / "engines" / "sentinel" / "test_compiler.py"
-    assert test_file.exists()
+    # 5. Manifest validates and is discoverable via EngineRegistry
+    registry = EngineRegistry(engines_dir=tmp_path / "src" / "graft" / "engines")
+    manifest = registry.get("sentinel")
+    assert manifest.name == "sentinel"
+    assert manifest.display_name == "Sentinel"
+    assert manifest.capabilities.custom_rules is True
 
     # 6. .env.example updated with engine section
     assert "# ENGINE: SENTINEL" in env_example.read_text(encoding="utf-8")
@@ -82,3 +87,12 @@ def test_scaffold_rule_custom_destination(tmp_path: Path) -> None:
     rule_path = scaffold_rule("secops", "custom_rule", project_root=tmp_path, out_path=custom_out)
     assert rule_path == custom_out
     assert custom_out.exists()
+
+
+def test_scaffold_rule_custom_destination_string(tmp_path: Path) -> None:
+    custom_out_str = str(tmp_path / "str_dir" / "my_str_rule.yaml")
+    rule_path = scaffold_rule(
+        "secops", "custom_rule_str", project_root=tmp_path, out_path=custom_out_str
+    )
+    assert str(rule_path) == custom_out_str
+    assert rule_path.exists()

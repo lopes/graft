@@ -623,7 +623,7 @@ To bootstrap Graft without manual transcription:
    ```
    Merging to `main` completes the cutover, declaring Git as the permanent, authoritative Source of Truth.
 
-For full architectural details, see the **[Engine Adoption & Lifecycle Guide](../operators/adoption.md)**.
+For full architectural details, see the **[Engine Adoption & Lifecycle Guide](../../../../docs/operators/adoption.md)**.
 
 
 

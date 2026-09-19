@@ -73,15 +73,15 @@ rulesets:
 
 ---
 
-## 4. Reconciliation Modes: Scoped (Mode B) vs. Full Catalog (Mode A)
+## 4. Reconciliation Modes: Scoped vs. Full Catalog
 
 Graft provides two execution modes to balance rapid pull request evaluation with comprehensive tenant self-healing:
 
-| Parameter | Mode B: Scoped Reconciliation (Default) | Mode A: Full Reconciliation (`--all` / `--full`) |
+| Parameter | Scoped Reconciliation (Default) | Full Catalog Reconciliation (`--all` / `--full`) |
 | :--- | :--- | :--- |
-| **Flag** | *(No flag, default)* | `--all` or `--full` |
+| **CLI Flag** | *(No flag, default)* | `--all` or `--full` |
 | **Evaluation Scope** | Detection files modified in Git branch / working tree | Every detection rule and ruleset in the entire repository |
-| **Use Case** | Local development, feature branches, PR validation gates | Merge to `main`, scheduled cron drift detection |
+| **Use Case** | Local development, feature branches, PR validation gates | Mainline merge to `main`, scheduled cron drift detection |
 | **Drift Behavior** | Ignores untouched drifted tenant rules | Identifies out-of-band console edits across entire catalog |
 | **Convergence** | Reconciles only touched files | Overwrites console edits and restores Git desired state |
 
@@ -94,10 +94,10 @@ Graft provides two execution modes to balance rapid pull request evaluation with
 Compares repository detection state against the live SecOps tenant:
 
 ```bash
-# Mode B (Scoped): Compare only detection files modified in your branch
+# Scoped Reconciliation: Compare only detection files modified in your branch
 graft secops diff --env production
 
-# Mode A (Full): Scan entire tenant catalog for out-of-band console drift
+# Full Catalog Reconciliation: Scan entire tenant catalog for out-of-band console drift
 graft secops diff --all --env production
 
 # Target only custom rules
@@ -132,10 +132,10 @@ graft secops diff --target managed --env production
 Applies the desired repository state directly to the Google SecOps tenant:
 
 ```bash
-# Mode B (Scoped): Apply only detection files modified in your branch
+# Scoped Reconciliation: Apply only detection files modified in your branch
 graft secops apply --env production
 
-# Mode A (Full): Enforce full catalog convergence, healing all console drift
+# Full Catalog Reconciliation: Enforce full catalog convergence, healing all console drift
 graft secops apply --all --env production
 
 # Apply custom rules only

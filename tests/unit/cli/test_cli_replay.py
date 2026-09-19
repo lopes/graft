@@ -64,7 +64,7 @@ def test_cli_test_execution_all_passed(
     monkeypatch.setenv("GRAFT_SECOPS_STAGING_LOCATION", "us")
     monkeypatch.setenv("GRAFT_SECOPS_STAGING_INSTANCE_ID", "test-inst")
 
-    with patch("graft.cli.engines.secops.SecOpsReplayAdapter") as mock_adapter_cls:
+    with patch("graft.engines.secops.adapter.SecOpsReplayAdapter") as mock_adapter_cls:
         mock_adapter = MagicMock()
         mock_adapter.run_test_vector.return_value = ReplayResult(
             test_id="test_powershell_download_cradle",
@@ -90,7 +90,7 @@ def test_cli_test_execution_assertion_failed(
     monkeypatch.setenv("GRAFT_SECOPS_STAGING_LOCATION", "us")
     monkeypatch.setenv("GRAFT_SECOPS_STAGING_INSTANCE_ID", "test-inst")
 
-    with patch("graft.cli.engines.secops.SecOpsReplayAdapter") as mock_adapter_cls:
+    with patch("graft.engines.secops.adapter.SecOpsReplayAdapter") as mock_adapter_cls:
         mock_adapter = MagicMock()
         mock_adapter.run_test_vector.return_value = ReplayResult(
             test_id="test_powershell_download_cradle",
@@ -116,7 +116,7 @@ def test_cli_test_json_output(
     monkeypatch.setenv("GRAFT_SECOPS_STAGING_LOCATION", "us")
     monkeypatch.setenv("GRAFT_SECOPS_STAGING_INSTANCE_ID", "test-inst")
 
-    with patch("graft.cli.engines.secops.SecOpsReplayAdapter") as mock_adapter_cls:
+    with patch("graft.engines.secops.adapter.SecOpsReplayAdapter") as mock_adapter_cls:
         mock_adapter = MagicMock()
         mock_adapter.run_test_vector.return_value = ReplayResult(
             test_id="test_powershell_download_cradle",

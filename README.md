@@ -59,19 +59,17 @@ flowchart TD
 
 ---
 
-## Documentation
+## Choose Your Journey
 
-For full guides and architecture specifications, see the **[Graft Documentation Index (docs/README.md)](docs/README.md)**:
+Graft's documentation is organized around **three core engineering personas**:
 
-- **[System Architecture](docs/architecture.md):** Hexagonal Ports & Adapters and stdlib runtime policy.
-- **[Engine Adoption & Lifecycle Guide](docs/adoption.md):** The 3-epoch lifecycle: brownfield ingestion (`pull`), baseline enrichment, and declaring Git as the authoritative Source of Truth.
-- **[Rule Authoring Guide](docs/rule_authoring.md):** 5-block envelope format, YARA-L logic, and runbooks.
-- **[GitOps Reconciliation](docs/gitops_reconciliation.md):** Managing vendor-curated content, drift detection (`diff`), and synchronization (`apply`, `pull`).
-- **[Synthetic Replay Testing](docs/replay_testing.md):** Dynamic verification using quarantined rules and synthetic UDM event injection.
-- **[Visibility, Matrix & Catalogs](docs/visibility_and_matrix.md):** MITRE ATT&CK matrix, Navigator v4 layers, and Git author attribution.
-- **[Google SecOps Engine Setup](docs/engines/secops.md):** Credentials, dual-tenant vs single-tenant lab topologies, and API mechanics.
-- **[Extending Engines Tutorial](docs/engines/extending_engines.md):** Developer guide to scaffolding and implementing new engine adapters.
-- **[Security Architecture](docs/security.md):** Workload Identity Federation, OIDC token exchange, fork isolation, and audit logging.
+| Persona | Focus & Deliverables | Primary Guide |
+| :--- | :--- | :--- |
+| 🎯 **Detection Engineer / Analyst** | Authors, modifies, lints, tests, and diffs detection rules on a daily basis. Previews pull requests and consults operational runbooks. | **[Analyst Guide](docs/analysts/README.md)**<br/>📖 **[Detection Recipes Cookbook](docs/analysts/recipes.md)** |
+| 🛠️ **Platform & SecOps Engineer** | Bootstraps Graft into existing SIEM tenants, configures CI/CD pipelines, handles authentication (WIF/OIDC), and maintains production sync. | **[Operator Guide](docs/operators/README.md)**<br/>🔄 **[Day 0 Ingestion & Reverse Sync](docs/operators/adoption.md)** |
+| 💻 **Core Developer** | Fixes bugs in core services, extends port protocols, builds new engine adapters, and enforces software architecture quality gates. | **[Developer Guide](docs/developers/README.md)**<br/>🔌 **[Pluggable Adapter Framework](docs/developers/framework.md)** |
+
+For the complete architectural overview and philosophy, visit the **[Graft Documentation Hub (docs/README.md)](docs/README.md)**.
 
 ---
 
@@ -104,7 +102,7 @@ git config core.hooksPath .githooks
 
 ### Brownfield Adoption: Fastest Path (Day 0 Ingestion)
 
-When adopting Graft on an existing SIEM instance, follow the 3-step bootstrap workflow (see [docs/adoption.md](docs/adoption.md) for full architectural specification):
+When adopting Graft on an existing SIEM instance, follow the 3-step bootstrap workflow (see [docs/operators/adoption.md](docs/operators/adoption.md) for full architectural specification):
 
 ```bash
 # 1. Reverse sync existing custom rules & curated content from live tenant
@@ -161,16 +159,16 @@ graft secops test --require-staging
 
 #### 4. GitOps Drift Detection & State Reconciliation
 ```bash
-# Preview changes for rules modified in current branch (Mode B: scoped)
+# Preview changes for rules modified in current branch (Scoped Reconciliation: default)
 graft secops diff --env production
 
-# Scan entire tenant catalog for out-of-band console drift (Mode A: full)
+# Scan entire tenant catalog for out-of-band console drift (Full Catalog Reconciliation: --all)
 graft secops diff --all --env production
 
-# Apply scoped branch changes to tenant (Mode B)
+# Apply scoped branch changes to tenant (Scoped Reconciliation)
 graft secops apply --env production
 
-# Force complete tenant convergence back to Git state, healing any console drift (Mode A)
+# Force complete tenant convergence back to Git state, healing any console drift (Full Catalog Reconciliation)
 graft secops apply --all --env production
 
 # Target only custom rules or only vendor-managed curated content

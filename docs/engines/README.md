@@ -6,22 +6,33 @@ In Graft, **Engines** are driven adapters that connect the platform-agnostic det
 
 ## 1. Engine Directory Taxonomy
 
-Every engine in Graft has a consistent physical structure across source code, rules, and schemas:
+Every engine in Graft is packaged as a self-contained, encapsulated module under `src/graft/engines/<engine>/`:
 
 ```text
 graft/
-├── src/graft/engines/<engine>/    # Engine adapter implementation & REST clients
-├── rules/<engine>/
-│   ├── custom/                    # 5-block envelope custom rules (.yaml)
-│   └── managed.yaml               # Declarative vendor-managed content manifest
-└── schemas/<engine>_custom.schema.json  # Engine-specific schema extensions
+├── src/graft/engines/<engine>/
+│   ├── engine.yaml           # Declarative manifest (capabilities, envs, vars)
+│   ├── adapter.py            # Primary EngineAdapter protocol implementation
+│   ├── config.py             # Tenant coordinates & auth resolution
+│   ├── compiler.py           # Syntax verification (RuleCompilerPort)
+│   ├── deployer.py           # Remote rule CRUD (RuleDeployerPort)
+│   ├── managed.py            # Managed state sync (ManagedEnginePort)
+│   ├── replay.py             # Synthetic replay harness (ReplayHarnessPort)
+│   ├── schemas/              # Co-located engine schemas (rule.schema.json)
+│   ├── tests/                # In-tree unit & contract tests
+│   └── README.md             # Engine-specific documentation
+└── rules/<engine>/
+    ├── custom/               # 5-block envelope custom rules (.yaml)
+    └── managed.yaml          # Declarative vendor-managed content manifest
 ```
 
 ---
 
-## 2. Pluggable Discovery & CLI Routing
+## 2. Pluggable Discovery & Capabilities-Driven CLI Routing
 
-Engines are automatically discovered at runtime by inspecting subdirectories of `src/graft/engines/`. When an engine provides a `register_subcommand(subparsers)` hook in `src/graft/cli/engines/<engine>.py`, Graft dynamically mounts its top-level commands into the CLI router:
+Engines are discovered dynamically at runtime by [`EngineRegistry`](file:///usr/local/google/home/joelopes/Projects/graft/src/graft/core/engine_registry.py), which parses and validates each engine's `engine.yaml` against `schemas/engine_manifest.schema.json`.
+
+Based on the capabilities declared in `engine.yaml`, [`EngineCommandController`](file:///usr/local/google/home/joelopes/Projects/graft/src/graft/cli/engine_controller.py) automatically provisions subcommands:
 
 ```bash
 graft <engine> [subcommands...]
@@ -40,5 +51,6 @@ For example, the Google SecOps engine mounts:
 
 ## 3. Available Documentation
 
-- **[Google SecOps Engine (`secops.md`)](secops.md):** Configuration, IAM permissions, dual-tenant staging vs prod topologies, single-tenant lab mode, and API mechanics.
-- **[Extending & Bootstrapping Engines (`extending_engines.md`)](extending_engines.md):** Step-by-step developer tutorial on bootstrapping a new engine adapter (e.g. CrowdStrike, Microsoft Sentinel, Splunk) via `graft new engine`.
+- **[Google SecOps Engine Reference (`secops.md`)](secops.md):** Configuration, IAM permissions, dual-tenant staging vs prod topologies, single-tenant lab mode, and API mechanics.
+- **[Pluggable Engine Adapter Framework](../developers/framework.md):** Architectural specification, abstraction layers, Core ports, and dynamic capabilities-driven routing.
+- **[Extending & Bootstrapping Engines](../developers/extending_engines.md):** Step-by-step developer tutorial on bootstrapping a new engine adapter (e.g. CrowdStrike, Microsoft Sentinel, Splunk) via `graft new engine`.

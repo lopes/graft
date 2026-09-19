@@ -1,0 +1,30 @@
+name: secops
+display_name: Google SecOps
+description: Google SecOps (Chronicle SIEM) Detection Engine Adapter
+adapter_class: graft.engines.secops.adapter:SecOpsAdapter
+
+capabilities:
+  custom_rules: true
+  syntax_verification: true
+  managed_rules: true
+  replay_testing: true
+
+environments:
+  - staging
+  - production
+
+env_vars:
+  required:
+    - GRAFT_SECOPS_INSTANCE_ID
+    - GRAFT_SECOPS_PROJECT
+    - GRAFT_SECOPS_LOCATION
+  optional:
+    - GRAFT_SECOPS_SA_EMAIL
+    - GRAFT_SECOPS_STAGING_PROJECT
+    - GRAFT_SECOPS_STAGING_LOCATION
+    - GRAFT_SECOPS_STAGING_INSTANCE_ID
+    - GRAFT_SECOPS_STAGING_SA_EMAIL
+    - GRAFT_SECOPS_PROD_PROJECT
+    - GRAFT_SECOPS_PROD_LOCATION
+    - GRAFT_SECOPS_PROD_INSTANCE_ID
+    - GRAFT_SECOPS_PROD_SA_EMAIL

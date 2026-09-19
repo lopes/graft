@@ -242,8 +242,75 @@ def test_reference_managed_manifest_validates_cleanly(validator: SchemaValidator
 def test_all_schemas_conform_to_draft202012_metaschema() -> None:
     schemas_dir = Path("schemas")
     schema_files = list(schemas_dir.glob("*.schema.json"))
+    for engine_schemas_dir in Path("src/graft/engines").glob("*/schemas"):
+        schema_files.extend(engine_schemas_dir.glob("*.schema.json"))
     assert len(schema_files) >= 3
 
     for sf in schema_files:
         schema = json.loads(sf.read_text(encoding="utf-8"))
         Draft202012Validator.check_schema(schema)
+
+
+def test_schema_validator_discovers_engine_schemas(tmp_path: Path) -> None:
+    schemas_dir = tmp_path / "schemas"
+    schemas_dir.mkdir(parents=True)
+    base_rule = Path("schemas/base_rule.schema.json").read_text(encoding="utf-8")
+    (schemas_dir / "base_rule.schema.json").write_text(base_rule, encoding="utf-8")
+
+    engines_dir = tmp_path / "engines"
+    test_engine_schemas = engines_dir / "mock_siem" / "schemas"
+    test_engine_schemas.mkdir(parents=True)
+    (test_engine_schemas / "rule.schema.json").write_text(
+        """{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "rule.schema.json",
+  "allOf": [
+    { "$ref": "base_rule.schema.json" },
+    {
+      "type": "object",
+      "properties": {
+        "deployment": {
+          "type": "object",
+          "required": ["mock_tier"],
+          "properties": {
+            "mock_tier": { "type": "string" }
+          }
+        }
+      }
+    }
+  ]
+}""",
+        encoding="utf-8",
+    )
+
+    validator = SchemaValidator(schemas_dir=schemas_dir, engines_dir=engines_dir)
+    assert "mock_siem:rule" in validator.available_schemas()
+    assert "mock_siem_rule" in validator.available_schemas()
+
+    valid_inst = {
+        "metadata": {
+            "id": "11111111-1111-4111-8111-111111111111",
+            "name": "test_rule",
+            "description": "desc",
+            "status": "testing",
+        },
+        "logic": "test logic",
+        "deployment": {"mock_tier": "gold"},
+        "runbook": {"context": "c", "triage": "t", "response": "r"},
+        "tests": [],
+    }
+    assert validator.is_valid(valid_inst, schema_name="mock_siem:rule") is True
+
+    invalid_inst = {
+        "metadata": {
+            "id": "11111111-1111-4111-8111-111111111111",
+            "name": "test_rule",
+            "description": "desc",
+            "status": "testing",
+        },
+        "logic": "test logic",
+        "deployment": {"mock_tier": 123},
+        "runbook": {"context": "c", "triage": "t", "response": "r"},
+        "tests": [],
+    }
+    assert validator.is_valid(invalid_inst, schema_name="mock_siem:rule") is False

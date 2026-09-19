@@ -1,0 +1,88 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "engine_manifest.schema.json",
+  "title": "Graft Engine Manifest Schema",
+  "type": "object",
+  "required": [
+    "name",
+    "display_name",
+    "description",
+    "adapter_class",
+    "capabilities"
+  ],
+  "properties": {
+    "name": {
+      "type": "string",
+      "pattern": "^[a-z0-9_]+$",
+      "minLength": 2,
+      "maxLength": 32
+    },
+    "display_name": {
+      "type": "string",
+      "minLength": 2,
+      "maxLength": 64
+    },
+    "description": {
+      "type": "string",
+      "minLength": 5,
+      "maxLength": 256
+    },
+    "adapter_class": {
+      "type": "string",
+      "pattern": "^[a-zA-Z0-9_.]+\\:[a-zA-Z0-9_]+$"
+    },
+    "capabilities": {
+      "type": "object",
+      "required": [
+        "custom_rules"
+      ],
+      "properties": {
+        "custom_rules": {
+          "type": "boolean"
+        },
+        "syntax_verification": {
+          "type": "boolean"
+        },
+        "managed_rules": {
+          "type": "boolean"
+        },
+        "replay_testing": {
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false
+    },
+    "environments": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "enum": [
+          "staging",
+          "production"
+        ]
+      },
+      "uniqueItems": true
+    },
+    "env_vars": {
+      "type": "object",
+      "properties": {
+        "required": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "uniqueItems": true
+        },
+        "optional": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "uniqueItems": true
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

@@ -42,7 +42,7 @@ def test_parse_diff_and_apply_all_flags() -> None:
 def test_secops_diff_default_scoped_no_changes() -> None:
     stdout_capture = io.StringIO()
     with (
-        patch("graft.cli.engines.secops.get_changed_files", return_value=set()),
+        patch("graft.cli.engine_controller.get_changed_files", return_value=set()),
         patch("sys.stdout", stdout_capture),
     ):
         code = main(["secops", "diff"])
@@ -56,7 +56,7 @@ def test_secops_diff_default_scoped_no_changes() -> None:
 def test_secops_apply_default_scoped_no_changes() -> None:
     stdout_capture = io.StringIO()
     with (
-        patch("graft.cli.engines.secops.get_changed_files", return_value=set()),
+        patch("graft.cli.engine_controller.get_changed_files", return_value=set()),
         patch("sys.stdout", stdout_capture),
     ):
         code = main(["secops", "apply"])
@@ -77,10 +77,13 @@ def test_secops_diff_default_scoped_with_changed_rule(tmp_path: Path) -> None:
     mock_deployer.list_rules.return_value = (mock_remote,)
 
     with (
-        patch("graft.cli.engines.secops.get_changed_files", return_value={rule_path}),
-        patch("graft.cli.engines.secops._load_custom_rules", return_value=(mock_desired,)),
-        patch("graft.cli.engines.secops.SecOpsDeployerAdapter", return_value=mock_deployer),
-        patch("graft.cli.engines.secops.SecOpsConfig.from_env", side_effect=Exception("mock")),
+        patch("graft.cli.engine_controller.get_changed_files", return_value={rule_path}),
+        patch(
+            "graft.cli.engine_controller.EngineCommandController._load_custom_rules",
+            return_value=(mock_desired,),
+        ),
+        patch("graft.engines.secops.adapter.SecOpsDeployerAdapter", return_value=mock_deployer),
+        patch("graft.engines.secops.adapter.SecOpsConfig.from_env", side_effect=Exception("mock")),
         patch("sys.stdout", stdout_capture),
     ):
         code = main(["secops", "diff"])
@@ -101,13 +104,13 @@ def test_secops_diff_all_ignores_changed_files() -> None:
     mock_deployer.list_rules.return_value = (mock_remote_1, mock_remote_2)
 
     with (
-        patch("graft.cli.engines.secops.get_changed_files") as mock_get_changed,
+        patch("graft.cli.engine_controller.get_changed_files") as mock_get_changed,
         patch(
-            "graft.cli.engines.secops._load_custom_rules",
+            "graft.cli.engine_controller.EngineCommandController._load_custom_rules",
             return_value=(mock_desired_1, mock_desired_2),
         ),
-        patch("graft.cli.engines.secops.SecOpsDeployerAdapter", return_value=mock_deployer),
-        patch("graft.cli.engines.secops.SecOpsConfig.from_env", side_effect=Exception("mock")),
+        patch("graft.engines.secops.adapter.SecOpsDeployerAdapter", return_value=mock_deployer),
+        patch("graft.engines.secops.adapter.SecOpsConfig.from_env", side_effect=Exception("mock")),
         patch("sys.stdout", stdout_capture),
     ):
         code = main(["secops", "diff", "--all", "--target", "custom"])

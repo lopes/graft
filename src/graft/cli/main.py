@@ -3,10 +3,10 @@ import json
 import logging
 import sys
 from collections.abc import Sequence
+from pathlib import Path
 
 from graft.cli.commands_core import execute_export, execute_lint, execute_update_mitre
 from graft.cli.engines import discover_and_register_engines
-from graft.cli.engines.secops import handle_secops_command
 from graft.cli.scaffold import ScaffoldError, scaffold_engine, scaffold_rule
 from graft.core.env import load_env_file
 
@@ -131,7 +131,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                 return 0
 
             if args.new_type == "rule":
-                out_path = args.out
+                out_path = Path(args.out) if getattr(args, "out", None) else None
                 rule_path = scaffold_rule(
                     engine=args.engine,
                     rule_name=args.name,
@@ -146,9 +146,6 @@ def main(argv: Sequence[str] | None = None) -> int:
         engine_handler = getattr(args, "engine_handler", None)
         if engine_handler is not None:
             return engine_handler(args, json_output=args.json)  # type: ignore[no-any-return]
-
-        if cmd == "secops":
-            return handle_secops_command(args, json_output=args.json)
 
     except ScaffoldError as err:
         if args.json:
