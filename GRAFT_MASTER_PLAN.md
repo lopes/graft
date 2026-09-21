@@ -212,6 +212,7 @@ To guarantee state preservation, eliminate hallucination, and prevent context sa
 | **Pluggable Engine Adapter Framework** | `[x]` | Encapsulated engine modules, dynamic manifest discovery, and capabilities-driven CLI routing | `src/graft/engines/`, `docs/architecture.md` |
 | **Documentation Persona Reorganization** | `[x]` | 3-track persona documentation (analysts, operators, developers), framework spec, recipes cookbook | `docs/`, `README.md` |
 | **Scoped CI Verification & E2E GitOps Live Validation** | `[x]` | Scoped diff compiler pre-merge dry-runs, fault tolerance docs, and live production reconciliation validation | `.github/workflows/`, `docs/operators/gitops_reconciliation.md` |
+| **YARA-L Synthesis & Identity Convergence** | `[x]` | Preserve Graft metadata.id in SecOps meta.id, 2-space logic indentation, dedented deconstruction, and semantic deconstruction equivalence | `src/graft/engines/secops/`, `docs/engines/secops.md` |
 
 ---
 
