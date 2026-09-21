@@ -1,4 +1,5 @@
 import re
+import textwrap
 import uuid
 
 from graft.core.models.compiler import CompilationDiagnostic, CompilationResult
@@ -35,6 +36,11 @@ def _extract_uuid(candidate: str, fallback: str) -> str:
     return str(uuid.uuid5(uuid.NAMESPACE_DNS, seed))
 
 
+def _indent_logic(logic: str, indent: str = "  ") -> str:
+    lines = logic.strip().splitlines()
+    return "\n".join(indent + line if line.strip() else "" for line in lines)
+
+
 def synthesize_yaral_rule(rule: RuleEnvelope) -> tuple[str, int]:
     meta_id = rule.metadata.id
     meta_desc = rule.metadata.description.replace('"', '\\"')
@@ -48,7 +54,7 @@ def synthesize_yaral_rule(rule: RuleEnvelope) -> tuple[str, int]:
         f'    status = "{meta_status}"',
     ]
     header_offset = len(header_lines)
-    rule_text = "\n".join(header_lines) + "\n" + rule.logic.strip() + "\n}\n"
+    rule_text = "\n".join(header_lines) + "\n" + _indent_logic(rule.logic) + "\n}\n"
     return rule_text, header_offset
 
 
@@ -108,9 +114,11 @@ def deconstruct_yaral_rule(
 
     last_brace = rule_text.rfind("}")
     if last_brace > body_start_pos:
-        logic_body = rule_text[body_start_pos:last_brace].strip()
+        logic_body = rule_text[body_start_pos:last_brace]
     else:
-        logic_body = rule_text[body_start_pos:].strip()
+        logic_body = rule_text[body_start_pos:]
+
+    logic_body = textwrap.dedent(logic_body.lstrip("\r\n")).strip()
 
     meta_id = _extract_uuid(meta_dict.get("id", ""), fallback_id or rule_name)
     desc = meta_dict.get("description", f"Imported detection rule for {rule_name}")
@@ -153,7 +161,7 @@ class SecOpsCompilerAdapter(RuleCompilerPort):
                 '    id = "00000000-0000-0000-0000-000000000000"',
             ]
             header_offset = len(header_lines)
-            final_text = "\n".join(header_lines) + "\n" + rule_text.strip() + "\n}\n"
+            final_text = "\n".join(header_lines) + "\n" + _indent_logic(rule_text) + "\n}\n"
 
         response = self._client.request(
             "POST",

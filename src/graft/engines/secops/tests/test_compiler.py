@@ -58,11 +58,15 @@ def test_synthesize_yaral_rule(sample_rule: RuleEnvelope) -> None:
     # Strict check: only id, description, status in meta:
     assert "author" not in rule_text
     assert "severity" not in rule_text
-    assert sample_rule.logic in rule_text
+    assert "  events:" in rule_text
+    assert '    $e.metadata.event_type = "NETWORK_CONNECTION"' in rule_text
+    assert "  condition:" in rule_text
+    assert "    $e" in rule_text
     assert rule_text.strip().endswith("}")
 
     lines = rule_text.splitlines()
-    assert lines[header_offset] == "events:"
+    assert lines[header_offset] == "  events:"
+    assert lines[header_offset + 1] == '    $e.metadata.event_type = "NETWORK_CONNECTION"'
 
 
 def test_verify_syntax_success(mock_client: MagicMock) -> None:
@@ -93,7 +97,8 @@ def test_verify_syntax_raw_logic_synthesizes_wrapper(mock_client: MagicMock) -> 
     called_body = mock_client.request.call_args[1]["body"]
     rule_text = called_body["ruleText"]
     assert "rule verify_syntax_rule {" in rule_text
-    assert raw_logic in rule_text
+    assert "  events:" in rule_text
+    assert '    $e.metadata.event_type = "USER_LOGIN"' in rule_text
     assert rule_text.strip().endswith("}")
 
 
@@ -250,3 +255,19 @@ condition:
     assert metadata.id == expected_uuid
     assert metadata.name == "raw_user_login_rule"
     assert logic.strip() == raw_logic.strip()
+
+
+def test_deconstruct_indented_yaral_rule() -> None:
+    indented_text = """rule sample {
+  meta:
+    id = "b1d72370-5fa3-4cb8-a579-22a468d6f101"
+    description = "test"
+  events:
+    $e.metadata.event_type = "USER_LOGIN"
+  condition:
+    $e
+}"""
+    metadata, logic = deconstruct_yaral_rule(indented_text)
+    assert metadata.id == "b1d72370-5fa3-4cb8-a579-22a468d6f101"
+    assert metadata.description == "test"
+    assert logic == 'events:\n  $e.metadata.event_type = "USER_LOGIN"\ncondition:\n  $e'
