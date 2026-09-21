@@ -47,10 +47,10 @@ Graft follows strict **Hexagonal Architecture (Ports & Adapters)**:
 
 ```mermaid
 flowchart TD
-    CLI["<b>Unified CLI</b> (argparse)<br/><code>graft lint</code> • <code>graft export</code> • <code>graft secops [cmd]</code>"]
-    CORE["<b>Driving Core</b> (src/graft/core/)<br/>• 100% Engine-Agnostic Domain Models (dataclasses)<br/>• Decoupled JSON Schema & MITRE STIX Validators<br/>• Git Blame Enriched Exporters (CSV / JSON)<br/>• MITRE ATT&CK Navigator Layer Generator<br/>• Hexagonal Ports (typing.Protocol)"]
-    SECOPS["<b>Google SecOps Engine</b> (src/graft/engines/secops/)<br/>• Chronicle v1 REST Client (urllib)<br/>• verifyRuleText Pre-Merge Dry Run<br/>• Custom Rule Lifecycle Deployer<br/>• Managed RuleSet Reconciler<br/>• Staging Replay Test Harness"]
-    FUTURE["<b>Future Engines</b><br/>(CrowdStrike, Sentinel, Splunk)"]
+    CLI["<b>Unified CLI</b> (argparse)<br/><code>graft lint</code><br/><code>graft export</code><br/><code>graft &lt;engine&gt; [cmd]</code>"]
+    CORE["<b>Driving Core</b> (src/graft/core/)<br/>• Domain Models (dataclasses)<br/>• Schema & MITRE Validators<br/>• Git Blame Enriched Exporters<br/>• ATT&CK Navigator Generator<br/>• Engine Ports (Protocols)"]
+    SECOPS["<b>Google SecOps Engine</b> (src/graft/engines/secops/)<br/>• Chronicle REST Client (urllib)<br/>• verifyRuleText Dry-Run<br/>• Custom Rule Deployer<br/>• Managed Reconciler<br/>• Staging Replay Harness"]
+    FUTURE["<b>Future Engines</b><br/>(Sentinel, Splunk, CrowdStrike)"]
 
     CLI --> CORE
     CORE --> SECOPS
