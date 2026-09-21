@@ -1826,8 +1826,4 @@ categories:
           - type: BROAD
             enabled: false
             alerting: false
-exclusions:
-  - id: "ex_test_deployer_sa"
-    ruleset_id: "433faf9e-4d51-f284-c35b-009528ecff05"
-    description: "Validation test exclusion for CI/CD deployer service account"
-    expression: 'principal.user.userid = "graft-secops-deployer@lopes-orion.iam.gserviceaccount.com"'
+exclusions: []
