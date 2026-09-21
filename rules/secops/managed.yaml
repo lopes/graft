@@ -1122,8 +1122,8 @@ categories:
         name: Mandiant Frontline Threats
         deployments:
           - type: PRECISE
-            enabled: true
-            alerting: true
+            enabled: false
+            alerting: false
           - type: BROAD
             enabled: false
             alerting: false
