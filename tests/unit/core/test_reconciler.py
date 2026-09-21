@@ -491,8 +491,8 @@ def test_custom_rule_diff_modified_logic_to_update() -> None:
     assert diff.has_changes is True
     assert len(diff.rules_to_create) == 0
     assert len(diff.rules_to_update) == 1
-    # Verify the remote ID was injected
-    assert diff.rules_to_update[0].metadata.id == "ru_remote_123"
+    # Verify the desired Graft ID is preserved
+    assert diff.rules_to_update[0].metadata.id == "local_uuid"
     assert diff.rules_to_update[0].logic == "new logic"
 
 
@@ -505,6 +505,7 @@ def test_custom_rule_diff_modified_deployment_to_update() -> None:
 
     assert diff.has_changes is True
     assert len(diff.rules_to_update) == 1
+    assert diff.rules_to_update[0].metadata.id == "local_uuid"
     assert diff.rules_to_update[0].deployment.enabled is True
 
 
@@ -534,7 +535,7 @@ def test_custom_rule_apply_orchestration(caplog: pytest.LogCaptureFixture) -> No
     assert len(diff.rules_to_update) == 1
     assert len(deployer.created_rules) == 1
     assert len(deployer.updated_rules) == 1
-    assert deployer.updated_rules[0].metadata.id == "ru_remote_old"
+    assert deployer.updated_rules[0].metadata.id == "local_uuid"
 
     log_messages = [rec.message for rec in caplog.records]
     assert any("Created custom rule 'fresh_rule'" in msg for msg in log_messages)

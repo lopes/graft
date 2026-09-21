@@ -139,6 +139,26 @@ def deconstruct_yaral_rule(
     return metadata, logic_body
 
 
+def extract_meta_id(rule_text: str) -> str | None:
+    meta_start = re.search(r"^\s*meta:\s*$", rule_text, re.MULTILINE)
+    if not meta_start:
+        return None
+    start_idx = meta_start.end()
+    next_sec = _SECTION_HEADER_REGEX.search(rule_text, pos=start_idx)
+    end_idx = next_sec.start() if next_sec else rule_text.rfind("}")
+    meta_content = rule_text[start_idx:end_idx] if end_idx != -1 else rule_text[start_idx:]
+    for line in meta_content.splitlines():
+        stripped = line.strip()
+        if not stripped or stripped.startswith("//") or stripped.startswith("#"):
+            continue
+        kv = re.match(r"^([a-zA-Z0-9_]+)\s*=\s*(.*)$", stripped)
+        if kv and kv.group(1).lower() == "id":
+            val = kv.group(2).strip().strip('"').strip("'")
+            if val:
+                return val
+    return None
+
+
 def _parse_int_field(value: object, default: int = 1) -> int:
     if isinstance(value, (int, str)) and str(value).isdigit():
         return int(str(value))

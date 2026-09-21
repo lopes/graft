@@ -175,7 +175,7 @@ def test_secops_rule_content_matches(sample_rule: RuleEnvelope) -> None:
     remote_synth = dataclasses.replace(sample_rule, logic=synth_text)
     assert secops_rule_content_matches(sample_rule, remote_synth) is True
 
-    # Remote rule with synthesized text using remote rule ID
+    # Remote rule with synthesized text with mismatched meta.id is detected as drift
     remote_rule_id = "ru_remote_999"
     remote_with_id = dataclasses.replace(
         sample_rule,
@@ -187,7 +187,7 @@ def test_secops_rule_content_matches(sample_rule: RuleEnvelope) -> None:
         metadata=dataclasses.replace(sample_rule.metadata, id=remote_rule_id),
         logic=synth_text_remote_id,
     )
-    assert secops_rule_content_matches(sample_rule, remote_synth_id) is True
+    assert secops_rule_content_matches(sample_rule, remote_synth_id) is False
 
     # Different logic should return False
     different = dataclasses.replace(sample_rule, logic="events:\n  $e\ncondition:\n  $e")
@@ -271,3 +271,25 @@ def test_deconstruct_indented_yaral_rule() -> None:
     assert metadata.id == "b1d72370-5fa3-4cb8-a579-22a468d6f101"
     assert metadata.description == "test"
     assert logic == 'events:\n  $e.metadata.event_type = "USER_LOGIN"\ncondition:\n  $e'
+
+
+def test_extract_meta_id() -> None:
+    from graft.engines.secops.compiler import extract_meta_id
+
+    # Normal double quotes
+    text1 = (
+        'rule foo {\n  meta:\n    id = "b1d72370-5fa3-4cb8-a579-22a468d6f101"\n  events:\n    $e\n}'
+    )
+    assert extract_meta_id(text1) == "b1d72370-5fa3-4cb8-a579-22a468d6f101"
+
+    # Single quotes and extra spacing
+    text2 = "rule foo {\n  meta:\n    id = 'my-custom-id' \n  events:\n    $e\n}"
+    assert extract_meta_id(text2) == "my-custom-id"
+
+    # No meta block
+    text3 = "rule foo {\n  events:\n    $e\n}"
+    assert extract_meta_id(text3) is None
+
+    # Meta block without id
+    text4 = 'rule foo {\n  meta:\n    author = "SecOps"\n  events:\n    $e\n}'
+    assert extract_meta_id(text4) is None

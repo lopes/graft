@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import dataclasses
 import logging
 from pathlib import Path
 from typing import Literal
@@ -40,13 +39,20 @@ def secops_rule_content_matches(desired: RuleEnvelope, remote: RuleEnvelope) -> 
     if remote_text == synth_desired.strip().replace("\r\n", "\n"):
         return True
 
-    synth_with_remote_id, _ = synthesize_yaral_rule(
-        dataclasses.replace(
-            desired,
-            metadata=dataclasses.replace(desired.metadata, id=remote.metadata.id),
+    try:
+        remote_meta, remote_logic = deconstruct_yaral_rule(
+            remote_text,
+            fallback_id=remote.metadata.id,
+            fallback_name=remote.metadata.name,
         )
-    )
-    return remote_text == synth_with_remote_id.strip().replace("\r\n", "\n")
+        return bool(
+            remote_meta.id == desired.metadata.id
+            and remote_meta.description == desired.metadata.description
+            and remote_meta.status == desired.metadata.status
+            and remote_logic.strip() == desired.logic.strip()
+        )
+    except Exception:
+        return False
 
 
 class SecOpsAdapter(EngineAdapter):

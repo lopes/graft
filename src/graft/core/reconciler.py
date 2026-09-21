@@ -343,11 +343,7 @@ class CustomRuleReconciler:
             )
 
             if not content_equal or not deployment_equal:
-                updated_rule = dataclasses.replace(
-                    des_rule,
-                    metadata=dataclasses.replace(des_rule.metadata, id=curr_rule.metadata.id),
-                )
-                rules_to_update.append(updated_rule)
+                rules_to_update.append(des_rule)
 
         return CustomRulesReconciliationDiff(
             rules_to_create=tuple(rules_to_create),

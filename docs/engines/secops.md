@@ -554,7 +554,7 @@ To prevent spurious diffs caused by whitespace differences, platform line ending
 
 - **Tier 1 (Raw Logic Equivalence):** Compares the normalized rule logic text directly (`\r\n` converted to `\n` and stripped).
 - **Tier 2 (Synthesized YARA-L Equivalence):** Compares the remote rule against the locally synthesized YARA-L rule (incorporating standard metadata fields: `meta: id = ...`, `description = ...`, `status = ...`).
-- **Tier 3 (ID-Replaced Synthesis Equivalence):** Evaluates the synthesized YARA-L after binding the remote server-assigned rule ID to the local envelope. This ensures local manifests using UUIDs or human-readable IDs cleanly match the remote tenant without false-positive drift.
+- **Tier 3 (Semantic Deconstruction Equivalence):** Deconstructs the remote YARA-L rule into domain components to compare normalized logic and verify that metadata fields (`meta.id`, `description`, `status`) strictly match the desired Git envelope, eliminating whitespace/formatting drift while ensuring Graft UUIDs are faithfully preserved in SecOps.
 
 #### 3. Deployment State Verification
 In addition to YARA-L logic, Graft verifies deployment coordinates:

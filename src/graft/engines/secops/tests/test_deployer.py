@@ -167,3 +167,83 @@ def test_set_rule_state_success(mock_client: MagicMock) -> None:
         body={"enabled": True, "alerting": True},
         params={"update_mask": "enabled,alerting"},
     )
+
+
+def test_list_rules_extracts_graft_uuid_from_meta_id(mock_client: MagicMock) -> None:
+    graft_uuid = "b1d72370-5fa3-4cb8-a579-22a468d6f101"
+    yaral_text = f"""rule custom_login_detection {{
+  meta:
+    id = "{graft_uuid}"
+    description = "Test rule"
+  events:
+    $e.metadata.event_type = "USER_LOGIN"
+  condition:
+    $e
+}}"""
+    mock_client.request.side_effect = [
+        {
+            "rules": [
+                {
+                    "name": "projects/p/locations/l/instances/i/rules/ru_remote_99999",
+                    "displayName": "custom_login_detection",
+                    "text": yaral_text,
+                },
+            ],
+        },
+        {"ruleDeployments": []},
+    ]
+
+    deployer = SecOpsDeployerAdapter(client=mock_client)
+    rules = deployer.list_rules()
+
+    assert len(rules) == 1
+    assert rules[0].metadata.id == graft_uuid
+    assert rules[0].metadata.name == "custom_login_detection"
+
+
+def test_update_rule_resolves_remote_id_and_preserves_meta_id(
+    mock_client: MagicMock, sample_rule: RuleEnvelope
+) -> None:
+    # RuleEnvelope with Graft UUID
+    graft_uuid = "b1d72370-5fa3-4cb8-a579-22a468d6f101"
+    import dataclasses
+
+    rule_to_update = dataclasses.replace(
+        sample_rule,
+        metadata=dataclasses.replace(
+            sample_rule.metadata,
+            id=graft_uuid,
+            name="test_rule",
+        ),
+    )
+
+    mock_client.request.side_effect = [
+        # 1. GET rules (list_rules)
+        {
+            "rules": [
+                {
+                    "name": "projects/p/locations/l/instances/i/rules/ru_secops_555",
+                    "displayName": "test_rule",
+                    "text": "rule test_rule { condition: true }",
+                }
+            ]
+        },
+        # 2. GET rules/-/deployments
+        {"ruleDeployments": []},
+        # 3. PATCH rules/ru_secops_555 (rule text)
+        {"name": "projects/p/locations/l/instances/i/rules/ru_secops_555"},
+        # 4. PATCH rules/ru_secops_555/deployment
+        {"name": "projects/p/locations/l/instances/i/rules/ru_secops_555/deployment"},
+    ]
+
+    deployer = SecOpsDeployerAdapter(client=mock_client)
+    deployer.list_rules()
+    deployer.update_rule(rule_to_update)
+
+    assert mock_client.request.call_count == 4
+    patch_text_call = mock_client.request.call_args_list[2]
+    assert patch_text_call[0] == ("PATCH", "rules/ru_secops_555")
+    sent_text = patch_text_call[1]["body"]["text"]
+    # Verify Graft UUID is preserved in meta.id and ru_secops_555 is NOT in meta.id
+    assert f'id = "{graft_uuid}"' in sent_text
+    assert "ru_secops_555" not in sent_text
