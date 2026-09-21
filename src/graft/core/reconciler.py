@@ -261,8 +261,9 @@ class GitOpsReconciler:
 
         # Apply deletions
         for excl in reconcile_diff.exclusions_to_delete:
-            logger.info("Deleted exclusion '%s' from tenant", excl.id)
+            logger.info("Deleting exclusion '%s' from tenant", excl.id)
             port.delete_exclusion(excl.id)
+            logger.info("Deleted exclusion '%s' from tenant", excl.id)
 
         # Apply updates
         for u_diff in reconcile_diff.exclusions_to_update:
@@ -278,13 +279,15 @@ class GitOpsReconciler:
                 )
                 if des_match is not None:
                     target_excl = dataclasses.replace(des_match, id=u_diff.id)
-                    logger.info("Updated exclusion '%s' in tenant", u_diff.id)
+                    logger.info("Updating exclusion '%s' in tenant", u_diff.id)
                     port.update_exclusion(target_excl)
+                    logger.info("Updated exclusion '%s' in tenant", u_diff.id)
 
         # Apply creations
         for excl in reconcile_diff.exclusions_to_create:
-            logger.info("Created exclusion '%s' in tenant", excl.id)
-            port.create_exclusion(excl)
+            logger.info("Creating exclusion '%s' in tenant", excl.id)
+            res_id = port.create_exclusion(excl)
+            logger.info("Created exclusion '%s' in tenant", res_id or excl.id)
 
         logger.info(
             "Managed state reconciliation complete. %d actions executed.",
