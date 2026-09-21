@@ -213,3 +213,16 @@ def test_engine_controller_execution(tmp_path: Path, monkeypatch: pytest.MonkeyP
     )
     exit_code_test = controller.execute(args_test)
     assert exit_code_test == 0
+
+    # 6. verify scoped (no modified rules in change scope)
+    args_verify_scoped = argparse.Namespace(
+        engine_command="verify", paths=[], all=False, env="staging"
+    )
+    monkeypatch.setattr("graft.cli.engine_controller.get_changed_files", lambda: set())
+    assert controller.execute(args_verify_scoped) == 0
+
+    # 7. verify with --all and explicit path
+    args_verify_all = argparse.Namespace(
+        engine_command="verify", paths=[str(tmp_path / "r.yaml")], all=True, env="staging"
+    )
+    assert controller.execute(args_verify_all) == 0
