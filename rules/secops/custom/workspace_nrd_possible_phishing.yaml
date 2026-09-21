@@ -26,6 +26,9 @@ logic: |
     $mail.metadata.product_event_type = "2"
     strings.extract_domain($mail.network.email.from) = $domain
 
+    // DEMO: Testing adding/removing lines
+    $mail.network.email.from != "scanner@internal-test.corp" // dummy, just testing
+
     $whois.graph.entity.domain.name = $domain
     $whois.graph.metadata.entity_type = "DOMAIN_NAME"
     $whois.graph.metadata.vendor_name = "WHOIS"
