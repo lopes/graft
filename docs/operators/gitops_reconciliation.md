@@ -178,6 +178,45 @@ graft secops pull --target custom --env production --out-dir rules/secops/custom
 graft secops pull --target custom --env production --force
 ```
 
+## 6. Fault Tolerance & Partial Failure Recovery (Idempotent Healing)
+
+A common operational concern in GitOps pipelines is handling partial deployment failures. For example:
+- A change modifies three detection rules (`Rule A`, `Rule B`, `Rule C`).
+- During `graft secops apply`, `Rule A` successfully deploys to the tenant.
+- `Rule B` encounters an unexpected API rejection (e.g., malformed syntax or schema error) and aborts the execution.
+- `Rule C` is not reached.
+
+```mermaid
+flowchart TD
+    subgraph Attempt1["Deployment Attempt 1 (Failure on Rule B)"]
+        R1A["Rule A (Updated)"] --> S1["Status: 200 OK (Applied)"]
+        R1B["Rule B (Invalid)"] --> F1["Status: 400 Error (Aborted)"]
+        R1C["Rule C (Pending)"] --> N1["Not Reached"]
+    end
+
+    subgraph Attempt2["Deployment Attempt 2 (Fix Rule B & Re-run)"]
+        R2A["Rule A (Matches Tenant)"] --> S2["Zero-Cost No-Op (Skipped)"]
+        R2B["Rule B (Fixed in Git)"] --> S2B["Status: 200 OK (Applied)"]
+        R2C["Rule C (Pending in Git)"] --> S2C["Status: 200 OK (Applied)"]
+    end
+
+    Attempt1 --> Attempt2
+```
+
+### Do Operators Need to Revert or Redo the Whole Batch?
+**No. Operators never need to roll back succeeded rules or manually untangle partial deployments.**
+
+Graft's reconciliation architecture is strictly **declarative and idempotent**:
+- **Live State Evaluation:** On every run, `graft <engine> apply` queries the live tenant state (`port.list_rules()`, `port.fetch_managed_state()`).
+- **Zero-Cost No-Op Skip:** Graft compares the live tenant state against the desired Git state. Because `Rule A` was already successfully applied in Attempt 1, Graft detects that the tenant is already in sync for `Rule A` and **skips it entirely** without issuing redundant API calls or generating audit noise.
+- **Targeted Delta Convergence:** Graft identifies that only `Rule B` (now fixed) and `Rule C` (previously unreached) differ from the live tenant, and converges only those remaining delta items.
+
+In production pipelines (`deploy-production.yml`), `graft secops apply --all` guarantees full catalog convergence, automatically self-healing partial deployment states once the blocking error is fixed in Git.
+
+---
+
+## 7. Next Steps & References
+
 For the complete lifecycle guide covering Day 0 discovery, baseline enrichment, and declaring Git as the permanent Source of Truth, see **[Engine Adoption & Lifecycle Guide](adoption.md)**.
 
 

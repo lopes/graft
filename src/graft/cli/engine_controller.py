@@ -87,6 +87,8 @@ class EngineCommandController:
     def _execute_verify(self, args: argparse.Namespace, env: str, json_output: bool) -> int:
         verify_paths: list[Path] = []
         raw_paths = getattr(args, "paths", [])
+        all_rules = getattr(args, "all", False)
+
         if raw_paths:
             for p_str in raw_paths:
                 p = Path(p_str)
@@ -94,16 +96,36 @@ class EngineCommandController:
                     verify_paths.extend(sorted(p.rglob("*.yaml")))
                 elif p.is_file():
                     verify_paths.append(p)
-        else:
+        elif all_rules:
             default_dir = Path(f"rules/{self.manifest.name}/custom")
             if default_dir.is_dir():
                 verify_paths.extend(sorted(default_dir.rglob("*.yaml")))
+        else:
+            changed = get_changed_files()
+            custom_dir = Path(f"rules/{self.manifest.name}/custom").resolve()
+            for p in changed:
+                if p.is_file() and p.suffix in (".yaml", ".yml"):
+                    try:
+                        if p.resolve().is_relative_to(custom_dir):
+                            verify_paths.append(p)
+                    except ValueError:
+                        pass
+            verify_paths.sort()
 
         if not verify_paths:
             if json_output:
                 sys.stdout.write(json.dumps({"success": True, "total": 0, "verified": []}) + "\n")
             else:
-                sys.stdout.write(f"No rules found to verify for {self.manifest.display_name}.\n")
+                if not raw_paths and not all_rules:
+                    sys.stdout.write(
+                        "No modified detection rules to verify in current change scope.\n"
+                        f"To verify the entire catalog, "
+                        f"run: graft {self.manifest.name} verify --all\n"
+                    )
+                else:
+                    sys.stdout.write(
+                        f"No rules found to verify for {self.manifest.display_name}.\n"
+                    )
             return 0
 
         adapter = self.registry.load_adapter(self.manifest.name, env=env)
@@ -720,6 +742,11 @@ def register_engine_commands(
         verify_p = cmd_subparsers.add_parser("verify", help="Lint locally and verify syntax")
         verify_p.add_argument("paths", nargs="*", help="Rule files or directories to verify")
         verify_p.add_argument("--env", choices=envs, default=envs[0] if envs else "staging")
+        verify_p.add_argument(
+            "--all",
+            action="store_true",
+            help="Verify all rules in catalog instead of scoped diff",
+        )
 
     if caps.replay_testing:
         test_p = cmd_subparsers.add_parser("test", help="Execute synthetic replay tests in staging")
