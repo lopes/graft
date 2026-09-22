@@ -1,7 +1,7 @@
 metadata:
   id: "b1d72370-5fa3-4cb8-a579-22a468d6f101"
   name: "workspace_nrd_possible_phishing"
-  description: "Detects a user opening an email from a newly registered domain (created < 7 days ago), which may indicate a phishing attempt."
+  description: "Google Workspace email opened from a newly registered domain."
   status: "production"
   authors:
     - "Joe Lopes <lopes.id>"
@@ -18,7 +18,6 @@ metadata:
   references:
     - "https://lopes.id/log/high-fidelity-nrd-detections/"
     - "https://support.google.com/a/answer/12384955"
-    - "https://attack.mitre.org/techniques/T1566/002/"
 
 logic: |
   events:
@@ -55,11 +54,7 @@ deployment:
   run_frequency: "live"
 
 runbook:
-  context: |
-    Adversaries frequently register new domains and immediately weaponize them in
-    spear-phishing campaigns before reputation feeds and web categorization tools
-    index them. Correlating Google Workspace message open events with domain
-    registration timestamps isolates zero-day phishing infrastructure.
+  context: "Adversaries frequently register new domains and immediately weaponize them in spear-phishing campaigns before reputation feeds and web categorization tools index them. Correlating Google Workspace message open events with domain registration timestamps isolates zero-day phishing infrastructure."
   triage: |
     1. Identify recipient user account and workstation coordinates.
     2. Review email subject, sender domain WHOIS registrar, and message attachments.
@@ -70,6 +65,7 @@ runbook:
     2. Add the sender domain to global perimeter and email blocklists.
     3. If credentials were provided or malicious payload downloaded, initiate host containment and session revocation.
 
+# EXPERIMENTAL - NOT WORKING
 tests:
   - id: "match_opened_nrd_email"
     description: "Triggers when a user opens an email originating from a newly registered domain"

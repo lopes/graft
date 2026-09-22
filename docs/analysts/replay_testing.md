@@ -1,5 +1,9 @@
 # Synthetic Replay Testing & Quarantine Harness
 
+> [!WARNING]
+> **Experimental Capability**
+> Synthetic replay testing is currently an experimental capability and architectural specification. The Google SecOps public REST API does not expose synchronous endpoints for in-memory synthetic UDM ingestion or ad-hoc rule execution. The `tests:` block is preserved in the rule envelope schema for design readiness.
+
 Static syntax linting validates YARA-L structure, but cannot verify whether complex regex expressions, multi-event time windows, or outcome calculations match true attack patterns. Graft solves this with an automated **Synthetic Replay Harness**.
 
 ---
@@ -54,11 +58,14 @@ To prevent synthetic testing from contaminating production alert queues or skewi
 ## 3. Environment Topologies: Staging vs. Single-Tenant Lab
 
 ### Multi-Tenant Enterprise Topology (Recommended)
+
 Staging and Production point to two physically separate Google SecOps customer instances:
+
 - `GRAFT_SECOPS_STAGING_*`: Used for replay testing and pre-merge compiler verification.
 - `GRAFT_SECOPS_PROD_*`: Production operational environment.
 
 ### Single-Tenant Lab Mode
+
 In personal research labs or sandbox environments where maintaining two separate SIEM instances is cost-prohibitive, Graft allows staging and production to share a single physical instance coordinates:
 
 ```bash

@@ -1,7 +1,7 @@
 metadata:
   id: "f84a1e93-61bc-4382-90ab-38f12a819003"
   name: "gcp_storage_iam_public_access_granted"
-  description: "Detects Google Cloud Storage IAM policy modifications that grant public access to allUsers or allAuthenticatedUsers."
+  description: "Google Cloud Storage bucket IAM policy modified to grant public access."
   status: "production"
   authors:
     - "Cloud Security Operations"
@@ -18,7 +18,6 @@ metadata:
     - "iam"
   references:
     - "https://cloud.google.com/storage/docs/access-control/iam"
-    - "https://attack.mitre.org/techniques/T1078/004/"
 
 logic: |
   events:
@@ -36,10 +35,7 @@ deployment:
   run_frequency: "live"
 
 runbook:
-  context: |
-    Granting roles on Cloud Storage buckets to allUsers (public internet) or
-    allAuthenticatedUsers (any Google account) allows unauthorized access to
-    sensitive cloud storage objects, creating significant data exfiltration risk.
+  context: "Granting roles on Cloud Storage buckets to allUsers (public internet) or allAuthenticatedUsers (any Google account) allows unauthorized access to sensitive cloud storage objects, creating significant data exfiltration risk."
   triage: |
     1. Identify the targeted Cloud Storage bucket resource name.
     2. Determine the calling principal and authorization context.
@@ -50,6 +46,7 @@ runbook:
     2. Enforce public access prevention on the bucket.
     3. Review Cloud Storage access and audit logs to identify data accessed during public window.
 
+# EXPERIMENTAL - NOT WORKING
 tests:
   - id: "match_public_bucket_policy"
     description: "Fires an alert when allUsers is granted access to a bucket"
