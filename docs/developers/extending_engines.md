@@ -261,7 +261,7 @@ import urllib.error
 import urllib.request
 from typing import Any
 
-from graft.core.models.rule import DeploymentConfig, Metadata, RuleEnvelope, RuleSeverity
+from graft.core.models.rule import BaseDeploymentConfig, RuleEnvelope, RuleMetadata
 from graft.core.ports.deployer import RuleDeployerPort
 from graft.engines.sentinel.config import SentinelConfig
 
@@ -346,15 +346,21 @@ class SentinelAdapter(EngineAdapter):
     def get_replay(self) -> ReplayHarnessPort | None:
         # Sentinel adapter does not support synthetic replay in this phase
         return None
+
+    def resolve_deployment_status(self, rule: RuleEnvelope) -> str:
+        """Translates engine deployment configuration to enabled | silent | disabled."""
+        if not rule.deployment.enabled:
+            return "disabled"
+        return "enabled" if rule.deployment.alerting else "silent"
 ```
 
 ---
 
 ## 9. Step 8: Write In-Tree Tests
 
-In Graft, engine tests are co-located within the engine package under `src/graft/engines/<engine>/tests/`. Root `tests/` is reserved strictly for engine-agnostic core logic and CLI routing.
+In Graft, engine tests live in `tests/engines/<engine>/`. Root `tests/unit/core/` is reserved strictly for engine-agnostic core logic and CLI routing.
 
-Create `src/graft/engines/sentinel/tests/test_sentinel_adapter.py`:
+Create `tests/engines/sentinel/test_sentinel_adapter.py`:
 
 ```python
 from graft.core.ports.engine import EngineAdapter

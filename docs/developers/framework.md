@@ -101,6 +101,8 @@ Defined in [`src/graft/core/ports/engine.py`](file:///usr/local/google/home/joel
 
 ```python
 from typing import Protocol, runtime_checkable
+
+from graft.core.models.rule import RuleEnvelope
 from graft.core.ports.compiler import RuleCompilerPort
 from graft.core.ports.deployer import RuleDeployerPort
 from graft.core.ports.managed import ManagedEnginePort
@@ -118,9 +120,11 @@ class EngineAdapter(Protocol):
     def get_managed(self) -> ManagedEnginePort | None: ...
 
     def get_replay(self) -> ReplayHarnessPort | None: ...
+
+    def resolve_deployment_status(self, rule: RuleEnvelope) -> str: ...
 ```
 
-The composite adapter acts as a factory. Depending on which capabilities the engine supports, it returns the appropriate port implementation or `None`.
+The composite adapter acts as a capabilities factory and status resolver. Depending on which capabilities the engine supports, it returns the appropriate port implementation or `None`, and translates engine-specific deployment toggles into an engine-agnostic status (`enabled`, `silent`, `disabled`).
 
 ---
 
