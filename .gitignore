@@ -221,3 +221,8 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Graft local export artifacts (catalogs, matrices, Navigator layers)
+exports/*
+!exports/.gitkeep
+

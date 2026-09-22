@@ -1,0 +1,241 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 480" width="100%" height="100%">
+  <defs>
+    <style>
+      .bg { fill: #0d1117; }
+      .bar { fill: #161b22; }
+      .border { stroke: #30363d; stroke-width: 1; fill: none; }
+      .tab-active { fill: #21262d; }
+      .text-title { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; font-size: 13px; font-weight: 600; fill: #c9d1d9; }
+      .text-muted { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; font-size: 11px; fill: #8b949e; }
+      .text-badge { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; font-size: 10px; font-weight: 600; fill: #58a6ff; }
+      .col-header { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; font-size: 11px; font-weight: 600; fill: #f0f6fc; }
+      .cell-text { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; font-size: 10px; fill: #8b949e; }
+      .cell-text-active { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; font-size: 10px; font-weight: 600; fill: #ffffff; }
+      .mono { font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace; }
+    </style>
+    <linearGradient id="grad-active" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#195c32" />
+      <stop offset="100%" stop-color="#238636" />
+    </linearGradient>
+    <filter id="shadow" x="-5%" y="-5%" width="110%" height="115%">
+      <feDropShadow dx="0" dy="4" stdDeviation="6" flood-color="#000000" flood-opacity="0.5" />
+    </filter>
+  </defs>
+
+  <!-- Main Container -->
+  <rect width="960" height="480" rx="8" class="bg" />
+  <rect width="960" height="480" rx="8" class="border" />
+
+  <!-- Window Header Bar -->
+  <rect width="960" height="40" rx="8" class="bar" />
+  <circle cx="20" cy="20" r="5" fill="#f85149" />
+  <circle cx="36" cy="20" r="5" fill="#e3b341" />
+  <circle cx="52" cy="20" r="5" fill="#2ea043" />
+
+  <!-- Tab -->
+  <rect x="75" y="8" width="220" height="32" rx="4" class="tab-active" />
+  <text x="90" y="28" class="text-title">MITRE ATT&amp;CK® Navigator</text>
+  <text x="275" y="27" class="text-muted" font-size="12">×</text>
+
+  <!-- Secondary Navigation / Controls Bar -->
+  <rect y="40" width="960" height="36" fill="#161b22" />
+  <line x1="0" y1="40" x2="960" y2="40" stroke="#30363d" stroke-width="1" />
+  <line x1="0" y1="76" x2="960" y2="76" stroke="#30363d" stroke-width="1" />
+
+  <!-- Layer Metadata Badges -->
+  <rect x="16" y="48" width="180" height="20" rx="10" fill="#21262d" />
+  <text x="26" y="62" class="text-title" font-size="11">Graft Coverage (secops)</text>
+
+  <rect x="204" y="48" width="130" height="20" rx="10" fill="#388bfd1a" stroke="#388bfd66" stroke-width="1" />
+  <text x="214" y="62" class="text-badge">Enterprise v19.2</text>
+
+  <rect x="342" y="48" width="135" height="20" rx="10" fill="#23863626" stroke="#23863688" stroke-width="1" />
+  <text x="352" y="62" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="10px" font-weight="600" fill="#3fb950">4 Techniques Mapped</text>
+
+  <!-- Gradient Legend Indicator -->
+  <text x="680" y="62" class="text-muted">Coverage Score:</text>
+  <rect x="770" y="52" width="14" height="12" rx="2" fill="#21262d" stroke="#30363d" />
+  <text x="790" y="62" class="text-muted">0</text>
+  <rect x="810" y="52" width="14" height="12" rx="2" fill="url(#grad-active)" stroke="#3fb950" />
+  <text x="830" y="62" class="text-muted">1.0</text>
+
+  <!-- Matrix Header Columns -->
+  <!-- Column 1: Initial Access -->
+  <rect x="16" y="88" width="145" height="28" rx="3" fill="#21262d" stroke="#30363d" />
+  <text x="24" y="106" class="col-header">Initial Access</text>
+
+  <!-- Column 2: Execution -->
+  <rect x="171" y="88" width="145" height="28" rx="3" fill="#21262d" stroke="#30363d" />
+  <text x="179" y="106" class="col-header">Execution</text>
+
+  <!-- Column 3: Persistence -->
+  <rect x="326" y="88" width="145" height="28" rx="3" fill="#21262d" stroke="#30363d" />
+  <text x="334" y="106" class="col-header">Persistence</text>
+
+  <!-- Column 4: Privilege Escalation -->
+  <rect x="481" y="88" width="145" height="28" rx="3" fill="#21262d" stroke="#30363d" />
+  <text x="489" y="106" class="col-header">Privilege Escalation</text>
+
+  <!-- Column 5: Defense Evasion -->
+  <rect x="636" y="88" width="145" height="28" rx="3" fill="#21262d" stroke="#30363d" />
+  <text x="644" y="106" class="col-header">Defense Evasion</text>
+
+  <!-- Column 6: Credential Access -->
+  <rect x="791" y="88" width="153" height="28" rx="3" fill="#21262d" stroke="#30363d" />
+  <text x="799" y="106" class="col-header">Credential Access</text>
+
+  <!-- Matrix Grid Rows -->
+  <!-- Row 1 -->
+  <!-- T1078.004 Cloud Accounts (COVERED) -->
+  <g>
+    <rect x="16" y="122" width="145" height="42" rx="3" fill="url(#grad-active)" stroke="#3fb950" stroke-width="1.5" />
+    <text x="24" y="138" class="cell-text-active">T1078.004</text>
+    <text x="24" y="152" class="cell-text-active" font-size="9.5">Cloud Accounts</text>
+  </g>
+
+  <!-- Inactive cells -->
+  <rect x="171" y="122" width="145" height="42" rx="3" fill="#161b22" stroke="#21262d" />
+  <text x="179" y="138" class="cell-text">T1059</text>
+  <text x="179" y="152" class="cell-text" font-size="9.5">Command &amp; Scripting</text>
+
+  <!-- T1098.001 Additional Cloud Credentials (COVERED) -->
+  <g>
+    <rect x="326" y="122" width="145" height="42" rx="3" fill="url(#grad-active)" stroke="#3fb950" stroke-width="1.5" />
+    <text x="334" y="138" class="cell-text-active">T1098.001</text>
+    <text x="334" y="152" class="cell-text-active" font-size="9.5">Additional Cloud Creds</text>
+  </g>
+
+  <rect x="481" y="122" width="145" height="42" rx="3" fill="#161b22" stroke="#21262d" />
+  <text x="489" y="138" class="cell-text">T1548</text>
+  <text x="489" y="152" class="cell-text" font-size="9.5">Abuse Elevation Control</text>
+
+  <!-- T1685 Disable or Modify Tools (COVERED) -->
+  <g>
+    <rect x="636" y="122" width="145" height="42" rx="3" fill="url(#grad-active)" stroke="#3fb950" stroke-width="1.5" />
+    <text x="644" y="138" class="cell-text-active">T1685</text>
+    <text x="644" y="152" class="cell-text-active" font-size="9.5">Disable/Modify Tools</text>
+  </g>
+
+  <rect x="791" y="122" width="153" height="42" rx="3" fill="#161b22" stroke="#21262d" />
+  <text x="799" y="138" class="cell-text">T1110</text>
+  <text x="799" y="152" class="cell-text" font-size="9.5">Brute Force</text>
+
+  <!-- Row 2 -->
+  <!-- T1566.002 Spearphishing Link (COVERED) -->
+  <g>
+    <rect x="16" y="170" width="145" height="42" rx="3" fill="url(#grad-active)" stroke="#3fb950" stroke-width="1.5" />
+    <text x="24" y="186" class="cell-text-active">T1566.002</text>
+    <text x="24" y="200" class="cell-text-active" font-size="9.5">Spearphishing Link</text>
+  </g>
+
+  <rect x="171" y="170" width="145" height="42" rx="3" fill="#161b22" stroke="#21262d" />
+  <text x="179" y="186" class="cell-text">T1204</text>
+  <text x="179" y="200" class="cell-text" font-size="9.5">User Execution</text>
+
+  <rect x="326" y="170" width="145" height="42" rx="3" fill="#161b22" stroke="#21262d" />
+  <text x="334" y="186" class="cell-text">T1136</text>
+  <text x="334" y="200" class="cell-text" font-size="9.5">Create Account</text>
+
+  <rect x="481" y="170" width="145" height="42" rx="3" fill="#161b22" stroke="#21262d" />
+  <text x="489" y="186" class="cell-text">T1068</text>
+  <text x="489" y="200" class="cell-text" font-size="9.5">Exploitation Priv Esc</text>
+
+  <rect x="636" y="170" width="145" height="42" rx="3" fill="#161b22" stroke="#21262d" />
+  <text x="644" y="186" class="cell-text">T1070</text>
+  <text x="644" y="200" class="cell-text" font-size="9.5">Indicator Removal</text>
+
+  <rect x="791" y="170" width="153" height="42" rx="3" fill="#161b22" stroke="#21262d" />
+  <text x="799" y="186" class="cell-text">T1555</text>
+  <text x="799" y="200" class="cell-text" font-size="9.5">Credentials from Stores</text>
+
+  <!-- Row 3 -->
+  <rect x="16" y="218" width="145" height="42" rx="3" fill="#161b22" stroke="#21262d" />
+  <text x="24" y="234" class="cell-text">T1190</text>
+  <text x="24" y="248" class="cell-text" font-size="9.5">Exploit Public-Facing App</text>
+
+  <rect x="171" y="218" width="145" height="42" rx="3" fill="#161b22" stroke="#21262d" />
+  <text x="179" y="234" class="cell-text">T1047</text>
+  <text x="179" y="248" class="cell-text" font-size="9.5">WMI Execution</text>
+
+  <rect x="326" y="218" width="145" height="42" rx="3" fill="#161b22" stroke="#21262d" />
+  <text x="334" y="234" class="cell-text">T1547</text>
+  <text x="334" y="248" class="cell-text" font-size="9.5">Boot/Logon Autostart</text>
+
+  <rect x="481" y="218" width="145" height="42" rx="3" fill="#161b22" stroke="#21262d" />
+  <text x="489" y="234" class="cell-text">T1543</text>
+  <text x="489" y="248" class="cell-text" font-size="9.5">Create/Modify System Proc</text>
+
+  <rect x="636" y="218" width="145" height="42" rx="3" fill="#161b22" stroke="#21262d" />
+  <text x="644" y="234" class="cell-text">T1036</text>
+  <text x="644" y="248" class="cell-text" font-size="9.5">Masquerading</text>
+
+  <rect x="791" y="218" width="153" height="42" rx="3" fill="#161b22" stroke="#21262d" />
+  <text x="799" y="234" class="cell-text">T1003</text>
+  <text x="799" y="248" class="cell-text" font-size="9.5">OS Credential Dumping</text>
+
+  <!-- Row 4 -->
+  <rect x="16" y="266" width="145" height="42" rx="3" fill="#161b22" stroke="#21262d" />
+  <text x="24" y="282" class="cell-text">T1133</text>
+  <text x="24" y="296" class="cell-text" font-size="9.5">External Remote Services</text>
+
+  <rect x="171" y="266" width="145" height="42" rx="3" fill="#161b22" stroke="#21262d" />
+  <text x="179" y="282" class="cell-text">T1569</text>
+  <text x="179" y="296" class="cell-text" font-size="9.5">System Services</text>
+
+  <rect x="326" y="266" width="145" height="42" rx="3" fill="#161b22" stroke="#21262d" />
+  <text x="334" y="282" class="cell-text">T1053</text>
+  <text x="334" y="296" class="cell-text" font-size="9.5">Scheduled Task/Job</text>
+
+  <rect x="481" y="266" width="145" height="42" rx="3" fill="#161b22" stroke="#21262d" />
+  <text x="489" y="282" class="cell-text">T1055</text>
+  <text x="489" y="296" class="cell-text" font-size="9.5">Process Injection</text>
+
+  <rect x="636" y="266" width="145" height="42" rx="3" fill="#161b22" stroke="#21262d" />
+  <text x="644" y="282" class="cell-text">T1562</text>
+  <text x="644" y="296" class="cell-text" font-size="9.5">Impair Defenses</text>
+
+  <rect x="791" y="266" width="153" height="42" rx="3" fill="#161b22" stroke="#21262d" />
+  <text x="799" y="282" class="cell-text">T1558</text>
+  <text x="799" y="296" class="cell-text" font-size="9.5">Steal/Forge Kerberos</text>
+
+  <!-- Interactive Inspector Card (Anchored to T1078.004) -->
+  <g filter="url(#shadow)">
+    <!-- Connector line -->
+    <path d="M 161 143 L 210 143" stroke="#58a6ff" stroke-width="1.5" stroke-dasharray="3 3" />
+    <circle cx="161" cy="143" r="3" fill="#58a6ff" />
+
+    <!-- Popover Card -->
+    <rect x="210" y="112" width="370" height="175" rx="6" fill="#161b22" stroke="#58a6ff" stroke-width="1.5" />
+
+    <!-- Card Header -->
+    <rect x="210" y="112" width="370" height="32" rx="6" fill="#21262d" />
+    <text x="224" y="132" class="text-title" font-size="12">Technique Details: T1078.004</text>
+    <rect x="510" y="119" width="56" height="18" rx="4" fill="#23863633" stroke="#238636" stroke-width="1" />
+    <text x="519" y="132" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="10px" font-weight="600" fill="#3fb950">Score: 1.0</text>
+
+    <!-- Card Body -->
+    <text x="224" y="160" class="text-muted">Technique:</text>
+    <text x="290" y="160" class="col-header">Cloud Accounts</text>
+
+    <text x="224" y="180" class="text-muted">Rule Name:</text>
+    <text x="290" y="180" class="mono" font-size="11" fill="#79c0ff">gcp_storage_iam_public_access_granted</text>
+
+    <text x="224" y="200" class="text-muted">Engine:</text>
+    <text x="290" y="200" class="mono" font-size="11" fill="#c9d1d9">secops (Google SecOps / YARA-L 2.0)</text>
+
+    <text x="224" y="220" class="text-muted">Deployment:</text>
+    <text x="290" y="220" class="mono" font-size="11" fill="#56d364">enabled (live alerting)</text>
+
+    <text x="224" y="240" class="text-muted">Runbook:</text>
+    <text x="290" y="240" class="col-header" fill="#f0f6fc">Documented (Investigation &amp; Triage Steps)</text>
+
+    <text x="224" y="260" class="text-muted">Source Path:</text>
+    <text x="290" y="260" class="mono" font-size="10" fill="#8b949e">rulesets/secops/custom/..._access_granted.yaml</text>
+  </g>
+
+  <!-- Footer Information Bar -->
+  <line x1="0" y1="440" x2="960" y2="440" stroke="#30363d" stroke-width="1" />
+  <rect y="440" width="960" height="40" rx="8" class="bar" />
+  <text x="20" y="465" class="mono" font-size="11" fill="#8b949e">$ graft export matrix --format navigator --engine secops --out exports/secops_coverage.json</text>
+  <text x="760" y="465" class="text-muted" font-size="11">MITRE ATT&amp;CK® Matrix v19.2</text>
+</svg>

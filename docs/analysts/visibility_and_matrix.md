@@ -44,13 +44,13 @@ Generate JSON layers adhering to the MITRE ATT&CK Navigator specification (versi
 
 ```bash
 # Export unified catalog layer (default greenish gradient: #008744)
-graft export matrix --format navigator --out layers/graft_coverage.json
+graft export matrix --format navigator --out exports/graft_coverage.json
 
 # Export engine-scoped layer with custom gradient color
-graft export matrix --format navigator --engine secops --color "#4285F4" --out layers/secops_coverage.json
+graft export matrix --format navigator --engine secops --color "#4285F4" --out exports/secops_coverage.json
 ```
 
-Import `layers/graft_coverage.json` directly into the [MITRE ATT&CK Navigator Web App](https://mitre-attack.github.io/attack-navigator/) to visualize detection coverage heatmaps, identify visibility gaps, and present metrics to stakeholders.
+Import `exports/graft_coverage.json` directly into the [MITRE ATT&CK Navigator Web App](https://mitre-attack.github.io/attack-navigator/) to visualize detection coverage heatmaps, identify visibility gaps, and present metrics to stakeholders.
 
 ### 3. Multi-Engine Gap Analysis in MITRE Navigator
 Operators managing hybrid detection platforms (e.g. Google SecOps and endpoint security) can export distinct layers per engine using `--engine <name>` and `--color <hex>`, then leverage Navigator's layer combination arithmetic for automated gap analysis.

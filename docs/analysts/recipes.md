@@ -265,10 +265,10 @@ graft export matrix --format table
 graft export matrix --format table --engine secops
 
 # Generate official MITRE ATT&CK Navigator v4.5 JSON layer (default greenish gradient: #008744)
-graft export matrix --format navigator --out layers/enterprise_coverage.json
+graft export matrix --format navigator --out exports/enterprise_coverage.json
 
 # Generate engine-scoped Navigator layer with a custom gradient color
-graft export matrix --format navigator --engine secops --color "#4285F4" --out layers/secops_coverage.json
+graft export matrix --format navigator --engine secops --color "#4285F4" --out exports/secops_coverage.json
 ```
 
 ### Multi-Engine Gap Analysis in MITRE Navigator
@@ -281,10 +281,10 @@ For detailed background and methodology, see Joe Lopes's foundational guide:
 Rather than hardcoding engine-to-color mappings, Graft empowers operators to select distinct gradient colors via `--color`:
 ```bash
 # Export Google SecOps layer (e.g. blue)
-graft export matrix --format navigator --engine secops --color "#4285F4" --out layers/secops.json
+graft export matrix --format navigator --engine secops --color "#4285F4" --out exports/secops.json
 
 # Export auxiliary engine layer (e.g. green)
-graft export matrix --format navigator --engine sentinel --color "#008744" --out layers/sentinel.json
+graft export matrix --format navigator --engine sentinel --color "#008744" --out exports/sentinel.json
 ```
 
 Each generated layer scopes techniques to tactic shortnames (e.g. `initial-access`, `defense-impairment`) and sets `selectTechniquesAcrossTactics: false`. This ensures technique scores and annotations remain locked to their relevant tactic column without bleeding across unrelated columns.
@@ -295,7 +295,7 @@ Each technique in the layer is enriched with:
 
 #### 2. Combining Layers in MITRE Navigator
 1. Navigate to the [MITRE ATT&CK Navigator Web App](https://mitre-attack.github.io/attack-navigator/).
-2. Open each exported layer (`layers/secops.json` as Layer **`a`**, `layers/sentinel.json` as Layer **`b`**).
+2. Open each exported layer (`exports/secops.json` as Layer **`a`**, `exports/sentinel.json` as Layer **`b`**).
 3. Click **"+" > Create Layer from Other Layers** to combine them using mathematical expressions:
    - **Combined Footprint (Union):** `max(a, b)` highlights all techniques covered by at least one engine.
    - **Redundant Defenses (Intersection):** `min(a, b)` highlights techniques covered by both engines simultaneously.

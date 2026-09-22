@@ -43,19 +43,107 @@ Graft acts as the unified trunk:
 
 ## Architecture at a Glance
 
-Graft follows strict **Hexagonal Architecture (Ports & Adapters)**:
+Graft follows strict **Hexagonal Architecture (Ports & Adapters)** structured as an operating system stack:
 
 ```mermaid
 flowchart TD
-    CLI["<b>Unified CLI</b> (argparse)<br/><code>graft lint</code><br/><code>graft export</code><br/><code>graft &lt;engine&gt; [cmd]</code>"]
-    CORE["<b>Driving Core</b> (src/graft/core/)<br/>• Domain Models (dataclasses)<br/>• Schema & MITRE Validators<br/>• Git Blame Enriched Exporters<br/>• ATT&CK Navigator Generator<br/>• Engine Ports (Protocols)"]
-    SECOPS["<b>Google SecOps Engine</b> (src/graft/engines/secops/)<br/>• Chronicle REST Client (urllib)<br/>• verifyRuleText Dry-Run<br/>• Custom Rule Deployer<br/>• Managed Reconciler<br/>• Staging Replay Harness"]
-    FUTURE["<b>Future Engines</b><br/>(Sentinel, Splunk, CrowdStrike)"]
+    subgraph DRIVING["Driving Interfaces (User Space)"]
+        direction LR
+        CLI["<b>Unified CLI Router</b><br/><code>graft lint</code> · <code>graft export</code> · <code>graft &lt;engine&gt;</code>"]
+        GITOPS["<b>GitOps CI/CD Pipelines</b><br/>Pre-Merge Dry-Runs · Auto-Sync on Merge"]
+        HOOKS["<b>Developer Quality Hooks</b><br/>Native Fast Offline Pre-Commit Gates"]
+    end
 
-    CLI --> CORE
-    CORE --> SECOPS
-    CORE -.-> FUTURE
+    subgraph ENGINES["Modular Pluggable Engines (src/graft/engines/)"]
+        direction LR
+        SECOPS["<b>Google SecOps Engine</b><br/><i>(Production-Ready Adapter)</i><br/>• YARA-L 2.0 REST API Client<br/>• Non-Destructive <code>verifyRuleText</code><br/>• Curated Rule Set Sync &amp; Exclusions<br/>• Staging UDM Replay Quarantine"]
+        SENTINEL["<b>Microsoft Sentinel</b><br/><i>(Extensible Port)</i><br/>• KQL Query Compilation<br/>• ARM / Bicep Sync<br/>• Analytic Rule Packaging"]
+        SPLUNK["<b>Splunk ES</b><br/><i>(Extensible Port)</i><br/>• SPL / SPL2 Correlation<br/>• Saved Searches REST API<br/>• App Manifest Packaging"]
+        ELASTIC["<b>Elastic Security</b><br/><i>(Extensible Port)</i><br/>• EQL / ES|QL Query Engine<br/>• Rules API Integration<br/>• Prebuilt Package Mapping"]
+    end
+
+    subgraph CORE["Graft Core Kernel Substrate (src/graft/core/)"]
+        direction TB
+        subgraph PORTS["Hexagonal Port Interfaces (Protocols)"]
+            direction LR
+            P_DEPLOY["<code>RuleDeployerPort</code>"]
+            P_COMP["<code>SyntaxCompilerPort</code>"]
+            P_MNG["<code>ManagedEnginePort</code>"]
+            P_REPLAY["<code>ReplayTestPort</code>"]
+        end
+        subgraph KERNEL["Engine-Agnostic Core Services"]
+            direction LR
+            MODELS["<b>5-Block Envelope Domain Models</b><br/>Immutable Dataclasses · Metadata · Runbook"]
+            SCHEMA["<b>Draft 2020-12 Schema Validator</b><br/>Sub-Second Strict Taxonomies"]
+            RECON["<b>Dual-Track GitOps Reconciler</b><br/>Custom Rules + Vendor Managed Drift"]
+            BLAME["<b>Git Blame Lifecycle Engine</b><br/>Factual Commits &amp; Author Indicators"]
+            ATTACK["<b>ATT&amp;CK v19.2 Matrix Engine</b><br/>Cross-Engine Navigator Layering"]
+        end
+    end
+
+    DRIVING --> ENGINES
+    ENGINES --> PORTS
+    PORTS --> KERNEL
 ```
+
+---
+
+## Key Features
+
+### 1. Modular Engine Architecture & Pluggable Adapters
+Graft strictly decouples detection engineering logic from downstream SIEM and telemetry platforms using **Hexagonal Architecture (Ports & Adapters)**:
+- **Self-Contained Engine Packages:** Every detection engine lives in an isolated directory under `src/graft/engines/<engine>/` housing its concrete API client, deployment adapter, engine-specific Draft 2020-12 schemas, and documentation.
+- **Strict Protocol Boundaries:** Engines implement explicit standard library `typing.Protocol` ports (`RuleDeployerPort`, `ManagedEnginePort`, `SyntaxCompilerPort`, `ReplayTestPort`). Core never adapts to an engine; engines adapt to Core.
+- **Zero Core Cloud Dependencies:** The core substrate imports zero third-party SIEM SDKs or cloud libraries. It relies strictly on Python standard library modules (`urllib.request`, `dataclasses`, `argparse`, `subprocess`), guaranteeing fast, lightweight, and auditable execution.
+- **Engine Scaffolding in Seconds:** Adding a new SIEM target (e.g. Microsoft Sentinel, Splunk ES, Elastic) requires no core refactoring. Running `graft new engine <name>` generates the complete directory structure, schema definitions, unit test scaffolds, and documentation templates instantly.
+
+### 2. Actionable Detection Envelopes & Factual Lifecycle
+Detection logic is only as effective as the operational response it enables:
+- **Normalized 5-Block Envelope:** Detections are authored in a standardized YAML envelope separating `metadata`, `logic`, `deployment`, `runbook`, and `tests`.
+- **Embedded Operational Runbooks:** Every rule embeds actionable triage playbooks directly alongside the detection logic (`investigation_steps`, `triage_commands`, and `response_actions`), eliminating tribal knowledge and context switching for SOC analysts during live incident response.
+- **Factual Lifecycle vs. "Maturity Score" Theater:** Graft rejects arbitrary 0–100 maturity guesses and manual status tags that rapidly become stale. Instead, Graft empirically computes factual lifecycle indicators directly from Git version history (first committed timestamp, latest revision timestamp, review commit count, unique author count) combined with active SIEM deployment health.
+- **Safe Archival & Zero Blind-Spot Governance:** Retiring a rule is as simple as moving it to `rulesets/<engine>/_archived/`. Graft automatically excludes any underscore-prefixed directory from active sync, matrix exports, and linting, preserving full envelope context and test fixtures for audits without cluttering active deployments.
+
+### 3. Dual-Track GitOps Drift Reconciliation
+Modern SIEMs run a combination of bespoke custom rules and vendor-managed curated detections. Graft manages both under unified version control:
+- **Custom Rule Synchronization:** Authors maintain declarative custom rules in Git (`rulesets/<engine>/custom/`). Graft calculates precise diffs between local state and live tenant APIs, automating safe creates and updates.
+- **Vendor-Managed Curated Content Control:** Manage vendor curated rule sets (`rulesets/<engine>/managed.yaml`) directly in code. Operators can declare precision tiers (`PRECISE` vs `BROAD`), toggle alerting states, and commit declarative rule exclusions (`findingsRefinements`) to suppress benign environmental noise.
+- **Dual-Mode Drift Reconciliation:**
+  - **Scoped PR Reconciliation (Default):** Evaluates only files modified in the active Git branch against tenant state, enabling lightning-fast pull request validations in CI/CD.
+  - **Full Catalog Convergence (`--all`):** Scans the entire tenant catalog to detect and reconcile out-of-band console drift, enforcing Git as the authoritative Source of Truth.
+- **Day 0 Brownfield Ingestion:** Teams can adopt Graft on existing SIEM instances in minutes without disruption. Running `graft <engine> pull` reverse-synchronizes live tenant custom rules and curated content into clean Git-managed envelopes.
+
+```bash
+$ graft secops diff --env production
+=== Custom Rules Diff ===
+[+] Custom rule to create: gcp_storage_iam_public_access_granted
+[~] Custom rule to update: workspace_nrd_possible_phishing (ID: ru_12345678-abcd-ef01-2345-6789abcdef01)
+[?] Untracked custom rule on tenant: legacy_unmanaged_alert (ID: ru_98765432-feee-dcba-0000-111122223333)
+
+=== Google SecOps Managed Content Diff ===
+[~] Deployment: ur_cloud_threats (PRECISE) | enabled: False -> True, alerting: False -> True
+[+] Exclusion to create: excl_cloud_functions_pipeline_sa
+[-] Exclusion to delete: excl_temp_maintenance_window
+```
+
+### 4. Threat Visibility, Audit-Ready Catalogs & ATT&CK v19.2 Layers
+Bridge the gap between detection engineering code, SOC operations, and leadership reporting:
+- **Multi-Format Detection Catalogs:** Export unified catalogs in interactive terminal tables, CSV spreadsheets, Markdown documentation (`docs/RULE_CATALOG.md`), or JSON for ingestion into security data lakes, BigQuery, or BI dashboards.
+- **MITRE ATT&CK Enterprise v19.2 Matrix:** Built-in evaluation of tactics and sub-techniques (`TAxxxx:Tyyyy.zzz`) with automated cross-engine technique normalization and coverage analysis.
+- **Official Navigator Layer Generation:** Generate color-graded MITRE ATT&CK Navigator v4.5/v5.2 layer files (`exports/secops_coverage.json`) with embedded rule metadata, deployment status, and direct source links for interactive heatmap visualization in the official ATT&CK Navigator.
+
+```bash
+$ graft export catalog
+Rule Name                              Engine  Status   MITRE ATT&CK                        Reviews  Runbook  Updated             
+-------------------------------------  ------  -------  ----------------------------------  -------  -------  --------------------
+gcp_iam_service_account_key_create     secops  enabled  TA0003:T1098.001, TA0004:T1098.001  1        yes      2026-09-22T14:01:52Z
+gcp_storage_iam_public_access_granted  secops  enabled  TA0001:T1078.004, TA0112:T1685      2        yes      2026-09-22T15:17:52Z
+workspace_nrd_possible_phishing        secops  enabled  TA0001:T1566.002                    1        yes      2026-09-22T14:01:52Z
+```
+
+<p align="center">
+  <img src="assets/attack-navigator-layer.svg" alt="MITRE ATT&CK Navigator Coverage Heatmap" width="900">
+</p>
 
 ---
 
@@ -198,9 +286,9 @@ graft export catalog --engine secops
 graft export matrix --format table --engine secops
 
 # Generate official MITRE ATT&CK Enterprise v19.2 Navigator layer (custom color gradient)
-graft export matrix --format navigator --engine secops --color "#4285F4" --out layers/secops_coverage.json
+graft export matrix --format navigator --engine secops --color "#4285F4" --out exports/secops_coverage.json
 
-# Export detection catalog for GRC compliance audits and documentation
+# Export detection catalog for audits and documentation pipelines
 graft export catalog --format csv --out exports/detection_catalog.csv
 graft export catalog --format markdown --out docs/RULE_CATALOG.md
 graft export catalog --format json

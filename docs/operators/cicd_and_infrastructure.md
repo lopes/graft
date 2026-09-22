@@ -103,8 +103,8 @@ When a pull request is merged into `main`, the deployment workflow executes auth
    Enforces full convergence across both custom detection rules and vendor-managed curated content, automatically healing any out-of-band console drift.
 5. **Governance Artifact Generation:**
    ```bash
-   mkdir -p exports layers
-   uv run graft export matrix --format navigator --out layers/attack_navigator_layer.json
+   mkdir -p exports
+   uv run graft export matrix --format navigator --out exports/attack_navigator_layer.json
    uv run graft export catalog --format markdown --out exports/ruleset_catalog.md
    uv run graft export catalog --format csv --out exports/ruleset_catalog.csv
    ```
