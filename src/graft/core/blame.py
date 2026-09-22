@@ -12,6 +12,7 @@ class RuleGitMetadata:
     last_modified_by: str
     last_modified_at: str
     commit_count: int
+    contributor_count: int
 
 
 def extract_git_metadata(path: Path | str, cwd: Path | None = None) -> RuleGitMetadata:
@@ -24,6 +25,7 @@ def extract_git_metadata(path: Path | str, cwd: Path | None = None) -> RuleGitMe
     last_modified_by = "Unknown"
     last_modified_at = "Unknown"
     commit_count = 0
+    contributor_count = 0
 
     try:
         creation_proc = subprocess.run(  # noqa: S603
@@ -106,6 +108,23 @@ def extract_git_metadata(path: Path | str, cwd: Path | None = None) -> RuleGitMe
         if count_str.isdigit():
             commit_count = int(count_str)
 
+        # 4. Contributor count (unique author emails)
+        authors_proc = subprocess.run(  # noqa: S603
+            [
+                git_bin,
+                "log",
+                "--format=%ae",
+                "--",
+                str(file_path),
+            ],
+            cwd=cwd,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        emails = {line.strip() for line in authors_proc.stdout.splitlines() if line.strip()}
+        contributor_count = len(emails)
+
     except (subprocess.SubprocessError, OSError):
         pass
 
@@ -116,4 +135,5 @@ def extract_git_metadata(path: Path | str, cwd: Path | None = None) -> RuleGitMe
         last_modified_by=last_modified_by,
         last_modified_at=last_modified_at,
         commit_count=commit_count,
+        contributor_count=contributor_count,
     )

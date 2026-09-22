@@ -23,6 +23,11 @@ class CatalogEntry:
     author: str
     created_at: str
     last_modified_at: str
+    review_count: int
+    contributor_count: int
+    has_tests: bool
+    test_event_count: int
+    has_runbook: bool
     run_frequency: str
     enabled: bool
     alerting: bool
@@ -36,6 +41,8 @@ def build_catalog_entry_from_rule(
     author = rule.metadata.authors[0] if rule.metadata.authors else "Unknown"
     created_at = "Unknown"
     last_modified_at = "Unknown"
+    review_count = 0
+    contributor_count = 0
 
     if path is not None:
         p = Path(path)
@@ -45,12 +52,20 @@ def build_catalog_entry_from_rule(
                 author = git_meta.author
             created_at = git_meta.created_at
             last_modified_at = git_meta.last_modified_at
+            review_count = git_meta.commit_count
+            contributor_count = git_meta.contributor_count
 
     tactics = sorted(rule.metadata.mitre.keys())
     techniques: list[str] = []
     for tech_list in rule.metadata.mitre.values():
         techniques.extend(tech_list)
     techniques = sorted(set(techniques))
+
+    has_tests = bool(rule.tests)
+    test_event_count = sum(len(t.events) for t in rule.tests)
+    has_runbook = bool(
+        rule.runbook.context.strip() or rule.runbook.triage.strip() or rule.runbook.response.strip()
+    )
 
     return CatalogEntry(
         id=rule.metadata.id,
@@ -65,6 +80,11 @@ def build_catalog_entry_from_rule(
         author=author,
         created_at=created_at,
         last_modified_at=last_modified_at,
+        review_count=review_count,
+        contributor_count=contributor_count,
+        has_tests=has_tests,
+        test_event_count=test_event_count,
+        has_runbook=has_runbook,
         run_frequency=rule.deployment.run_frequency,
         enabled=rule.deployment.enabled,
         alerting=rule.deployment.alerting,
@@ -81,7 +101,12 @@ def export_catalog_markdown(entries: Sequence[CatalogEntry]) -> str:
         "Run Frequency",
         "MITRE Techniques",
         "Author",
+        "Created",
         "Last Updated",
+        "Reviews",
+        "Contributors",
+        "Tests",
+        "Runbook",
     ]
     lines: list[str] = [
         f"| {' | '.join(headers)} |",
@@ -99,7 +124,12 @@ def export_catalog_markdown(entries: Sequence[CatalogEntry]) -> str:
             e.run_frequency,
             tech_str,
             e.author,
+            e.created_at if e.created_at != "Unknown" else "-",
             e.last_modified_at if e.last_modified_at != "Unknown" else "-",
+            str(e.review_count),
+            str(e.contributor_count),
+            f"yes ({e.test_event_count})" if e.has_tests else "no",
+            "yes" if e.has_runbook else "no",
         ]
         lines.append(f"| {' | '.join(row)} |")
 
@@ -120,6 +150,11 @@ def export_catalog_csv(entries: Sequence[CatalogEntry]) -> str:
         "author",
         "created_at",
         "last_modified_at",
+        "review_count",
+        "contributor_count",
+        "has_tests",
+        "test_event_count",
+        "has_runbook",
         "run_frequency",
         "enabled",
         "alerting",
