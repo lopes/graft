@@ -58,6 +58,9 @@ Actionable documentation embedded directly alongside detection logic.
 ### Block 5: `tests`
 Synthetic replay test fixtures for automated validation.
 
+> [!NOTE]
+> **Experimental Capability:** Synthetic replay tests in rule envelopes are an experimental capability. While schema-validated and parsed by Graft core models, dynamic cloud replay execution requires dedicated staging instances and is subject to SIEM API availability.
+
 - `id` *(string, required)*: Unique test vector identifier (`^[a-z0-9_]+$`).
 - `description` *(string, required)*: Objective of this test case.
 - `expect` *(integer, required)*: Expected number of detection matches (e.g., `1` for positive tests, `0` for negative tests).

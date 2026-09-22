@@ -102,7 +102,7 @@ graft export catalog --format=markdown --out docs/RULE_CATALOG.md
 | `workspace_nrd_possible_phishing` | secops | custom | enabled | TA0001:T1566.002 | Joe Lopes <lopes.id> | 2026-09-17 | 4 |
 
 ### CSV Catalog (`--format=csv`)
-Generate spreadsheet-ready exports for GRC compliance audits and security data pipelines:
+Generate spreadsheet-ready exports for security audits and reporting pipelines:
 
 ```bash
 graft export catalog --format=csv --out exports/detection_catalog.csv

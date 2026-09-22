@@ -246,7 +246,7 @@ graft export catalog
 # Filter catalog to a specific engine
 graft export catalog --engine secops
 
-# Export machine-readable CSV for GRC compliance and data pipelines
+# Export machine-readable CSV for audit readiness and data pipelines
 graft export catalog --format csv --out exports/rules.csv
 
 # Export Markdown catalog for repository documentation or wikis
@@ -258,7 +258,7 @@ graft export catalog --format json --out exports/rules.json
 
 ### Threat Matrix & MITRE Navigator Commands
 ```bash
-# View terminal ASCII table of MITRE ATT&CK technique coverage
+# View terminal table of MITRE ATT&CK technique coverage
 graft export matrix --format table
 
 # Filter matrix table by engine
