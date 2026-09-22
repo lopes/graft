@@ -213,6 +213,8 @@ To guarantee state preservation, eliminate hallucination, and prevent context sa
 | **Documentation Persona Reorganization** | `[x]` | 3-track persona documentation (analysts, operators, developers), framework spec, recipes cookbook | `docs/`, `README.md` |
 | **Scoped CI Verification & E2E GitOps Live Validation** | `[x]` | Scoped diff compiler pre-merge dry-runs, fault tolerance docs, and live production reconciliation validation | `.github/workflows/`, `docs/operators/gitops_reconciliation.md` |
 | **YARA-L Synthesis & Identity Convergence** | `[x]` | Preserve Graft metadata.id in SecOps meta.id, 2-space logic indentation, dedented deconstruction, and semantic deconstruction equivalence | `src/graft/engines/secops/`, `docs/engines/secops.md` |
+| **Rule Content Review & Deprecation of Status** | `[x]` | Concise rule descriptions, MITRE deduplication, unwrap runbook context, and complete removal of metadata.status | `rules/`, `src/graft/core/models/`, `src/graft/core/schemas/` |
+| **Core Schema Packaging & Unified Test Hierarchy** | `[x]` | Relocate core schemas to `src/graft/core/schemas/` and consolidate engine tests under `tests/engines/<engine>/` | `src/graft/core/schemas/`, `tests/engines/` |
 
 ---
 

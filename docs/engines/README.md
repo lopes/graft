@@ -19,8 +19,8 @@ graft/
 │   ├── managed.py            # Managed state sync (ManagedEnginePort)
 │   ├── replay.py             # Synthetic replay harness (ReplayHarnessPort)
 │   ├── schemas/              # Co-located engine schemas (rule.schema.json)
-│   ├── tests/                # In-tree unit & contract tests
 │   └── README.md             # Engine-specific documentation
+├── tests/engines/<engine>/   # Engine unit & contract tests
 └── rules/<engine>/
     ├── custom/               # 5-block envelope custom rules (.yaml)
     └── managed.yaml          # Declarative vendor-managed content manifest
@@ -30,7 +30,7 @@ graft/
 
 ## 2. Pluggable Discovery & Capabilities-Driven CLI Routing
 
-Engines are discovered dynamically at runtime by [`EngineRegistry`](file:///usr/local/google/home/joelopes/Projects/graft/src/graft/core/engine_registry.py), which parses and validates each engine's `engine.yaml` against `schemas/engine_manifest.schema.json`.
+Engines are discovered dynamically at runtime by [`EngineRegistry`](file:///usr/local/google/home/joelopes/Projects/graft/src/graft/core/engine_registry.py), which parses and validates each engine's `engine.yaml` against [`src/graft/core/schemas/engine_manifest.schema.json`](file:///usr/local/google/home/joelopes/Projects/graft/src/graft/core/schemas/engine_manifest.schema.json).
 
 Based on the capabilities declared in `engine.yaml`, [`EngineCommandController`](file:///usr/local/google/home/joelopes/Projects/graft/src/graft/cli/engine_controller.py) automatically provisions subcommands:
 

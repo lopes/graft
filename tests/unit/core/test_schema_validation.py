@@ -239,7 +239,7 @@ def test_reference_managed_manifest_validates_cleanly(validator: SchemaValidator
 
 
 def test_all_schemas_conform_to_draft202012_metaschema() -> None:
-    schemas_dir = Path("schemas")
+    schemas_dir = Path("src/graft/core/schemas")
     schema_files = list(schemas_dir.glob("*.schema.json"))
     for engine_schemas_dir in Path("src/graft/engines").glob("*/schemas"):
         schema_files.extend(engine_schemas_dir.glob("*.schema.json"))
@@ -253,7 +253,7 @@ def test_all_schemas_conform_to_draft202012_metaschema() -> None:
 def test_schema_validator_discovers_engine_schemas(tmp_path: Path) -> None:
     schemas_dir = tmp_path / "schemas"
     schemas_dir.mkdir(parents=True)
-    base_rule = Path("schemas/base_rule.schema.json").read_text(encoding="utf-8")
+    base_rule = Path("src/graft/core/schemas/base_rule.schema.json").read_text(encoding="utf-8")
     (schemas_dir / "base_rule.schema.json").write_text(base_rule, encoding="utf-8")
 
     engines_dir = tmp_path / "engines"

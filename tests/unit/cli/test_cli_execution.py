@@ -149,10 +149,14 @@ def test_main_lint_same_name_across_different_engines_passes(
 
 
 def test_main_new_engine(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    base_schema_content = Path("schemas/base_rule.schema.json").read_text(encoding="utf-8")
+    base_schema_content = Path("src/graft/core/schemas/base_rule.schema.json").read_text(
+        encoding="utf-8"
+    )
     monkeypatch.chdir(tmp_path)
-    (tmp_path / "schemas").mkdir(parents=True)
-    Path("schemas/base_rule.schema.json").write_text(base_schema_content, encoding="utf-8")
+    (tmp_path / "src" / "graft" / "core" / "schemas").mkdir(parents=True)
+    (tmp_path / "src" / "graft" / "core" / "schemas" / "base_rule.schema.json").write_text(
+        base_schema_content, encoding="utf-8"
+    )
     exit_code = main(["new", "engine", "testengine"])
     assert exit_code == 0
     engine_dir = tmp_path / "src" / "graft" / "engines" / "testengine"
@@ -162,14 +166,18 @@ def test_main_new_engine(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Non
 
 
 def test_main_secops_new_rule(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    base_schema_content = Path("schemas/base_rule.schema.json").read_text(encoding="utf-8")
+    base_schema_content = Path("src/graft/core/schemas/base_rule.schema.json").read_text(
+        encoding="utf-8"
+    )
     secops_schema_content = Path("src/graft/engines/secops/schemas/rule.schema.json").read_text(
         encoding="utf-8"
     )
     monkeypatch.chdir(tmp_path)
-    (tmp_path / "schemas").mkdir(parents=True)
+    (tmp_path / "src" / "graft" / "core" / "schemas").mkdir(parents=True)
     (tmp_path / "src" / "graft" / "engines" / "secops" / "schemas").mkdir(parents=True)
-    Path("schemas/base_rule.schema.json").write_text(base_schema_content, encoding="utf-8")
+    (tmp_path / "src" / "graft" / "core" / "schemas" / "base_rule.schema.json").write_text(
+        base_schema_content, encoding="utf-8"
+    )
     Path("src/graft/engines/secops/schemas/rule.schema.json").write_text(
         secops_schema_content, encoding="utf-8"
     )
@@ -180,14 +188,18 @@ def test_main_secops_new_rule(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -
 
 
 def test_main_new_rule_via_root_command(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    base_schema_content = Path("schemas/base_rule.schema.json").read_text(encoding="utf-8")
+    base_schema_content = Path("src/graft/core/schemas/base_rule.schema.json").read_text(
+        encoding="utf-8"
+    )
     secops_schema_content = Path("src/graft/engines/secops/schemas/rule.schema.json").read_text(
         encoding="utf-8"
     )
     monkeypatch.chdir(tmp_path)
-    (tmp_path / "schemas").mkdir(parents=True)
+    (tmp_path / "src" / "graft" / "core" / "schemas").mkdir(parents=True)
     (tmp_path / "src" / "graft" / "engines" / "secops" / "schemas").mkdir(parents=True)
-    Path("schemas/base_rule.schema.json").write_text(base_schema_content, encoding="utf-8")
+    (tmp_path / "src" / "graft" / "core" / "schemas" / "base_rule.schema.json").write_text(
+        base_schema_content, encoding="utf-8"
+    )
     Path("src/graft/engines/secops/schemas/rule.schema.json").write_text(
         secops_schema_content, encoding="utf-8"
     )

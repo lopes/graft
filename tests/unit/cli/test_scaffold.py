@@ -36,9 +36,10 @@ def test_scaffold_engine_creates_structure_and_files(tmp_path: Path) -> None:
     rules_dir = tmp_path / "rules" / "sentinel" / "custom"
     assert rules_dir.is_dir()
 
-    # 4. In-tree tests in src/graft/engines/sentinel/tests/
-    assert (engine_dir / "tests" / "test_compiler.py").exists()
-    assert (engine_dir / "tests" / "test_adapter.py").exists()
+    # 4. Engine tests in tests/engines/sentinel/
+    tests_engine_dir = tmp_path / "tests" / "engines" / "sentinel"
+    assert (tests_engine_dir / "test_compiler.py").exists()
+    assert (tests_engine_dir / "test_adapter.py").exists()
 
     # 5. Manifest validates and is discoverable via EngineRegistry
     registry = EngineRegistry(engines_dir=tmp_path / "src" / "graft" / "engines")

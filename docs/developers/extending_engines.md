@@ -19,11 +19,16 @@ src/graft/engines/sentinel/
 ├── compiler.py           # Syntax verification implementing RuleCompilerPort
 ├── deployer.py           # Custom rule CRUD implementing RuleDeployerPort
 ├── schemas/
-│   └── rule_logic.schema.json  # Engine-specific logic block schema for graft lint
-└── tests/
-    ├── __init__.py
-    ├── test_sentinel_compiler.py  # In-tree compiler unit tests
-    └── test_sentinel_adapter.py   # In-tree adapter contract tests
+│   └── rule.schema.json      # Engine-specific rule schema for graft lint
+└── README.md                 # Engine documentation
+```
+
+Engine tests live in `tests/engines/<engine>/`:
+```text
+tests/engines/sentinel/
+├── __init__.py
+├── test_compiler.py          # Compiler unit tests
+└── test_adapter.py           # Adapter contract tests
 ```
 
 Additionally, Graft maintains an engine-namespaced rule catalog:
@@ -81,7 +86,7 @@ env_vars:
 ```
 
 > [!TIP]
-> The manifest is validated against `schemas/engine_manifest.schema.json`. Capabilities declared here dictate which CLI commands Core registers for this engine.
+> The manifest is validated against `src/graft/core/schemas/engine_manifest.schema.json`. Capabilities declared here dictate which CLI commands Core registers for this engine.
 
 ---
 
@@ -367,7 +372,7 @@ def test_sentinel_adapter_conforms_to_protocol() -> None:
 Run pytest to verify discovery and execution:
 
 ```bash
-uv run pytest src/graft/engines/sentinel/tests
+uv run pytest tests/engines/sentinel
 ```
 
 ---
@@ -375,9 +380,9 @@ uv run pytest src/graft/engines/sentinel/tests
 ## 10. Summary Verification Checklist
 
 Before submitting an engine PR:
-- [ ] Manifest `engine.yaml` is valid according to `schemas/engine_manifest.schema.json`.
+- [ ] Manifest `engine.yaml` is valid according to `src/graft/core/schemas/engine_manifest.schema.json`.
 - [ ] Logic schema `schemas/rule_logic.schema.json` validates example rules.
 - [ ] All HTTP interactions use `urllib.request` (zero third-party dependencies).
 - [ ] Adapter passes `isinstance(adapter, EngineAdapter)` protocol checks.
-- [ ] In-tree tests achieve 100% pass rate in `uv run pytest`.
+- [ ] Engine tests achieve 100% pass rate in `uv run pytest tests/engines/<engine>`.
 - [ ] Code passes strict static quality gates: `uv run ruff check .`, `uv run ruff format --check .`, and `uv run mypy --strict src tests`.

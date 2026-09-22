@@ -27,7 +27,7 @@ def scaffold_engine(name: str, project_root: Path | None = None) -> dict[str, Pa
         raise ScaffoldError(f"Engine '{name}' already exists at {engine_dir}")
 
     schemas_dir = engine_dir / "schemas"
-    tests_engine_dir = engine_dir / "tests"
+    tests_engine_dir = root / "tests" / "engines" / name
     rules_custom_dir = root / "rules" / name / "custom"
 
     engine_dir.mkdir(parents=True, exist_ok=True)
@@ -348,7 +348,9 @@ def scaffold_rule(
     }
 
     # Validate against schema if schema is available
-    schema_dir = root / "schemas"
+    schema_dir = root / "src" / "graft" / "core" / "schemas"
+    if not schema_dir.is_dir():
+        schema_dir = root / "schemas"
     engines_dir = root / "src" / "graft" / "engines"
     try:
         validator = SchemaValidator(

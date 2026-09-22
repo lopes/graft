@@ -338,7 +338,7 @@ flowchart TD
 Graft dynamically discovers engines without requiring hardcoded imports in Core:
 
 1. **Manifest Discovery:** At startup, `EngineRegistry._discover()` scans all subdirectories under `src/graft/engines/` for `engine.yaml`.
-2. **Manifest Validation:** Every manifest is validated against [`schemas/engine_manifest.schema.json`](file:///usr/local/google/home/joelopes/Projects/graft/schemas/engine_manifest.schema.json).
+2. **Manifest Validation:** Every manifest is validated against [`src/graft/core/schemas/engine_manifest.schema.json`](file:///usr/local/google/home/joelopes/Projects/graft/src/graft/core/schemas/engine_manifest.schema.json).
 3. **Logic Schema Discovery:** In 5-block rule envelopes, the `logic:` block contains engine-specific syntax. When `graft lint` validates a rule for an engine, [`SchemaValidator`](file:///usr/local/google/home/joelopes/Projects/graft/src/graft/core/validation/schema_validator.py) checks for an engine-co-located schema at:
    ```text
    src/graft/engines/<engine>/schemas/rule_logic.schema.json

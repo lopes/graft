@@ -27,27 +27,39 @@ class SchemaValidator:
         self._load_schemas()
 
     def _find_schemas_dir(self) -> Path:
+        primary = Path(__file__).resolve().parent.parent / "schemas"
+        if primary.is_dir() and (primary / "base_rule.schema.json").exists():
+            return primary
         current = Path(__file__).resolve().parent
         for parent in [current, *current.parents]:
+            candidate_core = parent / "src" / "graft" / "core" / "schemas"
+            if candidate_core.is_dir() and (candidate_core / "base_rule.schema.json").exists():
+                return candidate_core
             candidate = parent / "schemas"
             if candidate.is_dir() and (candidate / "base_rule.schema.json").exists():
                 return candidate
-        cwd_candidate = Path.cwd() / "schemas"
+        cwd_candidate = Path.cwd() / "src" / "graft" / "core" / "schemas"
         if cwd_candidate.is_dir() and (cwd_candidate / "base_rule.schema.json").exists():
             return cwd_candidate
+        cwd_root = Path.cwd() / "schemas"
+        if cwd_root.is_dir() and (cwd_root / "base_rule.schema.json").exists():
+            return cwd_root
         raise FileNotFoundError(
-            "Could not locate schemas/ directory containing base_rule.schema.json"
+            "Could not locate schemas directory containing base_rule.schema.json"
         )
 
     def _find_engines_dir(self) -> Path | None:
+        primary = Path(__file__).resolve().parent.parent.parent / "engines"
+        if primary.is_dir():
+            return primary
         current = Path(__file__).resolve().parent
         for parent in [current, *current.parents]:
-            candidate = parent / "engines"
-            if candidate.is_dir():
-                return candidate
             candidate_src = parent / "src" / "graft" / "engines"
             if candidate_src.is_dir():
                 return candidate_src
+            candidate = parent / "engines"
+            if candidate.is_dir():
+                return candidate
         cwd_candidate = Path.cwd() / "src" / "graft" / "engines"
         if cwd_candidate.is_dir():
             return cwd_candidate
