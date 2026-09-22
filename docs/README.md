@@ -57,3 +57,20 @@ Graft organizes detection content into two separate, version-controlled tracks:
 Git is declared the single authoritative Source of Truth for detection state:
 - **Scoped Reconciliation (Default):** Restricts diffs and deployments strictly to rules touched in the current Git branch or working tree (`graft <engine> diff / apply`). Keeps PR reviews focused and minimizes blast radius.
 - **Full Catalog Reconciliation (`--all`):** Evaluates the entire repository catalog against the live tenant (`graft <engine> diff --all / apply --all`). Automatically detects and heals out-of-band console drift.
+
+---
+
+## Foundational Literature & Core Theses
+
+The architectural philosophy of Graft is directly grounded in foundational Detection-as-Code literature:
+
+- **Joe Lopes — *Detection-as-Code, Then What?*:** Detection logic alone is not a rule; it is merely one component of a 5-block envelope (`metadata`, `logic`, `deployment`, `runbook`, `tests`). Schema validation must be decoupled from application code. Avoid data duplication by leveraging VCS for blame and timestamps. Co-locate incident response runbooks directly within detection artifacts. Value realization comes from operational visibility (factual catalogs) and ATT&CK coverage matrices, not raw rule counts.
+- **NVISO Detection-as-Code Series (Parts 1–8):**
+  - *Part 1 (Introduction & Lifecycle):* Standardizes the detection engineering lifecycle into iterative software sprints: requirements, development, verification, deployment, monitoring, and tuning.
+  - *Part 2 (Repository Structure & Branching):* Establishes a monorepo topology with strict directory separation between core tooling, rule envelopes, schemas, and fixtures. Enforces trunk-based development with short-lived feature branches.
+  - *Part 3 (Validation & Quality Gates):* Defines a multi-tier testing pyramid: static schema validation, offline syntax checking, STIX taxonomy verification, and automated dynamic replay testing.
+  - *Part 4 (Documentation as Code):* Treats operational documentation as a build artifact, automatically deriving threat coverage, triage playbooks, and compliance catalogs from declarative envelopes.
+  - *Part 5 (Versioning & Semantic Releases):* Applies Semantic Versioning (SemVer) to rulesets, tracking breaking changes in logic/contracts (Major), new detections (Minor), and tuning/runbook adjustments (Patch).
+  - *Part 6 (CI/CD Deployment & State Management):* Formulates state synchronization using GitOps plan/apply principles, eliminating manual out-of-band console drift.
+  - *Part 7 (Monitoring & Health Metrics):* Closes the telemetry feedback loop post-deployment, tracking rule execution health, error rates, and alert volumes.
+  - *Part 8 (Tuning & Feedback Loops):* Manages rule exclusions and threshold adjustments declaratively in code with structured review histories.

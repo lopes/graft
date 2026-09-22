@@ -73,7 +73,7 @@ def test_extract_git_metadata_git_error_fallback(tmp_path: Path) -> None:
 
 def test_extract_git_metadata_real_repo_on_committed_file() -> None:
     # Test on an actual tracked repository file
-    meta = extract_git_metadata("GRAFT_MASTER_PLAN.md")
+    meta = extract_git_metadata("README.md")
     assert meta.author != "Unknown"
     assert meta.created_at != "Unknown"
     assert meta.commit_count >= 1

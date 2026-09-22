@@ -10,7 +10,7 @@
 </p>
 
 <p align="center">
-  <a href="GRAFT_MASTER_PLAN.md"><img src="https://img.shields.io/badge/status-active-brightgreen.svg" alt="Status: Active"></a>
+  <a href="docs/README.md"><img src="https://img.shields.io/badge/status-active-brightgreen.svg" alt="Status: Active"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-Apache_2.0-blue.svg" alt="License: Apache 2.0"></a>
   <a href="https://www.python.org/"><img src="https://img.shields.io/badge/python-%3E%3D3.13-blue" alt="Python Version"></a>
   <a href="https://github.com/astral-sh/ruff"><img src="https://img.shields.io/badge/code%20style-ruff-000000.svg" alt="Code Style: ruff"></a>
@@ -22,7 +22,7 @@
 > - **Public Lab Environment:** This public repository (`lopes/graft`) is strictly connected to an isolated lab/demo environment for open-source development and experimentation. It is never connected to production tenants.
 > - **Production Repositories Must Be Private:** Any detection engineering team or operator adopting or forking Graft for production use **must maintain their repository in private version control** under strict organizational access controls. While the Graft engine is open-source, version-controlling live production deployment states (`enabled`, `alerting`) or operational exclusions (`findingsRefinements`) in a public repository will leak defensive postures, monitoring coverage blind spots, and internal entity identities (hostnames, IP ranges, usernames, service accounts).
 > - **Curated Content Is Public:** The vendor-managed detection catalog metadata tracked in `rulesets/secops/managed.yaml` (category names, ruleset titles, descriptions, and catalog UUIDs) represents standard vendor content that is **publicly published** in official Google Cloud documentation. See [Google SecOps Curated Detections](https://docs.cloud.google.com/chronicle/docs/detection/curated-detections) and [Review Curated Detection Categories](https://docs.cloud.google.com/chronicle/docs/detection/cloud-threats-category).
-> - **Specification & Architecture:** Complete architectural foundations, component specifications, and engineering directives are documented in [GRAFT_MASTER_PLAN.md](GRAFT_MASTER_PLAN.md).
+> - **Specification & Architecture:** Complete architectural foundations, component specifications, and engineering directives are documented in [docs/README.md](docs/README.md) and [AGENTS.md](AGENTS.md).
 
 ---
 
@@ -273,9 +273,9 @@ graft export catalog --format json
 
 ---
 
-## Repository Roadmap & Governance
+## Platform Architecture & Governance
 
-The platform implementation is broken down into 10 TDD-isolated, reviewable phases. Track active progress and phase specifications in **[GRAFT_MASTER_PLAN.md](GRAFT_MASTER_PLAN.md)**.
+Comprehensive documentation tracks for Detection Engineers, SecOps Operators, and Core Developers are available in the **[Graft Documentation Hub (docs/README.md)](docs/README.md)**.
 
 Operational directives, strict stdlib-first constraints, coding standards, and agent guidelines are documented in **[AGENTS.md](AGENTS.md)**.
 

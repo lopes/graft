@@ -16,8 +16,8 @@
    - Investigate before modifying code. Identify verified root causes before proposing patches.
    - Never suppress linter warnings, broad `try/except`, disable tests, or paper over race conditions.
 3. **Phased Execution:**
-   - Work in discrete, reviewable phases defined in `GRAFT_MASTER_PLAN.md`.
-   - Never implement code belonging to future phases. Stop at phase boundaries, report completion, and wait for user confirmation.
+   - For non-trivial tasks (multi-file, new engines, refactors), present an explicit phase breakdown before starting. Each phase must be a coherent, reviewable unit.
+   - Never implement code belonging to future phases. Stop at phase boundaries, report completion, and wait for user confirmation before proceeding.
 
 ---
 
@@ -135,20 +135,18 @@ Before declaring any work complete, the following checks must return 0 errors:
 
 ---
 
-## 9. Cross-Session Execution Protocol (Gemini / Jetski)
+## 9. Engineering & Collaboration Protocol (Gemini / Jetski)
 
-Every phase is conducted in an independent session. Follow this strict protocol:
+Follow this disciplined protocol during development and maintenance sessions:
 
 ### Start-of-Session Routine (Agent Boots Up)
-1. **Read `GRAFT_MASTER_PLAN.md`:** Check the Progress Tracker to identify what phases are completed (`[x]`) and what phase is active (`[ ]`).
-2. **Read `AGENTS.md`:** Review technical constraints, commenting rules, Mermaid standards, and stdlib boundaries.
-3. **Inspect Baseline:** Run `git status`, `git log -n 3`, and `uv run pytest` to ensure you are starting from a clean, passing baseline.
-4. **Design Alignment & Scrutiny:** Present detailed structural designs, schema field names, API signatures, and data contracts to the user for review and critique. Discuss naming, trade-offs, and ergonomics, and obtain alignment before writing any implementation code.
-5. **Execute Only Current Phase via TDD:** Implement the agreed design using strict Red-Green-Refactor TDD. Never implement code belonging to future phases.
+1. **Inspect Baseline:** Run `git status`, `git log -n 3`, and `uv run pytest` to ensure you are starting from a clean, passing baseline.
+2. **Ground in Operational Directives:** Review `AGENTS.md` and relevant tracks in `docs/` for architecture, stdlib-first boundaries, and quality gates.
+3. **Design Alignment & Scrutiny:** Present detailed structural designs, schema field names, API signatures, and data contracts to the user for review and critique. Discuss trade-offs and obtain alignment before writing any implementation code.
+4. **Execute via Strict TDD:** Implement agreed changes using strict Red-Green-Refactor TDD.
 
-### End-of-Session Routine (Handoff to Next Session)
+### End-of-Session Routine (Session Handoff & Completion)
 1. **Verify Quality Gates:** Run `uv run ruff check .`, `uv run ruff format --check .`, `uv run mypy --strict src tests`, and `uv run pytest`.
-2. **Update Progress Tracker:** In `GRAFT_MASTER_PLAN.md`, mark the completed phase as `[x]`, record the commit hash and timestamp.
-3. **Commit Phase:** Create a scoped commit: `<scope>: <description>`.
-4. **Push to Remote:** Run `git push origin <current-branch>`.
-5. **Handoff Report:** Output a clean summary stating what was done, what files were created/modified, and provide the copy-pasteable **Kickstart Prompt** for the next phase.
+2. **Commit Changes:** Create a scoped commit following Scoped Commits: `<scope>: <description>`.
+3. **Push to Remote:** Run `git push origin <current-branch>` (or verify local commits are ready for user push).
+4. **Handoff Report:** Output a clean summary stating what was done, what files were created/modified, and verified quality gate results.
