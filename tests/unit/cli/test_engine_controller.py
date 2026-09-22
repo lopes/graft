@@ -229,3 +229,24 @@ def test_engine_controller_execution(tmp_path: Path, monkeypatch: pytest.MonkeyP
         engine_command="verify", paths=[str(tmp_path / "r.yaml")], all=True, env="staging"
     )
     assert controller.execute(args_verify_all) == 0
+
+
+def test_engine_controller_load_custom_rules_raises_on_corrupt_rule(tmp_path: Path) -> None:
+    manifest = EngineManifest(
+        name="test_engine",
+        display_name="Test Engine",
+        description="A mock test engine",
+        adapter_class="mock:FullMockAdapter",
+        capabilities=EngineCapabilities(custom_rules=True),
+    )
+    registry = EngineRegistry.__new__(EngineRegistry)
+    from graft.cli.engine_controller import EngineCommandController
+
+    controller = EngineCommandController(manifest, registry)
+    custom_dir = tmp_path / "rulesets" / "test_engine" / "custom"
+    custom_dir.mkdir(parents=True)
+    broken_file = custom_dir / "broken.yaml"
+    broken_file.write_text("metadata: [unclosed brackets", encoding="utf-8")
+
+    with pytest.raises(RuntimeError, match="Failed loading custom rule"):
+        controller._load_custom_rules(custom_dir=custom_dir)

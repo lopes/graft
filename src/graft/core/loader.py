@@ -128,16 +128,18 @@ def load_rule_from_yaml(
 
     if schema_name is None:
         parts = file_path.parts
-        if "rules" in parts:
-            idx = parts.index("rules")
-            if idx + 1 < len(parts):
-                engine = parts[idx + 1]
-                validator = SchemaValidator()
-                avail = validator.available_schemas()
-                if f"{engine}:rule" in avail:
-                    schema_name = f"{engine}:rule"
-                elif f"{engine}_custom" in avail:
-                    schema_name = f"{engine}_custom"
+        for folder in ("rulesets", "rules"):
+            if folder in parts:
+                idx = parts.index(folder)
+                if idx + 1 < len(parts):
+                    engine = parts[idx + 1]
+                    validator = SchemaValidator()
+                    avail = validator.available_schemas()
+                    if f"{engine}:rule" in avail:
+                        schema_name = f"{engine}:rule"
+                    elif f"{engine}_custom" in avail:
+                        schema_name = f"{engine}_custom"
+                break
         if schema_name is None:
             schema_name = "base_rule"
 

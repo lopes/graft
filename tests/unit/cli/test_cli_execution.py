@@ -379,7 +379,7 @@ def test_main_lint_ignores_archived_and_underscore_folders(tmp_path: Path) -> No
         '  description: "Valid rule description"\n  priority: "medium"\n  authors: ["alice"]\n'
         '  mitre:\n    execution:\n      - "T1059"\n'
         'logic: |\n  events:\n    $e.metadata.event_type = "USER_LOGIN"\n  condition:\n    $e\n'
-        'deployment:\n  run_frequency: "RUN_FREQUENCY_10_MINUTES"\n'
+        'deployment:\n  run_frequency: "live"\n'
         "  enabled: true\n  alerting: true\n"
         'runbook:\n  context: "Investigation context"\n'
         '  triage: "Triage instructions"\n  response: "Response instructions"\n'

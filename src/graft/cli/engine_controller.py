@@ -51,7 +51,8 @@ class EngineCommandController:
                     rule = load_rule_from_yaml(rule_path)
                     rules.append(rule)
                 except Exception as exc:
-                    logger.warning("Failed loading custom rule %s: %s", rule_path, exc)
+                    logger.error("Failed loading custom rule %s: %s", rule_path, exc)
+                    raise RuntimeError(f"Failed loading custom rule '{rule_path}': {exc}") from exc
         return tuple(rules)
 
     def execute(self, args: argparse.Namespace, json_output: bool = False) -> int:

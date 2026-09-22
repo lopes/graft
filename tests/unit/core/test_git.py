@@ -83,3 +83,23 @@ def test_get_changed_files_git_error_returns_empty(tmp_path: Path) -> None:
         changed = get_changed_files(cwd=tmp_path)
 
     assert changed == set()
+
+
+def test_get_changed_files_clean_branch_does_not_fallback_to_head_minus_one(tmp_path: Path) -> None:
+    def fake_subprocess_run(cmd: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
+        cmd_str = " ".join(cmd)
+        if "origin/main...HEAD" in cmd_str:
+            return subprocess.CompletedProcess(args=cmd, returncode=0, stdout="", stderr="")
+        if "HEAD~1...HEAD" in cmd_str:
+            return subprocess.CompletedProcess(
+                args=cmd,
+                returncode=0,
+                stdout="rulesets/secops/custom/old_committed_rule.yaml\n",
+                stderr="",
+            )
+        return subprocess.CompletedProcess(args=cmd, returncode=0, stdout="", stderr="")
+
+    with patch("subprocess.run", side_effect=fake_subprocess_run):
+        changed = get_changed_files(cwd=tmp_path)
+
+    assert changed == set()

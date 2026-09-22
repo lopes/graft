@@ -137,3 +137,11 @@ class SecOpsClient:
                     status=error_status,
                     details=error_details,
                 ) from err
+            except (urllib.error.URLError, TimeoutError, OSError) as err:
+                status_code = 504 if isinstance(err, TimeoutError) else 0
+                error_msg = getattr(err, "reason", str(err))
+                raise SecOpsApiError(
+                    message=f"Network transport error: {error_msg}",
+                    status_code=status_code,
+                    status="UNAVAILABLE",
+                ) from err

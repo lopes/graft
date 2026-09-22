@@ -217,7 +217,7 @@ To guarantee state preservation, eliminate hallucination, and prevent context sa
 | **Rule Content Review & Deprecation of Status** | `[x]` | Concise rule descriptions, MITRE deduplication, unwrap runbook context, and complete removal of metadata.status | `rulesets/`, `src/graft/core/models/`, `src/graft/core/schemas/` |
 | **Core Schema Packaging & Unified Test Hierarchy** | `[x]` | Relocate core schemas to `src/graft/core/schemas/` and consolidate engine tests under `tests/engines/<engine>/` | `src/graft/core/schemas/`, `tests/engines/` |
 | **Ruleset Taxonomy & Underscore Exclusion** | `[x]` | Migrate `rules/` -> `rulesets/`, standardize `_archived/`, ignore any `_<folder>` under rulesets | Commit `7774444`, `docs/analysts/rule_authoring.md` |
-| **Lifecycle & Rigor Indicators for Catalog Export** | `[x]` | Add `created_at`, `last_modified_at`, `review_count`, `contributor_count`, `has_tests`, `test_event_count`, `has_runbook` to CSV/JSON/MD exports | Commit `8a9d6ce`, `src/graft/core/catalog.py` |
+| **Lifecycle & Rigor Indicators for Catalog Export** | `[x]` | Add factual indicators (`created_at`, `last_modified_at`, `review_count`, `contributor_count`, `has_runbook`, unified `mitre_attack`, resolved deployment `status`) to CSV/JSON/MD exports; omit experimental rule test blocks | Commit `8a9d6ce`, `src/graft/core/catalog.py` |
 | **ATT&CK v19.2 & Unified Catalog/Matrix Exports** | `[x]` | Upgraded ATT&CK to v19.2, tri-state engine deployment status, unified TA:T mappings, Navigator tactic scoping, multi-engine layer colors, and gap analysis docs | Commit `a978d05`, `docs/analysts/recipes.md` |
 
 ---

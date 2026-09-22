@@ -317,21 +317,38 @@ class CustomRuleReconciler:
         content_comparator: Callable[[RuleEnvelope, RuleEnvelope], bool] | None = None,
         scoped: bool = False,
     ) -> CustomRulesReconciliationDiff:
-        current_map = {r.metadata.name: r for r in current}
-        desired_map = {r.metadata.name: r for r in desired}
+        matched_current_indices: set[int] = set()
 
         rules_to_create: list[RuleEnvelope] = []
         rules_to_update: list[RuleEnvelope] = []
-        untracked_rules: list[RuleEnvelope] = (
-            [] if scoped else [r for name, r in current_map.items() if name not in desired_map]
-        )
 
-        for name, des_rule in desired_map.items():
-            if name not in current_map:
+        for des_rule in desired:
+            curr_idx: int | None = None
+            curr_rule: RuleEnvelope | None = None
+
+            if des_rule.metadata.id:
+                for idx, r in enumerate(current):
+                    if r.metadata.id == des_rule.metadata.id:
+                        curr_idx = idx
+                        curr_rule = r
+                        break
+
+            if curr_rule is None:
+                for idx, r in enumerate(current):
+                    if (
+                        r.metadata.name == des_rule.metadata.name
+                        and idx not in matched_current_indices
+                    ):
+                        curr_idx = idx
+                        curr_rule = r
+                        break
+
+            if curr_rule is None or curr_idx is None:
                 rules_to_create.append(des_rule)
                 continue
 
-            curr_rule = current_map[name]
+            matched_current_indices.add(curr_idx)
+
             if content_comparator is not None:
                 content_equal = content_comparator(des_rule, curr_rule)
             else:
@@ -341,9 +358,16 @@ class CustomRuleReconciler:
                 des_rule.deployment.enabled == curr_rule.deployment.enabled
                 and des_rule.deployment.alerting == curr_rule.deployment.alerting
             )
+            name_equal = des_rule.metadata.name == curr_rule.metadata.name
 
-            if not content_equal or not deployment_equal:
+            if not content_equal or not deployment_equal or not name_equal:
                 rules_to_update.append(des_rule)
+
+        untracked_rules: list[RuleEnvelope] = (
+            []
+            if scoped
+            else [r for idx, r in enumerate(current) if idx not in matched_current_indices]
+        )
 
         return CustomRulesReconciliationDiff(
             rules_to_create=tuple(rules_to_create),

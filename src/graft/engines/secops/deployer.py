@@ -20,15 +20,34 @@ class SecOpsDeployerAdapter(RuleDeployerPort):
         return rule_id
 
     def list_rules(self) -> tuple[RuleEnvelope, ...]:
-        response = self._client.request("GET", "rules", params={"view": "FULL"})
-        raw_rules = response.get("rules")
-        if not isinstance(raw_rules, list):
-            return ()
+        raw_rules: list[dict[str, object]] = []
+        page_token: str | None = None
+        while True:
+            params: dict[str, str] = {"view": "FULL", "pageSize": "100"}
+            if page_token:
+                params["pageToken"] = page_token
+            response = self._client.request("GET", "rules", params=params)
+            items = response.get("rules", [])
+            if isinstance(items, list):
+                for item in items:
+                    if isinstance(item, dict):
+                        raw_rules.append(item)
+            next_token = response.get("nextPageToken")
+            page_token = str(next_token) if next_token else None
+            if not page_token:
+                break
 
         deployments_map: dict[str, tuple[bool, bool]] = {}
-        try:
-            dep_response = self._client.request("GET", "rules/-/deployments")
-            raw_deps = dep_response.get("ruleDeployments")
+        dep_page_token: str | None = None
+        while True:
+            dep_params: dict[str, str] = {"pageSize": "200"}
+            if dep_page_token:
+                dep_params["pageToken"] = dep_page_token
+            try:
+                dep_response = self._client.request("GET", "rules/-/deployments", params=dep_params)
+            except SecOpsApiError:
+                break
+            raw_deps = dep_response.get("ruleDeployments", [])
             if isinstance(raw_deps, list):
                 for dep in raw_deps:
                     if not isinstance(dep, dict):
@@ -42,16 +61,16 @@ class SecOpsDeployerAdapter(RuleDeployerPort):
                     enabled = bool(dep.get("enabled", False))
                     alerting = bool(dep.get("alerting", False))
                     deployments_map[dep_rule_id] = (enabled, alerting)
-        except SecOpsApiError:
-            pass
+            next_dep_token = dep_response.get("nextPageToken")
+            dep_page_token = str(next_dep_token) if next_dep_token else None
+            if not dep_page_token:
+                break
 
         self._remote_ids_by_name.clear()
         self._remote_ids_by_meta_id.clear()
 
         envelopes: list[RuleEnvelope] = []
         for raw in raw_rules:
-            if not isinstance(raw, dict):
-                continue
             name_resource = str(raw.get("name", ""))
             secops_id = name_resource.split("/")[-1] if "/" in name_resource else name_resource
             display_name = str(raw.get("displayName", secops_id))

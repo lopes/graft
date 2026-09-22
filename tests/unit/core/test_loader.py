@@ -177,3 +177,34 @@ def test_dump_rule_and_roundtrip(valid_yaml_content: str, tmp_path: Path) -> Non
     assert reloaded.logic.strip() == original.logic.strip()
     assert len(reloaded.tests) == len(original.tests)
     assert reloaded.tests[0].id == original.tests[0].id
+
+
+def test_load_rule_from_yaml_resolves_engine_schema_from_rulesets_dir(tmp_path: Path) -> None:
+    rule_dir = tmp_path / "rulesets" / "secops" / "custom"
+    rule_dir.mkdir(parents=True)
+    rule_file = rule_dir / "invalid_freq.yaml"
+    rule_file.write_text(
+        """metadata:
+  id: "c4e9b8f2-89b1-4f81-9b16-928d54128f73"
+  name: "bad_frequency_rule"
+  description: "Detects bad frequency"
+logic: |
+  events:
+    $e.metadata.event_type = "USER_LOGIN"
+  condition:
+    $e
+deployment:
+  enabled: true
+  alerting: true
+  run_frequency: "invalid_frequency_value"
+runbook:
+  context: "c"
+  triage: "t"
+  response: "r"
+tests: []
+""",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(RuleLoadError, match="Schema validation failed"):
+        load_rule_from_yaml(rule_file)

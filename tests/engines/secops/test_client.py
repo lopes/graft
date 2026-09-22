@@ -182,3 +182,35 @@ def test_client_retry_on_429_then_success(
     assert result == {"status": "ok"}
     assert calls == 2
     assert len(sleep_calls) == 1
+
+
+def test_client_network_urlerror_wrapped_in_secops_api_error(
+    secops_config: SecOpsConfig, auth_resolver: SecOpsAuthResolver, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def mock_urlopen(req: urllib.request.Request, **kwargs: Any) -> Any:
+        raise urllib.error.URLError("Temporary failure in name resolution")
+
+    monkeypatch.setattr(urllib.request, "urlopen", mock_urlopen)
+
+    client = SecOpsClient(config=secops_config, auth_resolver=auth_resolver)
+    with pytest.raises(SecOpsApiError) as exc_info:
+        client.request("GET", "rules")
+
+    assert "Temporary failure in name resolution" in str(exc_info.value)
+    assert exc_info.value.status_code == 0
+
+
+def test_client_timeout_error_wrapped_in_secops_api_error(
+    secops_config: SecOpsConfig, auth_resolver: SecOpsAuthResolver, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def mock_urlopen(req: urllib.request.Request, **kwargs: Any) -> Any:
+        raise TimeoutError("The read operation timed out")
+
+    monkeypatch.setattr(urllib.request, "urlopen", mock_urlopen)
+
+    client = SecOpsClient(config=secops_config, auth_resolver=auth_resolver)
+    with pytest.raises(SecOpsApiError) as exc_info:
+        client.request("GET", "rules")
+
+    assert "timed out" in str(exc_info.value)
+    assert exc_info.value.status_code == 504

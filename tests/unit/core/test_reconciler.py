@@ -583,3 +583,25 @@ def test_custom_rule_diff_scoped_ignores_untracked() -> None:
     assert len(diff_scoped.untracked_rules) == 0
     assert len(diff_scoped.rules_to_update) == 1
     assert diff_scoped.rules_to_update[0].metadata.name == "login_alert"
+
+
+def test_custom_rule_diff_renamed_rule_matched_by_id_to_update() -> None:
+    current_rule = _make_envelope(
+        "old_rule_name",
+        rule_id="c4e9b8f2-89b1-4f81-9b16-928d54128f73",
+        logic="same logic",
+    )
+    desired_rule = _make_envelope(
+        "new_rule_name",
+        rule_id="c4e9b8f2-89b1-4f81-9b16-928d54128f73",
+        logic="same logic",
+    )
+
+    reconciler = CustomRuleReconciler()
+    diff = reconciler.diff(current=(current_rule,), desired=(desired_rule,))
+
+    assert diff.has_changes is True
+    assert len(diff.rules_to_create) == 0
+    assert len(diff.rules_to_update) == 1
+    assert diff.rules_to_update[0].metadata.name == "new_rule_name"
+    assert len(diff.untracked_rules) == 0

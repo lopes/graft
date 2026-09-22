@@ -113,7 +113,7 @@ def test_list_rules_with_deployments_success(mock_client: MagicMock) -> None:
     assert mock_client.request.call_count == 2
     first_call = mock_client.request.call_args_list[0]
     assert first_call[0] == ("GET", "rules")
-    assert first_call[1]["params"] == {"view": "FULL"}
+    assert first_call[1]["params"] == {"view": "FULL", "pageSize": "100"}
 
     second_call = mock_client.request.call_args_list[1]
     assert second_call[0] == ("GET", "rules/-/deployments")
@@ -246,3 +246,60 @@ def test_update_rule_resolves_remote_id_and_preserves_meta_id(
     # Verify Graft UUID is preserved in meta.id and ru_secops_555 is NOT in meta.id
     assert f'id = "{graft_uuid}"' in sent_text
     assert "ru_secops_555" not in sent_text
+
+
+def test_list_rules_with_pagination_fetches_all_pages(mock_client: MagicMock) -> None:
+    mock_client.request.side_effect = [
+        # Rules page 1
+        {
+            "rules": [
+                {
+                    "name": "projects/p/locations/l/instances/i/rules/ru_page1",
+                    "displayName": "rule_one",
+                    "text": "rule rule_one { condition: true }",
+                }
+            ],
+            "nextPageToken": "token_page_2",
+        },
+        # Rules page 2
+        {
+            "rules": [
+                {
+                    "name": "projects/p/locations/l/instances/i/rules/ru_page2",
+                    "displayName": "rule_two",
+                    "text": "rule rule_two { condition: true }",
+                }
+            ],
+        },
+        # Deployments page 1
+        {
+            "ruleDeployments": [
+                {
+                    "name": "projects/p/locations/l/instances/i/rules/ru_page1/deployment",
+                    "enabled": True,
+                    "alerting": True,
+                }
+            ],
+            "nextPageToken": "dep_token_page_2",
+        },
+        # Deployments page 2
+        {
+            "ruleDeployments": [
+                {
+                    "name": "projects/p/locations/l/instances/i/rules/ru_page2/deployment",
+                    "enabled": False,
+                    "alerting": False,
+                }
+            ],
+        },
+    ]
+
+    deployer = SecOpsDeployerAdapter(client=mock_client)
+    rules = deployer.list_rules()
+
+    assert len(rules) == 2
+    assert rules[0].metadata.name == "rule_one"
+    assert rules[0].deployment.enabled is True
+    assert rules[1].metadata.name == "rule_two"
+    assert rules[1].deployment.enabled is False
+    assert mock_client.request.call_count == 4
