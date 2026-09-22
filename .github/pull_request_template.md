@@ -5,7 +5,7 @@
 <!-- Link to issue, research link, or relevant ticket (e.g. Closes #12, Ref https://...) -->
 
 ## Type of Change
-- [ ] Detection Rule (`rules/`)
+- [ ] Detection Rule (`rulesets/`)
 - [ ] Core Engine / Schemas (`src/graft/core/`)
 - [ ] Engine Adapter (`src/graft/engines/`)
 - [ ] CLI Subsystem (`src/graft/cli/`)

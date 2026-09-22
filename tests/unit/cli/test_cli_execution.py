@@ -20,7 +20,7 @@ def test_main_no_args_shows_help(capsys: pytest.CaptureFixture[str]) -> None:
 
 
 def test_main_lint_clean(capsys: pytest.CaptureFixture[str]) -> None:
-    exit_code = main(["lint", "rules/secops/custom/gcp_iam_service_account_key_create.yaml"])
+    exit_code = main(["lint", "rulesets/secops/custom/gcp_iam_service_account_key_create.yaml"])
     assert exit_code == 0
     captured = capsys.readouterr()
     assert "PASS" in captured.out or "clean" in captured.out.lower()
@@ -28,7 +28,7 @@ def test_main_lint_clean(capsys: pytest.CaptureFixture[str]) -> None:
 
 def test_main_lint_json_output(capsys: pytest.CaptureFixture[str]) -> None:
     exit_code = main(
-        ["--json", "lint", "rules/secops/custom/gcp_iam_service_account_key_create.yaml"]
+        ["--json", "lint", "rulesets/secops/custom/gcp_iam_service_account_key_create.yaml"]
     )
     assert exit_code == 0
     captured = capsys.readouterr()
@@ -47,8 +47,8 @@ def test_main_lint_error(tmp_path: Path) -> None:
 def test_main_lint_duplicate_id_across_engines_fails(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    rule1 = tmp_path / "rules" / "secops" / "custom" / "r1.yaml"
-    rule2 = tmp_path / "rules" / "crowdstrike" / "custom" / "r2.yaml"
+    rule1 = tmp_path / "rulesets" / "secops" / "custom" / "r1.yaml"
+    rule2 = tmp_path / "rulesets" / "crowdstrike" / "custom" / "r2.yaml"
     rule1.parent.mkdir(parents=True)
     rule2.parent.mkdir(parents=True)
 
@@ -183,7 +183,7 @@ def test_main_secops_new_rule(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -
     )
     exit_code = main(["secops", "new", "test_login_anomaly"])
     assert exit_code == 0
-    rule_file = tmp_path / "rules" / "secops" / "custom" / "test_login_anomaly.yaml"
+    rule_file = tmp_path / "rulesets" / "secops" / "custom" / "test_login_anomaly.yaml"
     assert rule_file.exists()
 
 
@@ -205,7 +205,7 @@ def test_main_new_rule_via_root_command(tmp_path: Path, monkeypatch: pytest.Monk
     )
     exit_code = main(["new", "rule", "test_root_new_rule", "--engine", "secops"])
     assert exit_code == 0
-    rule_file = tmp_path / "rules" / "secops" / "custom" / "test_root_new_rule.yaml"
+    rule_file = tmp_path / "rulesets" / "secops" / "custom" / "test_root_new_rule.yaml"
     assert rule_file.exists()
 
 
@@ -258,7 +258,7 @@ def test_main_secops_managed_diff_returns_0_when_in_sync() -> None:
     ):
         from graft.engines.secops.managed_loader import load_managed_manifest_from_yaml
 
-        live_state = load_managed_manifest_from_yaml("rules/secops/managed.yaml")
+        live_state = load_managed_manifest_from_yaml("rulesets/secops/managed.yaml")
         mock_adapter = MagicMock()
         mock_adapter.fetch_managed_state.return_value = live_state
         mock_adapter_cls.return_value = mock_adapter
@@ -289,7 +289,7 @@ def test_main_secops_diff_custom_target_returns_0_when_in_sync() -> None:
 
         local_rules = [
             load_rule_from_yaml(p, schema_name="secops_custom")
-            for p in sorted(Path("rules/secops/custom").rglob("*.yaml"))
+            for p in sorted(Path("rulesets/secops/custom").rglob("*.yaml"))
         ]
         mock_deployer = MagicMock()
         mock_deployer.list_rules.return_value = tuple(local_rules)
@@ -333,7 +333,7 @@ def test_main_secops_diff_all_targets_drift() -> None:
 
         mock_managed = MagicMock()
         mock_managed.fetch_managed_state.return_value = load_managed_manifest_from_yaml(
-            "rules/secops/managed.yaml"
+            "rulesets/secops/managed.yaml"
         )
         mock_managed_cls.return_value = mock_managed
 
@@ -363,3 +363,35 @@ def test_main_new_rule_json_output(tmp_path: Path, capsys: pytest.CaptureFixture
     data = json.loads(captured.out)
     assert data["success"] is True
     assert data["path"] == str(custom_target)
+
+
+def test_main_lint_ignores_archived_and_underscore_folders(tmp_path: Path) -> None:
+    rulesets_dir = tmp_path / "rulesets"
+    archived_dir = rulesets_dir / "secops" / "_archived"
+    custom_dir = rulesets_dir / "secops" / "custom"
+    archived_dir.mkdir(parents=True)
+    custom_dir.mkdir(parents=True)
+
+    # Valid rule in custom
+    valid_rule = custom_dir / "valid.yaml"
+    valid_rule.write_text(
+        'metadata:\n  id: "11111111-2222-3333-4444-555555555555"\n  name: "valid_rule"\n'
+        '  description: "Valid rule description"\n  priority: "medium"\n  authors: ["alice"]\n'
+        '  mitre:\n    execution:\n      - "T1059"\n'
+        'logic: |\n  events:\n    $e.metadata.event_type = "USER_LOGIN"\n  condition:\n    $e\n'
+        'deployment:\n  run_frequency: "RUN_FREQUENCY_10_MINUTES"\n'
+        "  enabled: true\n  alerting: true\n"
+        'runbook:\n  context: "Investigation context"\n'
+        '  triage: "Triage instructions"\n  response: "Response instructions"\n'
+        'tests:\n  - id: "t1"\n    description: "test"\n    expect: 1\n    events:\n'
+        '      - timestamp: "2026-09-18T00:00:00Z"\n        payload:\n          k: "v"\n',
+        encoding="utf-8",
+    )
+
+    # Corrupted / invalid rule placed in _archived
+    corrupted_archived = archived_dir / "broken_archived.yaml"
+    corrupted_archived.write_text("invalid: [broken yaml content", encoding="utf-8")
+
+    # Lint scanning the root directory should ignore _archived and return 0
+    exit_code = main(["lint", "--rules-dir", str(rulesets_dir)])
+    assert exit_code == 0

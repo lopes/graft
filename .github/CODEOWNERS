@@ -5,7 +5,7 @@
 /src/graft/core/ @lopes
 
 # Detection Rules
-/rules/ @lopes
+/rulesets/ @lopes
 
 # Engine Adapters
 /src/graft/engines/ @lopes

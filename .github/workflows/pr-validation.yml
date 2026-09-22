@@ -10,7 +10,7 @@ name: PR Quality & Verification Gates
       - reopened
     paths:
       - "src/**"
-      - "rules/**"
+      - "rulesets/**"
       - "schemas/**"
       - "tests/**"
       - "pyproject.toml"

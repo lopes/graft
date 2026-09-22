@@ -222,7 +222,7 @@ def test_managed_manifest_unknown_property_rejected(validator: SchemaValidator) 
 
 
 def test_reference_example_rule_validates_cleanly(validator: SchemaValidator) -> None:
-    custom_rules = list(Path("rules/secops/custom").glob("*.yaml"))
+    custom_rules = list(Path("rulesets/secops/custom").glob("*.yaml"))
     assert len(custom_rules) >= 3
     for rule_path in custom_rules:
         data = yaml.safe_load(rule_path.read_text(encoding="utf-8"))
@@ -231,7 +231,7 @@ def test_reference_example_rule_validates_cleanly(validator: SchemaValidator) ->
 
 
 def test_reference_managed_manifest_validates_cleanly(validator: SchemaValidator) -> None:
-    managed_path = Path("rules/secops/managed.yaml")
+    managed_path = Path("rulesets/secops/managed.yaml")
     assert managed_path.is_file()
     data = yaml.safe_load(managed_path.read_text(encoding="utf-8"))
     errors = validator.validate(data, schema_name="secops_managed")

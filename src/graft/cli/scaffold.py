@@ -28,12 +28,14 @@ def scaffold_engine(name: str, project_root: Path | None = None) -> dict[str, Pa
 
     schemas_dir = engine_dir / "schemas"
     tests_engine_dir = root / "tests" / "engines" / name
-    rules_custom_dir = root / "rules" / name / "custom"
+    rules_custom_dir = root / "rulesets" / name / "custom"
+    rules_archived_dir = root / "rulesets" / name / "_archived"
 
     engine_dir.mkdir(parents=True, exist_ok=True)
     schemas_dir.mkdir(parents=True, exist_ok=True)
     tests_engine_dir.mkdir(parents=True, exist_ok=True)
     rules_custom_dir.mkdir(parents=True, exist_ok=True)
+    rules_archived_dir.mkdir(parents=True, exist_ok=True)
 
     class_prefix = "".join(part.capitalize() for part in name.split("_"))
     created_files: dict[str, Path] = {}
@@ -294,7 +296,9 @@ def scaffold_rule(
     root = Path(project_root) if project_root else Path.cwd()
 
     dest = (
-        Path(out_path) if out_path else (root / "rules" / engine / "custom" / f"{rule_name}.yaml")
+        Path(out_path)
+        if out_path
+        else (root / "rulesets" / engine / "custom" / f"{rule_name}.yaml")
     )
     if dest.exists():
         raise ScaffoldError(f"Rule file already exists at {dest}")

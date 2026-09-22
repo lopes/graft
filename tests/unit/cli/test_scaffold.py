@@ -32,9 +32,10 @@ def test_scaffold_engine_creates_structure_and_files(tmp_path: Path) -> None:
     schema_file = engine_dir / "schemas" / "rule.schema.json"
     assert schema_file.exists()
 
-    # 3. Rules directory
-    rules_dir = tmp_path / "rules" / "sentinel" / "custom"
+    # 3. Rulesets directory
+    rules_dir = tmp_path / "rulesets" / "sentinel" / "custom"
     assert rules_dir.is_dir()
+    assert (tmp_path / "rulesets" / "sentinel" / "_archived").is_dir()
 
     # 4. Engine tests in tests/engines/sentinel/
     tests_engine_dir = tmp_path / "tests" / "engines" / "sentinel"

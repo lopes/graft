@@ -29,10 +29,14 @@ def build_parser() -> argparse.ArgumentParser:
         "lint", help="Validate custom rules and managed manifests offline"
     )
     lint_p.add_argument(
-        "paths", nargs="*", help="Files or directories to lint (default: scan rules/)"
+        "paths", nargs="*", help="Files or directories to lint (default: scan rulesets/)"
     )
     lint_p.add_argument(
-        "--rules-dir", default="rules", help="Root directory of rules (default: rules)"
+        "--rules-dir",
+        "--rulesets-dir",
+        default="rulesets",
+        dest="rules_dir",
+        help="Root directory of rulesets (default: rulesets)",
     )
     lint_p.add_argument("--fail-fast", action="store_true", help="Stop execution on first error")
 
@@ -57,6 +61,13 @@ def build_parser() -> argparse.ArgumentParser:
         help="Export format",
     )
     export_p.add_argument("--out", help="Output file path")
+    export_p.add_argument(
+        "--rules-dir",
+        "--rulesets-dir",
+        default="rulesets",
+        dest="rules_dir",
+        help="Root directory of rulesets (default: rulesets)",
+    )
 
     # 4. new (engine | rule)
     new_p = subparsers.add_parser("new", help="Scaffold a new engine or detection rule")
@@ -116,6 +127,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                 out_path=getattr(args, "out", None),
                 format_type=getattr(args, "format", "json"),
                 json_output=args.json,
+                rules_dir=getattr(args, "rules_dir", "rulesets"),
             )
 
         if cmd == "new":

@@ -37,10 +37,12 @@ class EngineCommandController:
         custom_dir: Path | None = None,
         filter_paths: set[Path] | None = None,
     ) -> tuple[RuleEnvelope, ...]:
-        target_dir = custom_dir or Path(f"rules/{self.manifest.name}/custom")
+        target_dir = custom_dir or Path(f"rulesets/{self.manifest.name}/custom")
         rules: list[RuleEnvelope] = []
         if target_dir.is_dir():
             for rule_path in sorted(target_dir.rglob("*.yaml")):
+                if any(part.startswith("_") for part in rule_path.parts):
+                    continue
                 if filter_paths is not None and (
                     rule_path.resolve() not in filter_paths and rule_path not in filter_paths
                 ):
@@ -93,18 +95,34 @@ class EngineCommandController:
             for p_str in raw_paths:
                 p = Path(p_str)
                 if p.is_dir():
-                    verify_paths.extend(sorted(p.rglob("*.yaml")))
+                    verify_paths.extend(
+                        sorted(
+                            f
+                            for f in p.rglob("*.yaml")
+                            if not any(part.startswith("_") for part in f.parts)
+                        )
+                    )
                 elif p.is_file():
                     verify_paths.append(p)
         elif all_rules:
-            default_dir = Path(f"rules/{self.manifest.name}/custom")
+            default_dir = Path(f"rulesets/{self.manifest.name}/custom")
             if default_dir.is_dir():
-                verify_paths.extend(sorted(default_dir.rglob("*.yaml")))
+                verify_paths.extend(
+                    sorted(
+                        f
+                        for f in default_dir.rglob("*.yaml")
+                        if not any(part.startswith("_") for part in f.parts)
+                    )
+                )
         else:
             changed = get_changed_files()
-            custom_dir = Path(f"rules/{self.manifest.name}/custom").resolve()
+            custom_dir = Path(f"rulesets/{self.manifest.name}/custom").resolve()
             for p in changed:
-                if p.is_file() and p.suffix in (".yaml", ".yml"):
+                if (
+                    p.is_file()
+                    and p.suffix in (".yaml", ".yml")
+                    and not any(part.startswith("_") for part in p.parts)
+                ):
                     try:
                         if p.resolve().is_relative_to(custom_dir):
                             verify_paths.append(p)
@@ -193,17 +211,34 @@ class EngineCommandController:
             for p_str in raw_paths:
                 p = Path(p_str)
                 if p.is_dir():
-                    target_paths.extend(sorted(p.rglob("*.yaml")))
+                    target_paths.extend(
+                        sorted(
+                            f
+                            for f in p.rglob("*.yaml")
+                            if not any(part.startswith("_") for part in f.parts)
+                        )
+                    )
                 elif p.is_file():
                     target_paths.append(p)
         else:
-            default_dir = Path(f"rules/{self.manifest.name}/custom")
+            default_dir = Path(f"rulesets/{self.manifest.name}/custom")
             if default_dir.is_dir():
-                target_paths.extend(sorted(default_dir.rglob("*.yaml")))
+                target_paths.extend(
+                    sorted(
+                        f
+                        for f in default_dir.rglob("*.yaml")
+                        if not any(part.startswith("_") for part in f.parts)
+                    )
+                )
 
         if getattr(args, "changed_only", False):
             changed = get_changed_files()
-            target_paths = [tp for tp in target_paths if tp.resolve() in changed or tp in changed]
+            target_paths = [
+                tp
+                for tp in target_paths
+                if (tp.resolve() in changed or tp in changed)
+                and not any(part.startswith("_") for part in tp.parts)
+            ]
 
         rules_with_tests: list[RuleEnvelope] = []
         for tp in target_paths:
@@ -338,11 +373,11 @@ class EngineCommandController:
 
         if not all_rules:
             changed = get_changed_files()
-            manifest_path = Path(f"rules/{self.manifest.name}/managed.yaml").resolve()
+            manifest_path = Path(f"rulesets/{self.manifest.name}/managed.yaml").resolve()
             if (
                 run_managed
                 and manifest_path not in changed
-                and Path(f"rules/{self.manifest.name}/managed.yaml") not in changed
+                and Path(f"rulesets/{self.manifest.name}/managed.yaml") not in changed
             ):
                 run_managed = False
 
@@ -443,11 +478,11 @@ class EngineCommandController:
 
         if not all_rules:
             changed = get_changed_files()
-            manifest_path = Path(f"rules/{self.manifest.name}/managed.yaml").resolve()
+            manifest_path = Path(f"rulesets/{self.manifest.name}/managed.yaml").resolve()
             if (
                 run_managed
                 and manifest_path not in changed
-                and Path(f"rules/{self.manifest.name}/managed.yaml") not in changed
+                and Path(f"rulesets/{self.manifest.name}/managed.yaml") not in changed
             ):
                 run_managed = False
 
@@ -516,7 +551,7 @@ class EngineCommandController:
         if run_managed:
             managed_port = adapter.get_managed()
             if managed_port is not None:
-                manifest_path = Path(f"rules/{self.manifest.name}/managed.yaml")
+                manifest_path = Path(f"rulesets/{self.manifest.name}/managed.yaml")
                 if manifest_path.is_file():
                     target_state = self._load_managed_state(manifest_path, adapter)
                     if target_state is not None:
@@ -543,7 +578,7 @@ class EngineCommandController:
             sys.stderr.write(f"Managed content not supported by {self.manifest.display_name}\n")
             return 1
 
-        manifest_path = Path(getattr(args, "out", f"rules/{self.manifest.name}/managed.yaml"))
+        manifest_path = Path(getattr(args, "out", f"rulesets/{self.manifest.name}/managed.yaml"))
 
         if cmd == "diff":
             m_diff = self._diff_managed(managed_port, adapter)
@@ -585,9 +620,9 @@ class EngineCommandController:
     def _execute_pull(self, args: argparse.Namespace, env: str, json_output: bool) -> int:
         target = getattr(args, "target", "all")
         force = getattr(args, "force", False)
-        out_dir = Path(getattr(args, "out_dir", f"rules/{self.manifest.name}/custom"))
+        out_dir = Path(getattr(args, "out_dir", f"rulesets/{self.manifest.name}/custom"))
         out_manifest = Path(
-            getattr(args, "out_manifest", f"rules/{self.manifest.name}/managed.yaml")
+            getattr(args, "out_manifest", f"rulesets/{self.manifest.name}/managed.yaml")
         )
 
         adapter = self.registry.load_adapter(self.manifest.name, env=env)
@@ -654,7 +689,7 @@ class EngineCommandController:
         return 0
 
     def _diff_managed(self, port: ManagedEnginePort, adapter: Any) -> ReconciliationDiff:
-        manifest_path = Path(f"rules/{self.manifest.name}/managed.yaml")
+        manifest_path = Path(f"rulesets/{self.manifest.name}/managed.yaml")
         reconciler = GitOpsReconciler()
         if not manifest_path.is_file():
             return ReconciliationDiff(
@@ -734,8 +769,8 @@ def register_engine_commands(
         pull_p = cmd_subparsers.add_parser("pull", help="Pull rules and state from remote tenant")
         pull_p.add_argument("--env", choices=envs, default=envs[-1] if envs else "production")
         pull_p.add_argument("--target", choices=pull_targets, default=pull_targets[0])
-        pull_p.add_argument("--out-dir", default=f"rules/{manifest.name}/custom")
-        pull_p.add_argument("--out-manifest", default=f"rules/{manifest.name}/managed.yaml")
+        pull_p.add_argument("--out-dir", default=f"rulesets/{manifest.name}/custom")
+        pull_p.add_argument("--out-manifest", default=f"rulesets/{manifest.name}/managed.yaml")
         pull_p.add_argument("--force", action="store_true")
 
     if caps.syntax_verification:
@@ -769,4 +804,4 @@ def register_engine_commands(
 
         m_pull = m_sub.add_parser("pull", help="Pull live managed state into local manifest")
         m_pull.add_argument("--env", choices=envs, default=envs[-1] if envs else "production")
-        m_pull.add_argument("--out", default=f"rules/{manifest.name}/managed.yaml")
+        m_pull.add_argument("--out", default=f"rulesets/{manifest.name}/managed.yaml")

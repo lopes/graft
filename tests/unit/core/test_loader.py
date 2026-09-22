@@ -150,7 +150,7 @@ tests:
 
 
 def test_load_reference_example_rule() -> None:
-    example_path = Path("rules/secops/custom/workspace_nrd_possible_phishing.yaml")
+    example_path = Path("rulesets/secops/custom/workspace_nrd_possible_phishing.yaml")
     envelope = load_rule_from_yaml(example_path)
     assert envelope.metadata.name == "workspace_nrd_possible_phishing"
     assert envelope.deployment.run_frequency == "live"

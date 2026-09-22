@@ -12,10 +12,10 @@ def test_parse_root_flags() -> None:
 def test_parse_lint_command() -> None:
     parser = build_parser()
     args = parser.parse_args(
-        ["lint", "rules/secops/custom/gcp_iam_service_account_key_create.yaml", "--fail-fast"]
+        ["lint", "rulesets/secops/custom/gcp_iam_service_account_key_create.yaml", "--fail-fast"]
     )
     assert args.command == "lint"
-    assert args.paths == ["rules/secops/custom/gcp_iam_service_account_key_create.yaml"]
+    assert args.paths == ["rulesets/secops/custom/gcp_iam_service_account_key_create.yaml"]
     assert args.fail_fast is True
 
 

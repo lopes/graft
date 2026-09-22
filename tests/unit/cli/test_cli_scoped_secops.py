@@ -68,7 +68,7 @@ def test_secops_apply_default_scoped_no_changes() -> None:
 
 
 def test_secops_diff_default_scoped_with_changed_rule(tmp_path: Path) -> None:
-    rule_path = Path("rules/secops/custom/changed_rule.yaml").resolve()
+    rule_path = Path("rulesets/secops/custom/changed_rule.yaml").resolve()
     mock_desired = _make_rule("changed_rule", enabled=True, alerting=True)
     mock_remote = _make_rule("changed_rule", enabled=True, alerting=False)
 

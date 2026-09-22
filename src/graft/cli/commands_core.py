@@ -24,7 +24,7 @@ from graft.core.validation.schema_validator import SchemaValidator
 
 def execute_lint(
     paths: list[str] | None = None,
-    rules_dir: str = "rules",
+    rules_dir: str = "rulesets",
     fail_fast: bool = False,
     json_output: bool = False,
 ) -> int:
@@ -33,8 +33,20 @@ def execute_lint(
         for p_str in paths:
             p = Path(p_str)
             if p.is_dir():
-                target_files.extend(sorted(p.rglob("*.yaml")))
-                target_files.extend(sorted(p.rglob("*.yml")))
+                target_files.extend(
+                    sorted(
+                        f
+                        for f in p.rglob("*.yaml")
+                        if not any(part.startswith("_") for part in f.parts)
+                    )
+                )
+                target_files.extend(
+                    sorted(
+                        f
+                        for f in p.rglob("*.yml")
+                        if not any(part.startswith("_") for part in f.parts)
+                    )
+                )
             elif p.is_file():
                 target_files.append(p)
             else:
@@ -44,8 +56,20 @@ def execute_lint(
     else:
         root_rules = Path(rules_dir)
         if root_rules.is_dir():
-            target_files.extend(sorted(root_rules.rglob("*.yaml")))
-            target_files.extend(sorted(root_rules.rglob("*.yml")))
+            target_files.extend(
+                sorted(
+                    f
+                    for f in root_rules.rglob("*.yaml")
+                    if not any(part.startswith("_") for part in f.parts)
+                )
+            )
+            target_files.extend(
+                sorted(
+                    f
+                    for f in root_rules.rglob("*.yml")
+                    if not any(part.startswith("_") for part in f.parts)
+                )
+            )
 
     results: list[dict[str, Any]] = []
     has_errors = False
@@ -58,13 +82,18 @@ def execute_lint(
         for other_path in sorted(root_rules.rglob("*.yaml")):
             if (
                 other_path.name in ("managed.yaml", "managed.yml")
+                or any(part.startswith("_") for part in other_path.parts)
                 or other_path.resolve() in target_set
             ):
                 continue
             try:
                 parts = other_path.parts
                 engine = "secops"
-                if "rules" in parts:
+                if "rulesets" in parts:
+                    idx = parts.index("rulesets")
+                    if idx + 1 < len(parts):
+                        engine = parts[idx + 1]
+                elif "rules" in parts:
                     idx = parts.index("rules")
                     if idx + 1 < len(parts):
                         engine = parts[idx + 1]
@@ -85,7 +114,11 @@ def execute_lint(
         try:
             parts = file_path.parts
             engine = "secops"
-            if "rules" in parts:
+            if "rulesets" in parts:
+                idx = parts.index("rulesets")
+                if idx + 1 < len(parts):
+                    engine = parts[idx + 1]
+            elif "rules" in parts:
                 idx = parts.index("rules")
                 if idx + 1 < len(parts):
                     engine = parts[idx + 1]
@@ -176,19 +209,25 @@ def execute_update_mitre(
     return 0
 
 
-def _load_all_rules(rules_dir: Path | str = "rules") -> list[tuple[RuleEnvelope, str, Path]]:
+def _load_all_rules(rules_dir: Path | str = "rulesets") -> list[tuple[RuleEnvelope, str, Path]]:
     root = Path(rules_dir)
     loaded: list[tuple[RuleEnvelope, str, Path]] = []
     if not root.is_dir():
         return loaded
 
     for yaml_path in sorted(root.rglob("*.yaml")):
-        if yaml_path.name in ("managed.yaml", "managed.yml"):
+        if yaml_path.name in ("managed.yaml", "managed.yml") or any(
+            part.startswith("_") for part in yaml_path.parts
+        ):
             continue
         try:
             parts = yaml_path.parts
             engine = "secops"
-            if "rules" in parts:
+            if "rulesets" in parts:
+                idx = parts.index("rulesets")
+                if idx + 1 < len(parts):
+                    engine = parts[idx + 1]
+            elif "rules" in parts:
                 idx = parts.index("rules")
                 if idx + 1 < len(parts):
                     engine = parts[idx + 1]
@@ -204,7 +243,7 @@ def execute_export(
     out_path: str | None = None,
     format_type: str | None = None,
     json_output: bool = False,
-    rules_dir: str = "rules",
+    rules_dir: str = "rulesets",
 ) -> int:
     loaded = _load_all_rules(rules_dir)
     output_str = ""

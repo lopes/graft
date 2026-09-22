@@ -26,10 +26,10 @@ def test_unique_rules_across_different_engines_pass() -> None:
     rule2 = _make_rule("id-2", "rule_two")
 
     violations1 = validator.add_and_validate(
-        rule1, engine="secops", path=Path("rules/secops/custom/r1.yaml")
+        rule1, engine="secops", path=Path("rulesets/secops/custom/r1.yaml")
     )
     violations2 = validator.add_and_validate(
-        rule2, engine="crowdstrike", path=Path("rules/crowdstrike/custom/r2.yaml")
+        rule2, engine="crowdstrike", path=Path("rulesets/crowdstrike/custom/r2.yaml")
     )
 
     assert len(violations1) == 0
@@ -42,10 +42,10 @@ def test_same_name_across_different_engines_is_allowed() -> None:
     rule_crowdstrike = _make_rule("id-cs-1", "shared_rule_name")
 
     v1 = validator.add_and_validate(
-        rule_secops, engine="secops", path=Path("rules/secops/custom/rule.yaml")
+        rule_secops, engine="secops", path=Path("rulesets/secops/custom/rule.yaml")
     )
     v2 = validator.add_and_validate(
-        rule_crowdstrike, engine="crowdstrike", path=Path("rules/crowdstrike/custom/rule.yaml")
+        rule_crowdstrike, engine="crowdstrike", path=Path("rulesets/crowdstrike/custom/rule.yaml")
     )
 
     assert len(v1) == 0
@@ -58,10 +58,10 @@ def test_duplicate_id_across_different_engines_rejected() -> None:
     rule_crowdstrike = _make_rule("duplicate-uuid-1234", "crowdstrike_rule")
 
     v1 = validator.add_and_validate(
-        rule_secops, engine="secops", path=Path("rules/secops/custom/r1.yaml")
+        rule_secops, engine="secops", path=Path("rulesets/secops/custom/r1.yaml")
     )
     v2 = validator.add_and_validate(
-        rule_crowdstrike, engine="crowdstrike", path=Path("rules/crowdstrike/custom/r2.yaml")
+        rule_crowdstrike, engine="crowdstrike", path=Path("rulesets/crowdstrike/custom/r2.yaml")
     )
 
     assert len(v1) == 0
@@ -79,10 +79,10 @@ def test_duplicate_id_within_same_engine_rejected() -> None:
     rule2 = _make_rule("duplicate-uuid-1234", "second_rule")
 
     v1 = validator.add_and_validate(
-        rule1, engine="secops", path=Path("rules/secops/custom/r1.yaml")
+        rule1, engine="secops", path=Path("rulesets/secops/custom/r1.yaml")
     )
     v2 = validator.add_and_validate(
-        rule2, engine="secops", path=Path("rules/secops/custom/r2.yaml")
+        rule2, engine="secops", path=Path("rulesets/secops/custom/r2.yaml")
     )
 
     assert len(v1) == 0
@@ -96,10 +96,10 @@ def test_duplicate_name_within_same_engine_rejected() -> None:
     rule2 = _make_rule("id-2", "duplicate_rule_name")
 
     v1 = validator.add_and_validate(
-        rule1, engine="secops", path=Path("rules/secops/custom/r1.yaml")
+        rule1, engine="secops", path=Path("rulesets/secops/custom/r1.yaml")
     )
     v2 = validator.add_and_validate(
-        rule2, engine="secops", path=Path("rules/secops/custom/r2.yaml")
+        rule2, engine="secops", path=Path("rulesets/secops/custom/r2.yaml")
     )
 
     assert len(v1) == 0
@@ -112,9 +112,11 @@ def test_duplicate_name_within_same_engine_rejected() -> None:
 def test_validator_reset() -> None:
     validator = RuleUniquenessValidator()
     rule1 = _make_rule("id-1", "rule_name")
-    validator.add_and_validate(rule1, engine="secops", path=Path("rules/secops/custom/r1.yaml"))
+    validator.add_and_validate(rule1, engine="secops", path=Path("rulesets/secops/custom/r1.yaml"))
     validator.reset()
 
     # After reset, the same rule can be registered without collision
-    v = validator.add_and_validate(rule1, engine="secops", path=Path("rules/secops/custom/r1.yaml"))
+    v = validator.add_and_validate(
+        rule1, engine="secops", path=Path("rulesets/secops/custom/r1.yaml")
+    )
     assert len(v) == 0
