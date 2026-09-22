@@ -1,12 +1,16 @@
 import csv
+import functools
+import importlib.resources
 import io
-from collections.abc import Sequence
+import json
+from collections.abc import Mapping, Sequence
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any
 
 from graft.core.blame import extract_git_metadata
 from graft.core.models.rule import RuleEnvelope
+from graft.core.ports.engine import EngineAdapter
 
 
 @dataclass(frozen=True)
@@ -15,28 +19,54 @@ class CatalogEntry:
     name: str
     engine: str
     rule_type: str
-    severity: str | None
+    status: str
     description: str
-    mitre_tactics: tuple[str, ...]
-    mitre_techniques: tuple[str, ...]
+    mitre_attack: tuple[str, ...]
     tags: tuple[str, ...]
     author: str
     created_at: str
     last_modified_at: str
     review_count: int
     contributor_count: int
-    has_tests: bool
-    test_event_count: int
     has_runbook: bool
-    run_frequency: str
-    enabled: bool
-    alerting: bool
+
+
+@functools.cache
+def _get_tactic_id_map() -> dict[str, str]:
+    resource = importlib.resources.files("graft.data").joinpath("mitre_attack.json")
+    data: dict[str, Any] = json.loads(resource.read_text(encoding="utf-8"))
+    tactics: dict[str, dict[str, str]] = data.get("tactics", {})
+    return {slug: info.get("id", slug.upper()) for slug, info in tactics.items()}
+
+
+def resolve_mitre_attack_pairs(
+    mitre: Mapping[str, Sequence[str]],
+) -> tuple[str, ...]:
+    tactic_map = _get_tactic_id_map()
+    pairs: list[str] = []
+    for slug, techniques in mitre.items():
+        ta_id = tactic_map.get(slug, slug.upper())
+        for tech in techniques:
+            pairs.append(f"{ta_id}:{tech}")
+    return tuple(sorted(set(pairs)))
+
+
+def resolve_rule_deployment_status(
+    rule: RuleEnvelope,
+    engine: str | None = None,
+    adapter: EngineAdapter | None = None,
+) -> str:
+    if adapter is not None and hasattr(adapter, "resolve_deployment_status"):
+        return adapter.resolve_deployment_status(rule)
+    return "enabled" if rule.deployment.enabled else "disabled"
 
 
 def build_catalog_entry_from_rule(
     rule: RuleEnvelope,
     engine: str,
     path: Path | str | None = None,
+    adapter: EngineAdapter | None = None,
+    status: str | None = None,
 ) -> CatalogEntry:
     author = rule.metadata.authors[0] if rule.metadata.authors else "Unknown"
     created_at = "Unknown"
@@ -55,14 +85,8 @@ def build_catalog_entry_from_rule(
             review_count = git_meta.commit_count
             contributor_count = git_meta.contributor_count
 
-    tactics = sorted(rule.metadata.mitre.keys())
-    techniques: list[str] = []
-    for tech_list in rule.metadata.mitre.values():
-        techniques.extend(tech_list)
-    techniques = sorted(set(techniques))
-
-    has_tests = bool(rule.tests)
-    test_event_count = sum(len(t.events) for t in rule.tests)
+    resolved_status = status or resolve_rule_deployment_status(rule, engine, adapter)
+    mitre_attack = resolve_mitre_attack_pairs(rule.metadata.mitre)
     has_runbook = bool(
         rule.runbook.context.strip() or rule.runbook.triage.strip() or rule.runbook.response.strip()
     )
@@ -72,40 +96,74 @@ def build_catalog_entry_from_rule(
         name=rule.metadata.name,
         engine=engine,
         rule_type="custom",
-        severity=rule.metadata.priority,
+        status=resolved_status,
         description=rule.metadata.description,
-        mitre_tactics=tuple(tactics),
-        mitre_techniques=tuple(techniques),
+        mitre_attack=mitre_attack,
         tags=rule.metadata.tags,
         author=author,
         created_at=created_at,
         last_modified_at=last_modified_at,
         review_count=review_count,
         contributor_count=contributor_count,
-        has_tests=has_tests,
-        test_event_count=test_event_count,
         has_runbook=has_runbook,
-        run_frequency=rule.deployment.run_frequency,
-        enabled=rule.deployment.enabled,
-        alerting=rule.deployment.alerting,
     )
+
+
+def render_catalog_table(entries: Sequence[CatalogEntry]) -> str:
+    if not entries:
+        return "No rules found in catalog."
+
+    headers = [
+        "Rule Name",
+        "Engine",
+        "Status",
+        "MITRE ATT&CK",
+        "Reviews",
+        "Runbook",
+        "Updated",
+    ]
+    rows: list[list[str]] = []
+    for e in entries:
+        mitre_str = ", ".join(e.mitre_attack) if e.mitre_attack else "-"
+        rows.append(
+            [
+                e.name,
+                e.engine,
+                e.status,
+                mitre_str,
+                str(e.review_count),
+                "yes" if e.has_runbook else "no",
+                e.last_modified_at if e.last_modified_at != "Unknown" else "-",
+            ]
+        )
+
+    col_widths = [len(h) for h in headers]
+    for row in rows:
+        for i, cell in enumerate(row):
+            col_widths[i] = max(col_widths[i], len(cell))
+
+    header_line = "  ".join(h.ljust(col_widths[i]) for i, h in enumerate(headers))
+    separator_line = "  ".join("-" * col_widths[i] for i in range(len(headers)))
+    lines = [header_line, separator_line]
+
+    for row in rows:
+        line = "  ".join(row[i].ljust(col_widths[i]) for i in range(len(row)))
+        lines.append(line)
+
+    return "\n".join(lines)
 
 
 def export_catalog_markdown(entries: Sequence[CatalogEntry]) -> str:
     headers = [
         "Rule Name",
         "Engine",
-        "Type",
-        "Enabled",
-        "Alerting",
-        "Run Frequency",
-        "MITRE Techniques",
+        "Status",
+        "MITRE ATT&CK",
         "Author",
         "Created",
         "Last Updated",
         "Reviews",
         "Contributors",
-        "Tests",
         "Runbook",
     ]
     lines: list[str] = [
@@ -114,21 +172,17 @@ def export_catalog_markdown(entries: Sequence[CatalogEntry]) -> str:
     ]
 
     for e in entries:
-        tech_str = ", ".join(e.mitre_techniques) if e.mitre_techniques else "-"
+        mitre_str = ", ".join(e.mitre_attack) if e.mitre_attack else "-"
         row = [
             f"`{e.name}`",
             e.engine,
-            e.rule_type,
-            "yes" if e.enabled else "no",
-            "yes" if e.alerting else "no",
-            e.run_frequency,
-            tech_str,
+            e.status,
+            mitre_str,
             e.author,
             e.created_at if e.created_at != "Unknown" else "-",
             e.last_modified_at if e.last_modified_at != "Unknown" else "-",
             str(e.review_count),
             str(e.contributor_count),
-            f"yes ({e.test_event_count})" if e.has_tests else "no",
             "yes" if e.has_runbook else "no",
         ]
         lines.append(f"| {' | '.join(row)} |")
@@ -142,22 +196,16 @@ def export_catalog_csv(entries: Sequence[CatalogEntry]) -> str:
         "name",
         "engine",
         "rule_type",
-        "severity",
+        "status",
         "description",
-        "mitre_tactics",
-        "mitre_techniques",
+        "mitre_attack",
         "tags",
         "author",
         "created_at",
         "last_modified_at",
         "review_count",
         "contributor_count",
-        "has_tests",
-        "test_event_count",
         "has_runbook",
-        "run_frequency",
-        "enabled",
-        "alerting",
     ]
 
     output = io.StringIO()
@@ -166,8 +214,7 @@ def export_catalog_csv(entries: Sequence[CatalogEntry]) -> str:
 
     for e in entries:
         row = asdict(e)
-        row["mitre_tactics"] = ";".join(e.mitre_tactics)
-        row["mitre_techniques"] = ";".join(e.mitre_techniques)
+        row["mitre_attack"] = ";".join(e.mitre_attack)
         row["tags"] = ";".join(e.tags)
         writer.writerow(row)
 
@@ -177,5 +224,8 @@ def export_catalog_csv(entries: Sequence[CatalogEntry]) -> str:
 def export_catalog_json(entries: Sequence[CatalogEntry]) -> list[dict[str, Any]]:
     payload: list[dict[str, Any]] = []
     for e in entries:
-        payload.append(asdict(e))
+        d = asdict(e)
+        d["mitre_attack"] = list(e.mitre_attack)
+        d["tags"] = list(e.tags)
+        payload.append(d)
     return payload

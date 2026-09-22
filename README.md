@@ -190,15 +190,19 @@ graft secops managed pull --env production
 
 #### 6. Threat Matrix & Visibility Catalogs
 ```bash
-# Render ASCII MITRE ATT&CK coverage table in the terminal
-graft export matrix --format table
+# Render on-screen detection catalog table (default format)
+graft export catalog
 
-# Generate official MITRE ATT&CK Navigator v4.5 JSON layer for visual heatmaps
-graft export matrix --format navigator --out layers/attack_coverage.json
+# Filter catalog or matrix by target engine
+graft export catalog --engine secops
+graft export matrix --format table --engine secops
 
-# Export detection catalog with VCS lifecycle and engineering-rigor indicators
-graft export catalog --format markdown --out docs/RULE_CATALOG.md
+# Generate official MITRE ATT&CK Enterprise v19.2 Navigator layer (custom color gradient)
+graft export matrix --format navigator --engine secops --color "#4285F4" --out layers/secops_coverage.json
+
+# Export detection catalog for GRC compliance audits and documentation
 graft export catalog --format csv --out exports/detection_catalog.csv
+graft export catalog --format markdown --out docs/RULE_CATALOG.md
 graft export catalog --format json
 ```
 
@@ -206,10 +210,10 @@ graft export catalog --format json
 > **Factual Lifecycle Indicators vs. Static "Maturity" Fields:**
 > Graft intentionally omits static `metadata.status` or `maturity` fields from rules. In real-world detection engineering, static maturity labels rapidly become stale, creating administrative toil and a false sense of security ("security theater"). Similarly, Graft avoids arbitrary 0–100 synthetic maturity scores.
 >
-> Instead, `graft export catalog` computes verified, objective indicators directly from version control and the rule envelope:
+> Instead, `graft export catalog` computes verified, objective indicators directly from version control, the rule envelope, and engine deployment adapters:
 > - **VCS Lifecycle:** First committed timestamp (`created_at`) and latest revision timestamp (`last_modified_at`).
 > - **Peer Review Scrutiny:** Total git commit count (`review_count`) and unique author count (`contributor_count`).
-> - **Engineering Rigor:** Presence of synthetic test vectors (`has_tests`), total replay events verified (`test_event_count`), and documented operational playbooks (`has_runbook`).
+> - **Operational Context:** Documented operational playbooks (`has_runbook`), unified ATT&CK mappings (`mitre_attack: TAxxxx:Tyyyy.zzz`), and engine-evaluated deployment health (`status: enabled | silent | disabled`).
 >
 > Operators can pipe these indicators into data pipelines (e.g. BigQuery, Google Sheets, BI dashboards) and combine them with live operational telemetry from the SIEM (alert volume, true-positive precision, mean time to triage) to assess true detection maturity objectively.
 >

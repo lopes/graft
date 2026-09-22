@@ -57,3 +57,42 @@ def test_secops_adapter_are_rules_equal() -> None:
     adapter = SecOpsAdapter()
     assert adapter.are_rules_equal(rule, rule) is True
     assert secops_rule_content_matches(rule, rule) is True
+
+
+def test_secops_adapter_resolve_deployment_status() -> None:
+    from graft.core.models.rule import BaseDeploymentConfig, RuleEnvelope, RuleMetadata, Runbook
+
+    meta = RuleMetadata(
+        id="c4e9b8f2-89b1-4f81-9b16-928d54128f73",
+        name="test_rule",
+        description="d",
+    )
+    runbook = Runbook(context="c", triage="t", response="r")
+
+    adapter = SecOpsAdapter()
+
+    rule_enabled = RuleEnvelope(
+        metadata=meta,
+        logic="events: $e condition: $e",
+        deployment=BaseDeploymentConfig(enabled=True, alerting=True),
+        runbook=runbook,
+        tests=(),
+    )
+    rule_silent = RuleEnvelope(
+        metadata=meta,
+        logic="events: $e condition: $e",
+        deployment=BaseDeploymentConfig(enabled=True, alerting=False),
+        runbook=runbook,
+        tests=(),
+    )
+    rule_disabled = RuleEnvelope(
+        metadata=meta,
+        logic="events: $e condition: $e",
+        deployment=BaseDeploymentConfig(enabled=False, alerting=False),
+        runbook=runbook,
+        tests=(),
+    )
+
+    assert adapter.resolve_deployment_status(rule_enabled) == "enabled"
+    assert adapter.resolve_deployment_status(rule_silent) == "silent"
+    assert adapter.resolve_deployment_status(rule_disabled) == "disabled"

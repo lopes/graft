@@ -235,17 +235,106 @@ Rules placed in any underscore-prefixed folder (e.g. `_archived/`, `_deprecated/
 
 ## Recipe 9: Generating MITRE ATT&CK Matrices & Catalogs
 
-### Commands
+### Objective
+Export objective detection catalogs across formats (`table`, `csv`, `json`, `markdown`) and generate MITRE ATT&CK Enterprise v19.2 matrices and Navigator layers for coverage tracking and multi-engine gap analysis.
+
+### Catalog Commands
 ```bash
-# View terminal ASCII table of current MITRE ATT&CK technique coverage
-graft export matrix --format table
+# Display on-screen detection catalog table (default format)
+graft export catalog
 
-# Generate an ATT&CK Navigator v4.5 JSON layer for heatmaps
-graft export matrix --format navigator --out layers/enterprise_coverage.json
+# Filter catalog to a specific engine
+graft export catalog --engine secops
 
-# Export a Markdown rule catalog with Git author attribution and deployment status
+# Export machine-readable CSV for GRC compliance and data pipelines
+graft export catalog --format csv --out exports/rules.csv
+
+# Export Markdown catalog for repository documentation or wikis
 graft export catalog --format markdown --out docs/RULE_CATALOG.md
 
-# Export machine-readable CSV for GRC and audit compliance
-graft export catalog --format csv --out exports/rules.csv
+# Export structured JSON for external data lakes or dashboards
+graft export catalog --format json --out exports/rules.json
 ```
+
+### Threat Matrix & MITRE Navigator Commands
+```bash
+# View terminal ASCII table of MITRE ATT&CK technique coverage
+graft export matrix --format table
+
+# Filter matrix table by engine
+graft export matrix --format table --engine secops
+
+# Generate official MITRE ATT&CK Navigator v4.5 JSON layer (default greenish gradient: #008744)
+graft export matrix --format navigator --out layers/enterprise_coverage.json
+
+# Generate engine-scoped Navigator layer with a custom gradient color
+graft export matrix --format navigator --engine secops --color "#4285F4" --out layers/secops_coverage.json
+```
+
+### Multi-Engine Gap Analysis in MITRE Navigator
+When operating multi-engine topologies (e.g., Google SecOps for cloud telemetry alongside an EDR or identity security platform), evaluating visibility gaps requires combining individual coverage footprints into an aggregated analytical layer.
+
+For detailed background and methodology, see Joe Lopes's foundational guide:
+👉 **[Gap Analysis with MITRE Navigator](https://lopes.id/log/gap-analysis-mitre-navigator/)**
+
+#### 1. Export Per-Engine Layers with Distinct Colors
+Rather than hardcoding engine-to-color mappings, Graft empowers operators to select distinct gradient colors via `--color`:
+```bash
+# Export Google SecOps layer (e.g. blue)
+graft export matrix --format navigator --engine secops --color "#4285F4" --out layers/secops.json
+
+# Export auxiliary engine layer (e.g. green)
+graft export matrix --format navigator --engine sentinel --color "#008744" --out layers/sentinel.json
+```
+
+Each generated layer scopes techniques to tactic shortnames (e.g. `initial-access`, `defense-impairment`) and sets `selectTechniquesAcrossTactics: false`. This ensures technique scores and annotations remain locked to their relevant tactic column without bleeding across unrelated columns.
+
+Each technique in the layer is enriched with:
+- `metadata`: Engine origin, matching rule names, live deployment status (`enabled`, `silent`, `disabled`), and whether runbooks are documented. (Experimental test vectors are intentionally omitted).
+- `links`: Clickable relative links directly to the rule YAML source files.
+
+#### 2. Combining Layers in MITRE Navigator
+1. Navigate to the [MITRE ATT&CK Navigator Web App](https://mitre-attack.github.io/attack-navigator/).
+2. Open each exported layer (`layers/secops.json` as Layer **`a`**, `layers/sentinel.json` as Layer **`b`**).
+3. Click **"+" > Create Layer from Other Layers** to combine them using mathematical expressions:
+   - **Combined Footprint (Union):** `max(a, b)` highlights all techniques covered by at least one engine.
+   - **Redundant Defenses (Intersection):** `min(a, b)` highlights techniques covered by both engines simultaneously.
+   - **Normalized Gap Analysis (1–5 Scale):** To flag single-engine dependencies as high-priority gaps while celebrating redundancy, apply the normalized scoring formula:
+     ```text
+     1 + 4 * (1 - (max(a, b) * (1 - min(a, b))))
+     ```
+     - **Score 1 (Low / Red / High Risk):** Single-engine coverage. If that engine goes down or fails, your defense has a blind spot.
+     - **Score 5 (High / Green / Low Risk):** Multi-engine redundancy. Both platforms actively detect the adversary behavior.
+     - **Score 0 / Unscored (White):** Total blind spot across all platforms.
+
+### MITRE ATT&CK Enterprise v19.2 Taxonomy
+Graft stays current with modern adversary tactics and techniques, pinning to ATT&CK Enterprise v19.2:
+- **Stealth Tactic (`TA0005`):** In v19.2, MITRE renamed `TA0005` from "Defense Evasion" to "Stealth". The corresponding YAML slug is `stealth`.
+- **Defense Impairment Tactic (`TA0112`):** Introduced in v19.2 to capture actions that disable, corrupt, or modify defenses. The corresponding YAML slug is `defense_impairment`.
+- **Technique Revocations & Replacements:** Techniques revoked by MITRE are rejected by `graft lint`. For example, `T1562.001` (Disable or Modify Tools) was revoked in v19.2 and replaced by `T1685` under `defense_impairment`. Graft adopts the latest taxonomy forward.
+
+### Objective Catalog Schema (14 Fields)
+Every catalog export (`table`, `csv`, `json`, `markdown`) normalizes to 14 objective indicators:
+
+| Field | Description | Source |
+| :--- | :--- | :--- |
+| `id` | Unique UUID string identifying the detection | Rule YAML `metadata.id` |
+| `name` | Canonical slug identifier | Rule YAML `metadata.name` |
+| `engine` | Target SIEM / engine identifier (e.g. `secops`) | Directory topology |
+| `rule_type` | `custom` or `managed` | Directory taxonomy |
+| `status` | Tri-state deployment health: `enabled`, `silent`, or `disabled` | Engine adapter evaluation |
+| `description` | Summary of threat behavior detected | Rule YAML `metadata.description` |
+| `mitre_attack` | Semicolon-delimited `TAxxxx:Tyyyy.zzz` pairs | Rule YAML `metadata.mitre` |
+| `tags` | Semicolon-delimited operational tags | Rule YAML `metadata.tags` |
+| `author` | Creation author name from Git blame | Git commit history |
+| `created_at` | Initial commit timestamp (ISO 8601) | Git commit history |
+| `last_modified_at` | Most recent commit timestamp (ISO 8601) | Git commit history |
+| `review_count` | Total number of revision commits | Git revision count |
+| `contributor_count` | Number of distinct Git authors | Git blame log |
+| `has_runbook` | Whether triage and response runbook is documented | Rule YAML `runbook` block |
+
+> [!NOTE]
+> **Why `severity`, `alerting`, and `maturity` Are Omitted:**
+> - `severity` does not exist in standard envelopes (it is an engine-specific outcome, not an agnostic rule property).
+> - Raw deployment fields (`alerting`, `enabled`, `run_frequency`) vary broadly by engine; Graft abstracts them into an engine-evaluated tri-state `status` (`enabled`, `silent`, `disabled`).
+> - Static `maturity` labels rots into administrative toil and false security. Objective VCS lifecycle and review metrics provide verifiable indicators without synthetic score inflation.

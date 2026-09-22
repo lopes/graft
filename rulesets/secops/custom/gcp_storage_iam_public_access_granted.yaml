@@ -7,8 +7,8 @@ metadata:
   mitre:
     initial_access:
       - "T1078.004"
-    defense_evasion:
-      - "T1562.001"
+    defense_impairment:
+      - "T1685"
   tags:
     - "gcp"
     - "gcs"

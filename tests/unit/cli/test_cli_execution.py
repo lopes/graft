@@ -395,3 +395,27 @@ def test_main_lint_ignores_archived_and_underscore_folders(tmp_path: Path) -> No
     # Lint scanning the root directory should ignore _archived and return 0
     exit_code = main(["lint", "--rules-dir", str(rulesets_dir)])
     assert exit_code == 0
+
+
+def test_main_update_mitre_success(capsys: pytest.CaptureFixture[str]) -> None:
+    with patch(
+        "graft.cli.commands_core.update_mitre_taxonomy",
+        return_value={"version": "19.2", "techniques": {"T1059": {}}, "tactics": {"execution": {}}},
+    ):
+        exit_code = main(["update-mitre"])
+    assert exit_code == 0
+    captured = capsys.readouterr()
+    assert "Updated MITRE ATT&CK Enterprise taxonomy to v19.2" in captured.out
+
+
+def test_main_update_mitre_json_output(capsys: pytest.CaptureFixture[str]) -> None:
+    with patch(
+        "graft.cli.commands_core.update_mitre_taxonomy",
+        return_value={"version": "19.2", "techniques": {"T1059": {}}, "tactics": {"execution": {}}},
+    ):
+        exit_code = main(["--json", "update-mitre"])
+    assert exit_code == 0
+    captured = capsys.readouterr()
+    data = json.loads(captured.out)
+    assert data["success"] is True
+    assert data["version"] == "19.2"

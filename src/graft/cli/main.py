@@ -68,6 +68,12 @@ def build_parser() -> argparse.ArgumentParser:
         dest="rules_dir",
         help="Root directory of rulesets (default: rulesets)",
     )
+    export_p.add_argument("--engine", help="Filter export to a specific engine (e.g. secops)")
+    export_p.add_argument(
+        "--color",
+        default="#008744",
+        help="Hex color for Navigator layer gradient stop (default: #008744)",
+    )
 
     # 4. new (engine | rule)
     new_p = subparsers.add_parser("new", help="Scaffold a new engine or detection rule")
@@ -125,9 +131,11 @@ def main(argv: Sequence[str] | None = None) -> int:
             return execute_export(
                 target=args.target,
                 out_path=getattr(args, "out", None),
-                format_type=getattr(args, "format", "json"),
+                format_type=getattr(args, "format", None),
                 json_output=args.json,
                 rules_dir=getattr(args, "rules_dir", "rulesets"),
+                engine=getattr(args, "engine", None),
+                color=getattr(args, "color", "#008744"),
             )
 
         if cmd == "new":

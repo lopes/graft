@@ -6,11 +6,14 @@ from typing import Any
 import yaml
 
 from graft.core.catalog import (
+    CatalogEntry,
     build_catalog_entry_from_rule,
     export_catalog_csv,
     export_catalog_json,
     export_catalog_markdown,
+    render_catalog_table,
 )
+from graft.core.engine_registry import EngineRegistry
 from graft.core.loader import RuleLoadError, load_rule_from_yaml
 from graft.core.matrix import (
     calculate_mitre_coverage,
@@ -19,6 +22,7 @@ from graft.core.matrix import (
 )
 from graft.core.models.rule import RuleEnvelope
 from graft.core.validation import RuleUniquenessValidator
+from graft.core.validation.mitre_validator import update_mitre_taxonomy
 from graft.core.validation.schema_validator import SchemaValidator
 
 
@@ -201,12 +205,38 @@ def execute_update_mitre(
     source_url: str | None = None,
     json_output: bool = False,
 ) -> int:
-    msg = "MITRE ATT&CK Enterprise taxonomy is already pinned and up to date."
-    if json_output:
-        sys.stdout.write(json.dumps({"success": True, "message": msg}) + "\n")
-    else:
-        sys.stdout.write(f"{msg}\n")
-    return 0
+    try:
+        payload = update_mitre_taxonomy(source_url=source_url)
+        version = payload.get("version", "19.2")
+        tech_count = len(payload.get("techniques", {}))
+        tactic_count = len(payload.get("tactics", {}))
+        msg = (
+            f"Updated MITRE ATT&CK Enterprise taxonomy to v{version} "
+            f"({tech_count} techniques, {tactic_count} tactics)."
+        )
+        if json_output:
+            sys.stdout.write(
+                json.dumps(
+                    {
+                        "success": True,
+                        "version": version,
+                        "techniques": tech_count,
+                        "tactics": tactic_count,
+                        "message": msg,
+                    }
+                )
+                + "\n"
+            )
+        else:
+            sys.stdout.write(f"{msg}\n")
+        return 0
+    except Exception as exc:
+        err_msg = f"Failed updating MITRE ATT&CK taxonomy: {exc}"
+        if json_output:
+            sys.stdout.write(json.dumps({"success": False, "error": err_msg}) + "\n")
+        else:
+            sys.stderr.write(f"[ERROR] {err_msg}\n")
+        return 1
 
 
 def _load_all_rules(rules_dir: Path | str = "rulesets") -> list[tuple[RuleEnvelope, str, Path]]:
@@ -244,32 +274,54 @@ def execute_export(
     format_type: str | None = None,
     json_output: bool = False,
     rules_dir: str = "rulesets",
+    engine: str | None = None,
+    color: str = "#008744",
 ) -> int:
     loaded = _load_all_rules(rules_dir)
+    if engine is not None:
+        loaded = [r for r in loaded if r[1] == engine]
+
     output_str = ""
 
     if target in ("matrix", "navigator"):
-        fmt = format_type or "navigator"
-        rules = [r[0] for r in loaded]
-        report = calculate_mitre_coverage(rules)
+        fmt = format_type or ("json" if json_output else "navigator")
+        report = calculate_mitre_coverage(loaded)
 
         if fmt == "table":
             output_str = render_matrix_table(report)
         else:  # navigator or json
-            payload = export_navigator_layer(report)
+            layer_title = (
+                f"Graft Detection Coverage ({engine})" if engine else "Graft Detection Coverage"
+            )
+            payload = export_navigator_layer(report, layer_name=layer_title, color=color)
             output_str = json.dumps(payload, indent=2)
 
     elif target in ("catalog", "metadata"):
-        fmt = format_type or ("json" if json_output else "markdown")
-        entries = [build_catalog_entry_from_rule(r[0], engine=r[1], path=r[2]) for r in loaded]
+        fmt = format_type or ("json" if json_output else "table")
+        registry = EngineRegistry()
+        adapters: dict[str, Any] = {}
+        entries: list[CatalogEntry] = []
+        for r in loaded:
+            rule, engine, rule_path = r
+            if engine not in adapters:
+                try:
+                    adapters[engine] = registry.load_adapter(engine)
+                except Exception:
+                    adapters[engine] = None
+            entry = build_catalog_entry_from_rule(
+                rule, engine=engine, path=rule_path, adapter=adapters[engine]
+            )
+            entries.append(entry)
 
         if fmt == "csv":
             output_str = export_catalog_csv(entries)
         elif fmt == "json":
             catalog_payload = export_catalog_json(entries)
             output_str = json.dumps(catalog_payload, indent=2)
-        else:  # markdown
+        elif fmt == "markdown":
             output_str = export_catalog_markdown(entries)
+        else:  # table
+            output_str = render_catalog_table(entries)
 
     if out_path:
         dest = Path(out_path)

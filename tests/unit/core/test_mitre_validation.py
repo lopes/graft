@@ -1,3 +1,6 @@
+import json
+from pathlib import Path
+
 import pytest
 
 from graft.core.validation.mitre_validator import MitreValidator
@@ -75,3 +78,87 @@ def test_unmapped_forwarder_technique_on_real_tactic_rejected(
     assert len(errors) == 1
     assert "does not belong to tactic 'execution'" in errors[0].message
     assert mitre_validator.is_valid(mitre_data) is False
+
+
+def test_mitre_v192_stealth_and_defense_impairment(mitre_validator: MitreValidator) -> None:
+    assert mitre_validator.version == "19.2"
+    assert "stealth" in mitre_validator.tactics
+    assert "defense_impairment" in mitre_validator.tactics
+    assert mitre_validator.tactics["stealth"]["id"] == "TA0005"
+    assert mitre_validator.tactics["stealth"]["shortname"] == "stealth"
+    assert mitre_validator.tactics["defense_impairment"]["id"] == "TA0112"
+    assert mitre_validator.tactics["defense_impairment"]["shortname"] == "defense-impairment"
+
+    # T1685 belongs to defense_impairment
+    valid_data = {"defense_impairment": ["T1685"]}
+    assert mitre_validator.is_valid(valid_data) is True
+
+
+def test_parse_attack_stix_bundle() -> None:
+    from graft.core.validation.mitre_validator import parse_attack_stix_bundle
+
+    sample_stix = {
+        "objects": [
+            {
+                "type": "x-mitre-tactic",
+                "x_mitre_deprecated": False,
+                "x_mitre_shortname": "initial-access",
+                "name": "Initial Access",
+                "external_references": [{"source_name": "mitre-attack", "external_id": "TA0001"}],
+            },
+            {
+                "type": "attack-pattern",
+                "x_mitre_deprecated": False,
+                "revoked": False,
+                "name": "Spearphishing Link",
+                "external_references": [
+                    {"source_name": "mitre-attack", "external_id": "T1566.002"}
+                ],
+                "kill_chain_phases": [
+                    {"kill_chain_name": "mitre-attack", "phase_name": "initial-access"}
+                ],
+            },
+        ]
+    }
+
+    result = parse_attack_stix_bundle(sample_stix, version="19.2")
+    assert result["version"] == "19.2"
+    assert "initial_access" in result["tactics"]
+    assert result["tactics"]["initial_access"]["id"] == "TA0001"
+    assert result["tactics"]["initial_access"]["shortname"] == "initial-access"
+    assert "none" in result["tactics"]
+    assert "T1566.002" in result["techniques"]
+    assert result["techniques"]["T1566.002"]["tactics"] == ["initial_access"]
+    assert "T0000" in result["techniques"]
+
+
+def test_update_mitre_taxonomy(tmp_path: Path) -> None:
+    import io
+    from unittest.mock import patch
+
+    from graft.core.validation.mitre_validator import update_mitre_taxonomy
+
+    sample_stix = {
+        "objects": [
+            {
+                "type": "x-mitre-tactic",
+                "x_mitre_deprecated": False,
+                "x_mitre_shortname": "stealth",
+                "name": "Stealth",
+                "external_references": [{"source_name": "mitre-attack", "external_id": "TA0005"}],
+            }
+        ]
+    }
+    raw_bytes = json.dumps(sample_stix).encode("utf-8")
+    mock_resp = io.BytesIO(raw_bytes)
+    target_file = tmp_path / "mitre_test.json"
+
+    with patch("urllib.request.urlopen", return_value=mock_resp):
+        payload = update_mitre_taxonomy(
+            source_url="http://example.com/stix.json", target_path=target_file
+        )
+
+    assert payload["version"] == "19.2"
+    assert target_file.is_file()
+    saved = json.loads(target_file.read_text(encoding="utf-8"))
+    assert "stealth" in saved["tactics"]

@@ -5,6 +5,7 @@ import pytest
 
 from graft.core.engine_registry import EngineManifestLoadError, EngineNotFoundError, EngineRegistry
 from graft.core.models.engine import EngineCapabilities, EngineManifest
+from graft.core.models.rule import RuleEnvelope
 from graft.core.ports.compiler import RuleCompilerPort
 from graft.core.ports.deployer import RuleDeployerPort
 from graft.core.ports.engine import EngineAdapter
@@ -137,6 +138,9 @@ class DummyAdapter(EngineAdapter):
 
     def get_replay(self) -> ReplayHarnessPort | None:
         return None
+
+    def resolve_deployment_status(self, rule: RuleEnvelope) -> str:
+        return "enabled" if rule.deployment.enabled else "disabled"
 
 
 def test_engine_adapter_protocol_conformance() -> None:

@@ -10,15 +10,53 @@ from graft.core.catalog import (
     export_catalog_csv,
     export_catalog_json,
     export_catalog_markdown,
+    render_catalog_table,
+    resolve_mitre_attack_pairs,
+    resolve_rule_deployment_status,
 )
 from graft.core.models.rule import (
     BaseDeploymentConfig,
     RuleEnvelope,
     RuleMetadata,
     Runbook,
-    TestEvent,
-    TestVector,
 )
+
+
+def test_resolve_mitre_attack_pairs() -> None:
+    mitre_data = {
+        "initial_access": ("T1566.002",),
+        "stealth": ("T1055.011",),
+    }
+    pairs = resolve_mitre_attack_pairs(mitre_data)
+    assert pairs == ("TA0001:T1566.002", "TA0005:T1055.011")
+
+
+def test_resolve_mitre_attack_pairs_unmapped() -> None:
+    pairs = resolve_mitre_attack_pairs({"none": ("T0000",)})
+    assert pairs == ("TA0000:T0000",)
+
+
+def test_resolve_rule_deployment_status_fallback() -> None:
+    meta = RuleMetadata(id="00000000-0000-0000-0000-000000000001", name="r1", description="d")
+    runbook = Runbook(context="c", triage="t", response="r")
+
+    r_enabled = RuleEnvelope(
+        metadata=meta,
+        logic="events: $e condition: $e",
+        deployment=BaseDeploymentConfig(enabled=True, alerting=True),
+        runbook=runbook,
+        tests=(),
+    )
+    r_disabled = RuleEnvelope(
+        metadata=meta,
+        logic="events: $e condition: $e",
+        deployment=BaseDeploymentConfig(enabled=False, alerting=False),
+        runbook=runbook,
+        tests=(),
+    )
+
+    assert resolve_rule_deployment_status(r_enabled) == "enabled"
+    assert resolve_rule_deployment_status(r_disabled) == "disabled"
 
 
 def test_build_catalog_entry_from_rule() -> None:
@@ -42,32 +80,26 @@ def test_build_catalog_entry_from_rule() -> None:
     assert entry.name == "workspace_nrd_phishing"
     assert entry.engine == "secops"
     assert entry.rule_type == "custom"
-    assert entry.severity == "high"
-    assert "T1566.002" in entry.mitre_techniques
-    assert "initial_access" in entry.mitre_tactics
+    assert entry.status == "enabled"
+    assert entry.mitre_attack == ("TA0001:T1566.002",)
+    assert entry.tags == ("workspace", "phishing")
     assert entry.author == "Joe Lopes"
-    assert entry.enabled is True
-    assert entry.alerting is True
-    assert entry.run_frequency == "live"
     assert entry.created_at == "Unknown"
     assert entry.last_modified_at == "Unknown"
     assert entry.review_count == 0
     assert entry.contributor_count == 0
-    assert entry.has_tests is False
-    assert entry.test_event_count == 0
     assert entry.has_runbook is True
 
 
-def test_build_catalog_entry_with_git_and_tests(tmp_path: Path) -> None:
+def test_build_catalog_entry_with_git(tmp_path: Path) -> None:
     rule_file = tmp_path / "rule.yaml"
     rule_file.touch()
 
     rule = RuleEnvelope(
         metadata=RuleMetadata(
             id="00000000-0000-0000-0000-000000000002",
-            name="rule_with_tests",
-            description="Rule with tests description",
-            priority="medium",
+            name="rule_with_git",
+            description="Rule with git description",
             authors=(),
             mitre={},
             tags=(),
@@ -75,23 +107,7 @@ def test_build_catalog_entry_with_git_and_tests(tmp_path: Path) -> None:
         logic="events: $e condition: $e",
         deployment=BaseDeploymentConfig(enabled=True, alerting=False, run_frequency="hourly"),
         runbook=Runbook(context="", triage="", response=""),
-        tests=(
-            TestVector(
-                id="vec1",
-                description="t1",
-                expect=1,
-                events=(
-                    TestEvent(timestamp="2026-01-01T00:00:00Z"),
-                    TestEvent(timestamp="2026-01-01T00:01:00Z"),
-                ),
-            ),
-            TestVector(
-                id="vec2",
-                description="t2",
-                expect=0,
-                events=(TestEvent(timestamp="2026-01-01T00:02:00Z"),),
-            ),
-        ),
+        tests=(),
     )
 
     mock_git = RuleGitMetadata(
@@ -112,9 +128,39 @@ def test_build_catalog_entry_with_git_and_tests(tmp_path: Path) -> None:
     assert entry.last_modified_at == "2026-09-20"
     assert entry.review_count == 7
     assert entry.contributor_count == 3
-    assert entry.has_tests is True
-    assert entry.test_event_count == 3
     assert entry.has_runbook is False
+
+
+def test_render_catalog_table() -> None:
+    entry = CatalogEntry(
+        id="00000000-0000-0000-0000-000000000001",
+        name="workspace_nrd_phishing",
+        engine="secops",
+        rule_type="custom",
+        status="enabled",
+        description="A test rule",
+        mitre_attack=("TA0001:T1566.002",),
+        tags=("workspace",),
+        author="Joe Lopes",
+        created_at="2026-01-01",
+        last_modified_at="2026-09-22",
+        review_count=4,
+        contributor_count=2,
+        has_runbook=True,
+    )
+
+    table = render_catalog_table([entry])
+    assert "Rule Name" in table
+    assert "Engine" in table
+    assert "Status" in table
+    assert "MITRE ATT&CK" in table
+    assert "Reviews" in table
+    assert "Runbook" in table
+    assert "Updated" in table
+    assert "workspace_nrd_phishing" in table
+    assert "secops" in table
+    assert "enabled" in table
+    assert "TA0001:T1566.002" in table
 
 
 def test_export_catalog_markdown() -> None:
@@ -123,30 +169,23 @@ def test_export_catalog_markdown() -> None:
         name="test_rule",
         engine="secops",
         rule_type="custom",
-        severity="high",
+        status="enabled",
         description="A test rule",
-        mitre_tactics=("initial_access",),
-        mitre_techniques=("T1566.002",),
+        mitre_attack=("TA0001:T1566.002",),
         tags=("workspace",),
         author="Joe Lopes",
         created_at="2026-01-01",
-        last_modified_at="2026-09-17",
+        last_modified_at="2026-09-22",
         review_count=4,
         contributor_count=2,
-        has_tests=True,
-        test_event_count=3,
         has_runbook=True,
-        run_frequency="live",
-        enabled=True,
-        alerting=True,
     )
 
     md = export_catalog_markdown([entry])
-    assert "| Rule Name | Engine |" in md
-    assert "| `test_rule` | secops |" in md
-    assert "T1566.002" in md
-    assert "| Created | Last Updated | Reviews | Contributors | Tests | Runbook |" in md
-    assert "| 2026-01-01 | 2026-09-17 | 4 | 2 | yes (3) | yes |" in md
+    assert "| Rule Name | Engine | Status | MITRE ATT&CK |" in md
+    assert "| `test_rule` | secops | enabled | TA0001:T1566.002 |" in md
+    assert "| Reviews | Contributors | Runbook |" in md
+    assert "| 4 | 2 | yes |" in md
 
 
 def test_export_catalog_csv() -> None:
@@ -155,22 +194,16 @@ def test_export_catalog_csv() -> None:
         name="test_rule",
         engine="secops",
         rule_type="custom",
-        severity="high",
+        status="enabled",
         description="A test rule",
-        mitre_tactics=("initial_access",),
-        mitre_techniques=("T1566.002",),
-        tags=("workspace",),
+        mitre_attack=("TA0001:T1566.002",),
+        tags=("workspace", "phishing"),
         author="Joe Lopes",
         created_at="2026-01-01",
-        last_modified_at="2026-09-17",
+        last_modified_at="2026-09-22",
         review_count=4,
         contributor_count=2,
-        has_tests=True,
-        test_event_count=3,
         has_runbook=True,
-        run_frequency="live",
-        enabled=True,
-        alerting=True,
     )
 
     csv_output = export_catalog_csv([entry])
@@ -179,14 +212,16 @@ def test_export_catalog_csv() -> None:
     assert len(rows) == 1
     assert rows[0]["name"] == "test_rule"
     assert rows[0]["engine"] == "secops"
-    assert rows[0]["mitre_techniques"] == "T1566.002"
+    assert rows[0]["status"] == "enabled"
+    assert rows[0]["mitre_attack"] == "TA0001:T1566.002"
+    assert rows[0]["tags"] == "workspace;phishing"
     assert rows[0]["created_at"] == "2026-01-01"
-    assert rows[0]["last_modified_at"] == "2026-09-17"
+    assert rows[0]["last_modified_at"] == "2026-09-22"
     assert rows[0]["review_count"] == "4"
     assert rows[0]["contributor_count"] == "2"
-    assert rows[0]["has_tests"] == "True"
-    assert rows[0]["test_event_count"] == "3"
     assert rows[0]["has_runbook"] == "True"
+    assert "severity" not in rows[0]
+    assert "has_tests" not in rows[0]
 
 
 def test_export_catalog_json() -> None:
@@ -195,32 +230,28 @@ def test_export_catalog_json() -> None:
         name="test_rule",
         engine="secops",
         rule_type="custom",
-        severity="high",
+        status="enabled",
         description="A test rule",
-        mitre_tactics=("initial_access",),
-        mitre_techniques=("T1566.002",),
+        mitre_attack=("TA0001:T1566.002",),
         tags=("workspace",),
         author="Joe Lopes",
         created_at="2026-01-01",
-        last_modified_at="2026-09-17",
+        last_modified_at="2026-09-22",
         review_count=4,
         contributor_count=2,
-        has_tests=True,
-        test_event_count=3,
         has_runbook=True,
-        run_frequency="live",
-        enabled=True,
-        alerting=True,
     )
 
     payload = export_catalog_json([entry])
     assert len(payload) == 1
     assert payload[0]["name"] == "test_rule"
     assert payload[0]["engine"] == "secops"
+    assert payload[0]["status"] == "enabled"
+    assert payload[0]["mitre_attack"] == ["TA0001:T1566.002"]
     assert payload[0]["created_at"] == "2026-01-01"
-    assert payload[0]["last_modified_at"] == "2026-09-17"
+    assert payload[0]["last_modified_at"] == "2026-09-22"
     assert payload[0]["review_count"] == 4
     assert payload[0]["contributor_count"] == 2
-    assert payload[0]["has_tests"] is True
-    assert payload[0]["test_event_count"] == 3
     assert payload[0]["has_runbook"] is True
+    assert "severity" not in payload[0]
+    assert "has_tests" not in payload[0]

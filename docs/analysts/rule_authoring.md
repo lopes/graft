@@ -34,9 +34,9 @@ Core identification and threat taxonomy mapping.
 > Graft rejects hardcoded maturity labels. Instead, maturity is treated as an **empirical, measurable property** reflected in objective indicators:
 > - **VCS Lifecycle:** First committed date (`created_at`) and latest revision date (`last_modified_at`).
 > - **Peer Scrutiny:** Total revision history (`review_count`) and breadth of peer review (`contributor_count`).
-> - **Engineering Rigor:** Synthetic unit test vectors (`has_tests`, `test_event_count`) and documented operational procedures (`has_runbook`).
+> - **Operational Context:** Documented operational triage procedures (`has_runbook`), unified ATT&CK mappings (`mitre_attack`), and tri-state deployment health (`status: enabled | silent | disabled`).
 >
-> Graft also deliberately refuses to compute an arbitrary synthetic score (e.g. 0–100) from repo data alone ("no bullshit"). A rule with 10 commits and 5 tests might still produce 10,000 false positives in production. Instead, Graft surfaces these objective indicators via `graft export catalog` so detection engineering teams can join them with external SIEM/SOAR runtime metrics (true-positive rate, precision, alert volume, MTTR) to measure true health.
+> Graft also deliberately refuses to compute an arbitrary synthetic score (e.g. 0–100) from repo data alone ("no bullshit"). A rule with 10 commits might still produce 10,000 false positives in production. Instead, Graft surfaces these objective indicators via `graft export catalog` so detection engineering teams can join them with external SIEM/SOAR runtime metrics (true-positive rate, precision, alert volume, MTTR) to measure true health.
 
 ### Block 2: `logic`
 Engine-native query logic. For Google SecOps, this contains YARA-L 2.0 sections (`events:`, `match:`, `outcome:`, `condition:`). Graft automatically synthesizes the `rule <name> { meta: ... }` wrapper when sending to Chronicle APIs.

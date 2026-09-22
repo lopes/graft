@@ -105,6 +105,9 @@ class FullMockAdapter(EngineAdapter):
     def get_replay(self) -> ReplayHarnessPort | None:
         return self.replay
 
+    def resolve_deployment_status(self, rule: RuleEnvelope) -> str:
+        return "enabled" if rule.deployment.enabled else "disabled"
+
 
 def test_register_engine_commands_subparsers() -> None:
     manifest = EngineManifest(

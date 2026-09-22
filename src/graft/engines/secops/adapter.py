@@ -104,6 +104,13 @@ class SecOpsAdapter(EngineAdapter):
     def are_rules_equal(self, desired: RuleEnvelope, remote: RuleEnvelope) -> bool:
         return secops_rule_content_matches(desired, remote)
 
+    def resolve_deployment_status(self, rule: RuleEnvelope) -> str:
+        if not rule.deployment.enabled:
+            return "disabled"
+        if rule.deployment.alerting:
+            return "enabled"
+        return "silent"
+
     def load_managed_manifest(self, path: Path) -> ManagedState:
         return load_managed_manifest_from_yaml(path)
 

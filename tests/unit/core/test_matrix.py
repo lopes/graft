@@ -1,3 +1,5 @@
+from pathlib import Path
+
 from graft.core.matrix import (
     calculate_mitre_coverage,
     export_navigator_layer,
@@ -45,23 +47,45 @@ def test_calculate_mitre_coverage_aggregation() -> None:
 
     assert "T1098.001" in tech_map
     assert tech_map["T1098.001"].rule_count == 2
-    assert tech_map["T1098.001"].rule_names == ["rule_three", "rule_two"] or sorted(
-        tech_map["T1098.001"].rule_names
-    ) == ["rule_three", "rule_two"]
+    assert sorted(tech_map["T1098.001"].rule_names) == ["rule_three", "rule_two"]
 
 
 def test_export_navigator_layer_structure() -> None:
     rule = make_dummy_rule("rule_gcp", {"persistence": ("T1098.001",)})
-    report = calculate_mitre_coverage([rule])
+    report = calculate_mitre_coverage(
+        [(rule, "secops", Path("rulesets/secops/custom/rule_gcp.yaml"))]
+    )
     layer = export_navigator_layer(report, layer_name="Test Layer")
 
     assert layer["name"] == "Test Layer"
     assert layer["domain"] == "enterprise-attack"
-    assert layer["versions"]["navigator"] == "4.5"
+    assert layer["versions"]["attack"] == "19.2"
+    assert layer["versions"]["navigator"] == "5.2.0"
+    assert layer["versions"]["layer"] == "4.5"
+    assert layer["selectTechniquesAcrossTactics"] is False
+    assert layer["gradient"]["colors"] == ["#ffffff", "#008744"]
+
     assert len(layer["techniques"]) == 1
-    assert layer["techniques"][0]["techniqueID"] == "T1098.001"
-    assert layer["techniques"][0]["score"] == 1
-    assert "rule_gcp" in layer["techniques"][0]["comment"]
+    t0 = layer["techniques"][0]
+    assert t0["techniqueID"] == "T1098.001"
+    assert t0["tactic"] == "persistence"
+    assert t0["score"] == 1
+    assert "rule_gcp" in t0["comment"]
+
+    meta_names = [m["name"] for m in t0["metadata"]]
+    assert "engine" in meta_names
+    assert "rules" in meta_names
+    assert "runbook" in meta_names
+
+    assert len(t0["links"]) == 1
+    assert "rulesets/secops/custom/rule_gcp.yaml" in t0["links"][0]["url"]
+
+
+def test_export_navigator_layer_custom_color() -> None:
+    rule = make_dummy_rule("rule_gcp", {"persistence": ("T1098.001",)})
+    report = calculate_mitre_coverage([rule])
+    layer = export_navigator_layer(report, layer_name="Custom Color Layer", color="#2e7d32")
+    assert layer["gradient"]["colors"] == ["#ffffff", "#2e7d32"]
 
 
 def test_render_matrix_table() -> None:
