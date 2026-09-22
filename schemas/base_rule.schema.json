@@ -16,8 +16,7 @@
       "required": [
         "id",
         "name",
-        "description",
-        "status"
+        "description"
       ],
       "properties": {
         "id": {
@@ -34,14 +33,6 @@
           "type": "string",
           "minLength": 1,
           "maxLength": 128
-        },
-        "status": {
-          "type": "string",
-          "enum": [
-            "testing",
-            "production",
-            "deprecated"
-          ]
         },
         "priority": {
           "type": "string",

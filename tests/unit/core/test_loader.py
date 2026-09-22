@@ -17,7 +17,6 @@ def valid_yaml_content() -> str:
   id: "c4e9b8f2-89b1-4f81-9b16-928d54128f73"
   name: "powershell_encoded_launch"
   description: "Detects execution of PowerShell commands using base64 encoded arguments."
-  status: "production"
   priority: "high"
   authors:
     - "Security Engineering"
@@ -72,7 +71,6 @@ def test_load_rule_from_str_success(valid_yaml_content: str) -> None:
     assert isinstance(envelope, RuleEnvelope)
     assert envelope.metadata.id == "c4e9b8f2-89b1-4f81-9b16-928d54128f73"
     assert envelope.metadata.name == "powershell_encoded_launch"
-    assert envelope.metadata.status == "production"
     assert envelope.metadata.priority == "high"
     assert envelope.metadata.mitre == {"execution": ("T1059.001",)}
     assert envelope.deployment.enabled is True
@@ -105,7 +103,6 @@ def test_load_rule_schema_validation_failure() -> None:
   id: "invalid-uuid"
   name: "Bad Name!"
   description: "Desc"
-  status: "unknown"
 logic: ""
 deployment:
   enabled: true
@@ -124,7 +121,6 @@ def test_load_rule_mitre_validation_failure() -> None:
   id: "c4e9b8f2-89b1-4f81-9b16-928d54128f73"
   name: "rule_test"
   description: "Test rule description"
-  status: "testing"
   mitre:
     initial_access:
       - "T1059.001"
@@ -172,7 +168,6 @@ def test_dump_rule_and_roundtrip(valid_yaml_content: str, tmp_path: Path) -> Non
     assert reloaded.metadata.id == original.metadata.id
     assert reloaded.metadata.name == original.metadata.name
     assert reloaded.metadata.description == original.metadata.description
-    assert reloaded.metadata.status == original.metadata.status
     assert reloaded.metadata.priority == original.metadata.priority
     assert reloaded.metadata.mitre == original.metadata.mitre
     assert reloaded.deployment.enabled == original.deployment.enabled

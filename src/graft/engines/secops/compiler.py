@@ -44,14 +44,12 @@ def _indent_logic(logic: str, indent: str = "  ") -> str:
 def synthesize_yaral_rule(rule: RuleEnvelope) -> tuple[str, int]:
     meta_id = rule.metadata.id
     meta_desc = rule.metadata.description.replace('"', '\\"')
-    meta_status = rule.metadata.status
 
     header_lines = [
         f"rule {rule.metadata.name} {{",
         "  meta:",
         f'    id = "{meta_id}"',
         f'    description = "{meta_desc}"',
-        f'    status = "{meta_status}"',
     ]
     header_offset = len(header_lines)
     rule_text = "\n".join(header_lines) + "\n" + _indent_logic(rule.logic) + "\n}\n"
@@ -71,7 +69,6 @@ def deconstruct_yaral_rule(
             id=rule_id,
             name=rule_name,
             description=f"Imported detection rule for {rule_name}"[:128],
-            status="production",
             authors=(),
             mitre={},
         )
@@ -124,15 +121,10 @@ def deconstruct_yaral_rule(
     desc = meta_dict.get("description", f"Imported detection rule for {rule_name}")
     if len(desc) > 128:
         desc = desc[:125] + "..."
-    status = meta_dict.get("status", "production").lower()
-    if status not in ("testing", "production", "deprecated"):
-        status = "production"
-
     metadata = RuleMetadata(
         id=meta_id,
         name=rule_name,
         description=desc,
-        status=status,
         authors=tuple(authors),
         mitre={},
     )

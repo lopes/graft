@@ -451,7 +451,6 @@ def _make_envelope(
             id=rule_id,
             name=name,
             description="Test rule",
-            status="production",
         ),
         logic=logic,
         deployment=BaseDeploymentConfig(enabled=enabled, alerting=alerting),

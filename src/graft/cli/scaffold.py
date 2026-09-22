@@ -307,7 +307,6 @@ def scaffold_rule(
             "id": rule_uuid,
             "name": rule_name,
             "description": f"Detection rule for {rule_name.replace('_', ' ')}",
-            "status": "testing",
             "priority": "medium",
             "authors": ["Detection Engineering <detection@company.com>"],
             "mitre": {

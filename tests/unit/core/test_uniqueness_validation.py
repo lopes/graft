@@ -11,7 +11,6 @@ def _make_rule(rule_id: str, rule_name: str) -> RuleEnvelope:
         id=rule_id,
         name=rule_name,
         description="Test rule",
-        status="production",
     )
     return RuleEnvelope(
         metadata=metadata,

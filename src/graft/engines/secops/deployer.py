@@ -71,7 +71,6 @@ class SecOpsDeployerAdapter(RuleDeployerPort):
                 id=effective_id,
                 name=display_name,
                 description="",
-                status="production",
                 authors=(),
                 mitre={},
             )

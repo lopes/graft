@@ -58,14 +58,14 @@ def test_main_lint_duplicate_id_across_engines_fails(
     )
     content1 = (
         'metadata:\n  id: "11111111-2222-3333-4444-555555555555"\n  name: "rule_one"\n'
-        '  description: "Desc"\n  status: "production"\n'
+        '  description: "Desc"\n'
         'logic: "events:\\n  $e\\ncondition:\\n  $e"\n'
         'deployment:\n  enabled: true\n  alerting: true\n  run_frequency: "live"\n'
         f'runbook:\n  context: "c"\n  triage: "t"\n  response: "r"\n{tests_block}'
     )
     content2 = (
         'metadata:\n  id: "11111111-2222-3333-4444-555555555555"\n  name: "rule_two"\n'
-        '  description: "Desc"\n  status: "production"\n'
+        '  description: "Desc"\n'
         'logic: "events:\\n  $e\\ncondition:\\n  $e"\n'
         'deployment:\n  enabled: true\n  alerting: true\n  run_frequency: "live"\n'
         f'runbook:\n  context: "c"\n  triage: "t"\n  response: "r"\n{tests_block}'
@@ -92,14 +92,14 @@ def test_main_lint_duplicate_name_in_same_engine_fails(
     )
     content1 = (
         'metadata:\n  id: "11111111-1111-1111-1111-111111111111"\n  name: "shared_name"\n'
-        '  description: "Desc"\n  status: "production"\n'
+        '  description: "Desc"\n'
         'logic: "events:\\n  $e\\ncondition:\\n  $e"\n'
         'deployment:\n  enabled: true\n  alerting: true\n  run_frequency: "live"\n'
         f'runbook:\n  context: "c"\n  triage: "t"\n  response: "r"\n{tests_block}'
     )
     content2 = (
         'metadata:\n  id: "22222222-2222-2222-2222-222222222222"\n  name: "shared_name"\n'
-        '  description: "Desc"\n  status: "production"\n'
+        '  description: "Desc"\n'
         'logic: "events:\\n  $e\\ncondition:\\n  $e"\n'
         'deployment:\n  enabled: true\n  alerting: true\n  run_frequency: "live"\n'
         f'runbook:\n  context: "c"\n  triage: "t"\n  response: "r"\n{tests_block}'
@@ -127,14 +127,14 @@ def test_main_lint_same_name_across_different_engines_passes(
     )
     content1 = (
         'metadata:\n  id: "11111111-1111-1111-1111-111111111111"\n  name: "shared_name"\n'
-        '  description: "Desc"\n  status: "production"\n'
+        '  description: "Desc"\n'
         'logic: "events:\\n  $e\\ncondition:\\n  $e"\n'
         'deployment:\n  enabled: true\n  alerting: true\n  run_frequency: "live"\n'
         f'runbook:\n  context: "c"\n  triage: "t"\n  response: "r"\n{tests_block}'
     )
     content2 = (
         'metadata:\n  id: "22222222-2222-2222-2222-222222222222"\n  name: "shared_name"\n'
-        '  description: "Desc"\n  status: "production"\n'
+        '  description: "Desc"\n'
         'logic: "events:\\n  $e\\ncondition:\\n  $e"\n'
         'deployment:\n  enabled: true\n  alerting: true\n  run_frequency: "live"\n'
         f'runbook:\n  context: "c"\n  triage: "t"\n  response: "r"\n{tests_block}'

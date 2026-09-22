@@ -45,7 +45,6 @@ def test_secops_adapter_are_rules_equal() -> None:
         id="c4e9b8f2-89b1-4f81-9b16-928d54128f73",
         name="test_rule",
         description="desc",
-        status="production",
     )
     rule = RuleEnvelope(
         metadata=meta,

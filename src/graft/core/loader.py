@@ -55,7 +55,6 @@ def load_rule_from_str(
         id=str(metadata_raw["id"]),
         name=str(metadata_raw["name"]),
         description=str(metadata_raw["description"]),
-        status=str(metadata_raw["status"]),
         priority=str(metadata_raw["priority"])
         if metadata_raw.get("priority") is not None
         else None,
@@ -150,7 +149,6 @@ def rule_to_dict(rule: RuleEnvelope) -> dict[str, Any]:
         "id": rule.metadata.id,
         "name": rule.metadata.name,
         "description": rule.metadata.description,
-        "status": rule.metadata.status,
     }
     if rule.metadata.priority is not None:
         metadata_dict["priority"] = rule.metadata.priority

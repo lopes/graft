@@ -48,7 +48,6 @@ def secops_rule_content_matches(desired: RuleEnvelope, remote: RuleEnvelope) -> 
         return bool(
             remote_meta.id == desired.metadata.id
             and remote_meta.description == desired.metadata.description
-            and remote_meta.status == desired.metadata.status
             and remote_logic.strip() == desired.logic.strip()
         )
     except Exception:

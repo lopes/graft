@@ -111,7 +111,6 @@ def test_deployer_port_conformance() -> None:
         id="c4e9b8f2-89b1-4f81-9b16-928d54128f73",
         name="test_rule",
         description="Desc",
-        status="testing",
         priority="low",
     )
     envelope = RuleEnvelope(
@@ -140,7 +139,6 @@ def test_replay_harness_port_conformance() -> None:
         id="c4e9b8f2-89b1-4f81-9b16-928d54128f73",
         name="test_rule",
         description="Desc",
-        status="testing",
         priority="low",
     )
     envelope = RuleEnvelope(

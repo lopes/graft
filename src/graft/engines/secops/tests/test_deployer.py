@@ -18,7 +18,6 @@ def sample_rule() -> RuleEnvelope:
         id="ru_11111111-2222-3333-4444-555555555555",
         name="test_rule",
         description="Test rule description",
-        status="production",
         authors=("Detection Engineer",),
         mitre={"execution": ("T1059.001",)},
     )

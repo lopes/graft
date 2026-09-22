@@ -17,7 +17,6 @@ def make_dummy_rule(name: str, mitre: dict[str, tuple[str, ...]]) -> RuleEnvelop
             id="00000000-0000-0000-0000-000000000001",
             name=name,
             description="Test rule",
-            status="production",
             mitre=mitre,
         ),
         logic="events: $e condition: $e",

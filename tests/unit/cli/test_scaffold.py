@@ -72,7 +72,6 @@ def test_scaffold_rule_success(tmp_path: Path) -> None:
     envelope = load_rule_from_yaml(rule_path, schema_name="secops_custom")
     assert envelope.metadata.name == "suspicious_powershell_execution"
     assert envelope.metadata.id is not None
-    assert envelope.metadata.status == "testing"
     assert envelope.deployment.enabled is False
     assert len(envelope.tests) >= 1
 

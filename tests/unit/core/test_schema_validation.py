@@ -22,7 +22,6 @@ def valid_secops_custom_dict() -> dict[str, object]:
             "description": (
                 "Detects execution of PowerShell commands using base64 encoded arguments."
             ),
-            "status": "production",
             "priority": "high",
             "authors": ["Security Engineering"],
             "mitre": {
@@ -110,15 +109,15 @@ def test_description_length_limit(
     assert any("128" in err.message or "maxLength" in err.validator for err in errors)
 
 
-def test_invalid_status_enum(
+def test_status_field_disallowed(
     validator: SchemaValidator, valid_secops_custom_dict: dict[str, object]
 ) -> None:
     metadata = valid_secops_custom_dict["metadata"]
     assert isinstance(metadata, dict)
-    metadata["status"] = "active"  # Only 'testing', 'production', 'deprecated' allowed
+    metadata["status"] = "production"
     errors = validator.validate(valid_secops_custom_dict, schema_name="secops_custom")
     assert len(errors) >= 1
-    assert any("status" in err.path or "active" in err.message for err in errors)
+    assert any("status" in err.message or "additionalProperties" in err.validator for err in errors)
 
 
 def test_invalid_rule_name_pattern(
@@ -292,7 +291,6 @@ def test_schema_validator_discovers_engine_schemas(tmp_path: Path) -> None:
             "id": "11111111-1111-4111-8111-111111111111",
             "name": "test_rule",
             "description": "desc",
-            "status": "testing",
         },
         "logic": "test logic",
         "deployment": {"mock_tier": "gold"},
@@ -306,7 +304,6 @@ def test_schema_validator_discovers_engine_schemas(tmp_path: Path) -> None:
             "id": "11111111-1111-4111-8111-111111111111",
             "name": "test_rule",
             "description": "desc",
-            "status": "testing",
         },
         "logic": "test logic",
         "deployment": {"mock_tier": 123},

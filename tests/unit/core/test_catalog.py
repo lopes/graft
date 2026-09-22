@@ -22,7 +22,6 @@ def test_build_catalog_entry_from_rule() -> None:
             id="00000000-0000-0000-0000-000000000001",
             name="workspace_nrd_phishing",
             description="NRD Phishing Test",
-            status="production",
             priority="high",
             authors=("Joe Lopes",),
             mitre={"initial_access": ("T1566.002",)},
@@ -38,7 +37,6 @@ def test_build_catalog_entry_from_rule() -> None:
     assert entry.name == "workspace_nrd_phishing"
     assert entry.engine == "secops"
     assert entry.rule_type == "custom"
-    assert entry.status == "production"
     assert entry.severity == "high"
     assert "T1566.002" in entry.mitre_techniques
     assert "initial_access" in entry.mitre_tactics
@@ -54,7 +52,6 @@ def test_export_catalog_markdown() -> None:
         name="test_rule",
         engine="secops",
         rule_type="custom",
-        status="production",
         severity="high",
         description="A test rule",
         mitre_tactics=("initial_access",),
@@ -80,7 +77,6 @@ def test_export_catalog_csv() -> None:
         name="test_rule",
         engine="secops",
         rule_type="custom",
-        status="production",
         severity="high",
         description="A test rule",
         mitre_tactics=("initial_access",),
@@ -109,7 +105,6 @@ def test_export_catalog_json() -> None:
         name="test_rule",
         engine="secops",
         rule_type="custom",
-        status="production",
         severity="high",
         description="A test rule",
         mitre_tactics=("initial_access",),

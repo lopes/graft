@@ -8,7 +8,7 @@ from graft.core.models.rule import BaseDeploymentConfig, RuleEnvelope, RuleMetad
 
 def _make_rule(name: str, enabled: bool = True, alerting: bool = True) -> RuleEnvelope:
     return RuleEnvelope(
-        metadata=RuleMetadata(id=f"id-{name}", name=name, description="desc", status="production"),
+        metadata=RuleMetadata(id=f"id-{name}", name=name, description="desc"),
         logic="events:\n  $e\ncondition:\n  $e",
         deployment=BaseDeploymentConfig(enabled=enabled, alerting=alerting),
         runbook=Runbook(),

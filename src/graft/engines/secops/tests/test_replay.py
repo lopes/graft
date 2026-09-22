@@ -19,7 +19,6 @@ def _build_test_envelope(name: str, expect: int = 1) -> RuleEnvelope:
             id="test-rule-id",
             name=name,
             description="Test rule description",
-            status="testing",
         ),
         logic="""rule test_rule {
   meta:

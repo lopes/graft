@@ -15,7 +15,6 @@ class CatalogEntry:
     name: str
     engine: str
     rule_type: str
-    status: str
     severity: str | None
     description: str
     mitre_tactics: tuple[str, ...]
@@ -58,7 +57,6 @@ def build_catalog_entry_from_rule(
         name=rule.metadata.name,
         engine=engine,
         rule_type="custom",
-        status=rule.metadata.status,
         severity=rule.metadata.priority,
         description=rule.metadata.description,
         mitre_tactics=tuple(tactics),
@@ -78,7 +76,8 @@ def export_catalog_markdown(entries: Sequence[CatalogEntry]) -> str:
         "Rule Name",
         "Engine",
         "Type",
-        "Status",
+        "Enabled",
+        "Alerting",
         "Run Frequency",
         "MITRE Techniques",
         "Author",
@@ -95,7 +94,8 @@ def export_catalog_markdown(entries: Sequence[CatalogEntry]) -> str:
             f"`{e.name}`",
             e.engine,
             e.rule_type,
-            e.status,
+            "yes" if e.enabled else "no",
+            "yes" if e.alerting else "no",
             e.run_frequency,
             tech_str,
             e.author,
@@ -112,7 +112,6 @@ def export_catalog_csv(entries: Sequence[CatalogEntry]) -> str:
         "name",
         "engine",
         "rule_type",
-        "status",
         "severity",
         "description",
         "mitre_tactics",

@@ -2,10 +2,8 @@ metadata:
   id: "b1d72370-5fa3-4cb8-a579-22a468d6f101"
   name: "workspace_nrd_possible_phishing"
   description: "Google Workspace email opened from a newly registered domain."
-  status: "production"
   authors:
     - "Joe Lopes <lopes.id>"
-    - "Detection Engineering"
   mitre:
     initial_access:
       - "T1566.002"
@@ -17,6 +15,7 @@ metadata:
     - "whois"
   references:
     - "https://lopes.id/log/high-fidelity-nrd-detections/"
+    - "https://github.com/chronicle/detection-rules/blob/main/rules/community/threat_intel/whois_recently_created_domain_access.yaral"
     - "https://support.google.com/a/answer/12384955"
 
 logic: |

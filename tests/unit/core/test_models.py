@@ -24,7 +24,6 @@ def test_rule_metadata_immutability() -> None:
         id="c4e9b8f2-89b1-4f81-9b16-928d54128f73",
         name="powershell_encoded_launch",
         description="Detects suspicious execution patterns",
-        status="production",
         priority="high",
         authors=("Detection Team",),
         mitre={"execution": ("T1059.001",)},
@@ -40,14 +39,12 @@ def test_rule_metadata_equality_and_defaults() -> None:
         id="c4e9b8f2-89b1-4f81-9b16-928d54128f73",
         name="rule_test",
         description="Desc",
-        status="testing",
         authors=("Author",),
     )
     meta2 = RuleMetadata(
         id="c4e9b8f2-89b1-4f81-9b16-928d54128f73",
         name="rule_test",
         description="Desc",
-        status="testing",
         authors=("Author",),
     )
     assert meta1 == meta2
@@ -61,7 +58,6 @@ def test_rule_envelope_structure() -> None:
         id="c4e9b8f2-89b1-4f81-9b16-928d54128f73",
         name="powershell_encoded",
         description="Detects suspicious PowerShell command lines",
-        status="production",
         priority="high",
         authors=("SecOps",),
         mitre={"execution": ("T1059.001",)},
@@ -93,7 +89,6 @@ def test_rule_envelope_structure() -> None:
     )
 
     assert envelope.metadata.id == "c4e9b8f2-89b1-4f81-9b16-928d54128f73"
-    assert envelope.metadata.status == "production"
     assert envelope.metadata.priority == "high"
     assert envelope.deployment.enabled is True
     assert envelope.deployment.run_frequency == "live"

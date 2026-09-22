@@ -6,7 +6,6 @@ class RuleMetadata:
     id: str
     name: str
     description: str
-    status: str
     priority: str | None = None
     authors: tuple[str, ...] = ()
     mitre: dict[str, tuple[str, ...]] = field(default_factory=dict)
