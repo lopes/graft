@@ -9,7 +9,7 @@ Graft standardizes all custom detection engineering around a declarative **5-Blo
 ```mermaid
 flowchart TD
     ROOT["Rule Envelope (.yaml)"]
-    ROOT --> B1["<b>1. metadata</b><br/>ID, Name, Status, Authors, MITRE, Tags, References"]
+    ROOT --> B1["<b>1. metadata</b><br/>ID, Name, Authors, MITRE, Tags, References"]
     ROOT --> B2["<b>2. logic</b><br/>Engine-Native Query String (e.g. YARA-L 2.0)"]
     ROOT --> B3["<b>3. deployment</b><br/>Enabled, Alerting, Run Frequency (live/hourly/daily)"]
     ROOT --> B4["<b>4. runbook</b><br/>Context, Triage Checklist, Incident Response Steps"]
@@ -17,12 +17,11 @@ flowchart TD
 ```
 
 ### Block 1: `metadata`
-Core identification, lifecycle status, and threat taxonomy mapping.
+Core identification and threat taxonomy mapping.
 
 - `id` *(UUID string, required)*: Globally unique identifier (v4 UUID format).
 - `name` *(string, required)*: Unique snake_case rule identifier (`^[a-z0-9_]+$`, max 64 chars).
 - `description` *(string, required)*: Plain-text explanation of the detection objective (max 128 chars).
-- `status` *(string, required)*: Lifecycle state (`testing`, `production`, `deprecated`).
 - `authors` *(list of strings, optional)*: Rule authors and engineering teams.
 - `mitre` *(mapping of tactic to techniques, optional)*: MITRE ATT&CK Enterprise taxonomy mapping. Must use valid lowercase tactic names (`initial_access`, `execution`, `persistence`, etc.) and real technique IDs (`T1566.002`, `T1098.001`). Validated against pre-indexed matrix during linting.
 - `tags` *(list of strings, optional)*: Categorical labels (e.g., `google_workspace`, `gcp`, `phishing`).
@@ -94,8 +93,7 @@ Below is an authentic reference rule implemented in [`rules/secops/custom/worksp
 metadata:
   id: "b1d72370-5fa3-4cb8-a579-22a468d6f101"
   name: "workspace_nrd_possible_phishing"
-  description: "Detects a user opening an email from a newly registered domain (created < 7 days ago), which may indicate a phishing attempt."
-  status: "production"
+  description: "User opened an email from a domain created within the last 7 days."
   authors:
     - "Joe Lopes <lopes.id>"
     - "Detection Engineering"
@@ -111,7 +109,6 @@ metadata:
   references:
     - "https://lopes.id/log/high-fidelity-nrd-detections/"
     - "https://support.google.com/a/answer/12384955"
-    - "https://attack.mitre.org/techniques/T1566/002/"
 
 logic: |
   events:
@@ -149,10 +146,7 @@ deployment:
 
 runbook:
   context: |
-    Adversaries frequently register new domains and immediately weaponize them in
-    spear-phishing campaigns before reputation feeds and web categorization tools
-    index them. Correlating Google Workspace message open events with domain
-    registration timestamps isolates zero-day phishing infrastructure.
+    Adversaries frequently register new domains and immediately weaponize them in spear-phishing campaigns before reputation feeds and web categorization tools index them. Correlating Google Workspace message open events with domain registration timestamps isolates zero-day phishing infrastructure.
   triage: |
     1. Identify recipient user account and workstation coordinates.
     2. Review email subject, sender domain WHOIS registrar, and message attachments.

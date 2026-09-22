@@ -3,13 +3,12 @@
 
 # Core architecture and schemas
 /src/graft/core/ @lopes
-/schemas/ @lopes
 
 # Detection Rules
 /rules/ @lopes
 
 # Engine Adapters
-/src/graft/adapters/ @lopes
+/src/graft/engines/ @lopes
 
 # CLI Subsystem
 /src/graft/cli/ @lopes

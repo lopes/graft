@@ -92,7 +92,7 @@ When pulling managed content:
 1. Graft queries the Chronicle Curated Rule Sets API (`curatedRuleSets`, `curatedRuleSetDeployments`, and `ruleExclusions`).
 2. It resolves category UUIDs to display names (e.g., `Cloud Threats`, `Linux Threats`).
 3. It captures deployment precision (`PRECISE` or `BROAD`), enabled/alerting toggles, and all active UDM exclusion filters (`findingsRefinements`).
-4. It serializes this unified posture into [`rules/secops/managed.yaml`](file:///usr/local/google/home/joelopes/Projects/graft/rules/secops/managed.yaml), conforming to [`schemas/secops_managed.schema.json`](file:///usr/local/google/home/joelopes/Projects/graft/schemas/secops_managed.schema.json).
+4. It serializes this unified posture into [`rules/secops/managed.yaml`](file:///usr/local/google/home/joelopes/Projects/graft/rules/secops/managed.yaml), conforming to [`src/graft/engines/secops/schemas/managed.schema.json`](file:///usr/local/google/home/joelopes/Projects/graft/src/graft/engines/secops/schemas/managed.schema.json).
 
 ### 3. How Custom Rules Are Ingested
 
@@ -101,7 +101,7 @@ When pulling custom rules:
 2. The deconstruction compiler ([`deconstruct_yaral_rule`](file:///usr/local/google/home/joelopes/Projects/graft/src/graft/engines/secops/compiler.py#L53)):
    - Sanitizes rule display names into valid snake_case identifiers matching `^[a-z0-9_]+$`.
    - Normalizes server identifiers (`ru_<uuid>`) into valid RFC 4122 UUIDs for `metadata.id`.
-   - Extracts embedded metadata (`description`, `status`, `author`) from the rule's `meta:` block.
+   - Extracts embedded metadata (`description`, `author`) from the rule's `meta:` block.
    - Preserves clean YARA-L logic (`events:`, `match:`, `condition:`) in the envelope's `logic` block.
 3. Graft populates standard default runbook sections (`context`, `triage`, `response`) so that the resulting envelopes immediately pass strict schema validation.
 4. Each rule is saved to `rules/secops/custom/<rule_name>.yaml`. Existing files are protected against accidental overwrites unless `--force` is supplied.

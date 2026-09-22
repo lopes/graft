@@ -6,8 +6,8 @@
 
 ## Type of Change
 - [ ] Detection Rule (`rules/`)
-- [ ] Core Engine / Schema (`src/graft/core/`, `schemas/`)
-- [ ] Engine Adapter (`src/graft/adapters/`)
+- [ ] Core Engine / Schemas (`src/graft/core/`)
+- [ ] Engine Adapter (`src/graft/engines/`)
 - [ ] CLI Subsystem (`src/graft/cli/`)
 - [ ] Documentation (`docs/`)
 - [ ] CI/CD & Governance (`.github/`)

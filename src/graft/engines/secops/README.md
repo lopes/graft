@@ -364,7 +364,7 @@ Google SecOps organizes curated detections in a 3-tier hierarchy:
 
 ### Managed Manifest Format
 
-The manifest [`rules/secops/managed.yaml`](file:///usr/local/google/home/joelopes/Projects/graft/rules/secops/managed.yaml) adheres to [`schemas/secops_managed.schema.json`](file:///usr/local/google/home/joelopes/Projects/graft/schemas/secops_managed.schema.json):
+The manifest [`rules/secops/managed.yaml`](file:///usr/local/google/home/joelopes/Projects/graft/rules/secops/managed.yaml) adheres to [`src/graft/engines/secops/schemas/managed.schema.json`](file:///usr/local/google/home/joelopes/Projects/graft/src/graft/engines/secops/schemas/managed.schema.json):
 
 ```yaml
 categories:
@@ -553,8 +553,8 @@ The custom rule reconciliation pipeline executes five discrete stages:
 To prevent spurious diffs caused by whitespace differences, platform line endings, or synthesized metadata headers, [`secops_rule_content_matches`](file:///usr/local/google/home/joelopes/Projects/graft/src/graft/engines/secops/adapter.py#L33) evaluates equivalence across three tiers:
 
 - **Tier 1 (Raw Logic Equivalence):** Compares the normalized rule logic text directly (`\r\n` converted to `\n` and stripped).
-- **Tier 2 (Synthesized YARA-L Equivalence):** Compares the remote rule against the locally synthesized YARA-L rule (incorporating standard metadata fields: `meta: id = ...`, `description = ...`, `status = ...`).
-- **Tier 3 (Semantic Deconstruction Equivalence):** Deconstructs the remote YARA-L rule into domain components to compare normalized logic and verify that metadata fields (`meta.id`, `description`, `status`) strictly match the desired Git envelope, eliminating whitespace/formatting drift while ensuring Graft UUIDs are faithfully preserved in SecOps.
+- **Tier 2 (Synthesized YARA-L Equivalence):** Compares the remote rule against the locally synthesized YARA-L rule (incorporating standard metadata fields: `meta: id = ...`, `description = ...`).
+- **Tier 3 (Semantic Deconstruction Equivalence):** Deconstructs the remote YARA-L rule into domain components to compare normalized logic and verify that metadata fields (`meta.id`, `description`) strictly match the desired Git envelope, eliminating whitespace/formatting drift while ensuring Graft UUIDs are faithfully preserved in SecOps.
 
 #### 3. Deployment State Verification
 In addition to YARA-L logic, Graft verifies deployment coordinates:

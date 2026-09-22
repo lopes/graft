@@ -72,11 +72,11 @@ Ideal for automated documentation generation and GitHub wiki pages:
 graft export catalog --format=markdown --out docs/RULE_CATALOG.md
 ```
 
-| Rule Name | Engine | Type | Status | Run Frequency | MITRE Techniques | Author | Last Updated |
-| --- | --- | --- | --- | --- | --- | --- | --- |
-| `gcp_iam_service_account_key_create` | secops | custom | production | live | T1098.001 | Cloud Security Operations | 2026-09-17 |
-| `gcp_storage_iam_public_access_granted` | secops | custom | production | live | T1078.004, T1562.001 | Cloud Security Operations | 2026-09-17 |
-| `workspace_nrd_possible_phishing` | secops | custom | production | live | T1566.002 | Joe Lopes <lopes.id> | 2026-09-17 |
+| Rule Name | Engine | Type | Enabled | Alerting | Run Frequency | MITRE Techniques | Author | Last Updated |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `gcp_iam_service_account_key_create` | secops | custom | yes | yes | live | T1098.001 | Cloud Security Operations | 2026-09-17 |
+| `gcp_storage_iam_public_access_granted` | secops | custom | yes | yes | live | T1078.004, T1562.001 | Cloud Security Operations | 2026-09-17 |
+| `workspace_nrd_possible_phishing` | secops | custom | yes | yes | live | T1566.002 | Joe Lopes <lopes.id> | 2026-09-17 |
 
 ### CSV Catalog (`--format=csv`)
 Generate spreadsheet-ready exports for compliance tracking and executive reporting:
@@ -85,7 +85,7 @@ Generate spreadsheet-ready exports for compliance tracking and executive reporti
 graft export catalog --format=csv --out exports/detection_catalog.csv
 ```
 
-CSV exports contain: `id, name, engine, rule_type, status, severity, description, mitre_tactics, mitre_techniques, tags, author, created_at, last_modified_at, run_frequency, enabled, alerting`.
+CSV exports contain: `id, name, engine, rule_type, severity, description, mitre_tactics, mitre_techniques, tags, author, created_at, last_modified_at, run_frequency, enabled, alerting`.
 
 ### JSON Catalog (`--format=json`)
 Structured JSON for feeding security data lakes or internal developer portals:

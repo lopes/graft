@@ -47,8 +47,7 @@ Fill out the scaffolded rule with realistic detection logic, operational control
 metadata:
   id: "b1d72370-5fa3-4cb8-a579-22a468d6f101"
   name: "gcp_iam_service_account_key_create"
-  description: "Detects creation of a new user-managed service account key in GCP IAM."
-  status: "testing"
+  description: "Long-lived user-managed GCP service account keys created."
   authors:
     - "Detection Engineering <detection@company.com>"
   mitre:
@@ -223,16 +222,13 @@ deployment:
   alerting: false
 ```
 
-### Scenario C: Retiring / Deprecating a Rule
-Update status to `deprecated`:
-```yaml
-metadata:
-  status: "deprecated"
-deployment:
-  enabled: false
-  alerting: false
+### Scenario C: Retiring a Rule
+To decommission a rule, delete its YAML envelope file from `rules/<engine>/custom/`:
+```bash
+git rm rules/secops/custom/legacy_rule.yaml
+git commit -m "rules(secops): retire legacy_rule"
 ```
-When you delete the rule file from Git and merge, Graft's reconciler automatically deprovisions the detection from the tenant.
+When merged to `main`, Graft's GitOps reconciler automatically detects the deletion and deprovisions the rule from the remote SIEM tenant.
 
 ---
 
