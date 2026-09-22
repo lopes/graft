@@ -40,8 +40,8 @@ The design of Graft is directly grounded in nine foundational architectural work
 | **Interface Design** | Granular `typing.Protocol` ports (`RuleCompilerPort`, `RuleDeployerPort`, `ManagedEnginePort`, `ReplayHarnessPort`). | Adheres to Interface Segregation Principle (ISP). Core services consume only required capabilities without rigid base-class inheritance. |
 | **Domain Modeling** | Standard library `@dataclass(frozen=True)` for domain entities in `src/graft/core/models/`. | Pure, lightweight, immutable, and zero external framework overhead in core. |
 | **Schema Inheritance** | Base schema template (`schemas/base_rule.schema.json`) extended per engine (`schemas/secops_custom.schema.json`) via JSON Schema `$ref` and `allOf`. | Standardizes core blocks (`metadata`, `runbook`, `logic`) while allowing engine-specific variations for `deployment` and `tests`. Every YAML file in the repo has a dedicated schema. |
-| **Repository Taxonomy** | Universal agnostic structure: `rules/<engine>/custom/` (organization-authored 5-block envelope rules) and `rules/<engine>/managed.yaml` (vendor-managed content state). | Replaces vendor-specific jargon ("curated") or misleading terms ("default") with an enterprise standard applicable to SecOps, Splunk ESCU, and Elastic Prebuilt Rules. |
-| **Managed State Format** | Single consolidated manifest (`rules/secops/managed.yaml`) capturing all Google Curated Rule Sets (`PRECISE` and `BROAD` deployments: `enabled`, `alerting`) and exclusions. | Google SecOps manages curated rules at the RuleSet level with only 2 deployments per set. A single declarative manifest eliminates hundreds of fragmented files, optimizes Git diffs, and prevents merge conflicts. |
+| **Repository Taxonomy** | Universal agnostic structure: `rulesets/<engine>/custom/` (organization-authored 5-block envelope rules), `rulesets/<engine>/managed.yaml` (vendor-managed content state), and `rulesets/<engine>/_archived/` (decommissioned rules). | Replaces vendor-specific jargon ("curated") or misleading terms ("default") with an enterprise standard applicable to SecOps, Splunk ESCU, and Elastic Prebuilt Rules. |
+| **Managed State Format** | Single consolidated manifest (`rulesets/secops/managed.yaml`) capturing all Google Curated Rule Sets (`PRECISE` and `BROAD` deployments: `enabled`, `alerting`) and exclusions. | Google SecOps manages curated rules at the RuleSet level with only 2 deployments per set. A single declarative manifest eliminates hundreds of fragmented files, optimizes Git diffs, and prevents merge conflicts. |
 | **Managed Sync Model** | GitOps Plan/Apply semantics (`diff`, `apply`, `pull`). | Treats Git as single source of truth. Prevents accidental destruction of emergency console modifications while highlighting upstream Google releases. |
 | **CLI Framework** | Standard library `argparse` with hierarchical subparsers. | Zero third-party CLI dependencies. Fast invocation, standard flags, and predictable subcommands (`graft [core]` and `graft secops [engine]`). |
 | **Replay Execution** | Staging tenant execution with **graceful degradation**: if rule defines tests but staging environment is absent, emit warning and proceed with exit code 0. | Eliminates hard blockers for environments without staging instances, while supporting `--require-staging` for strict CI pipelines. Completely prevents production alert pollution. |
@@ -164,8 +164,9 @@ graft/
 │       │   └── commands_secops.py     # graft secops verify, test, diff, apply, managed, pull
 │       └── data/                      # Bundled Static Assets
 │           └── mitre_attack.json      # Pre-indexed MITRE Enterprise ATT&CK matrix
-├── rules/
+├── rulesets/
 │   └── secops/
+│       ├── _archived/                 # Decommissioned rules preserved for audit history
 │       ├── custom/                    # 5-Block Custom YARA-L Rules
 │       │   └── *.yaml
 │       └── managed.yaml               # Single Consolidated Curated RuleSets Manifest
@@ -213,8 +214,10 @@ To guarantee state preservation, eliminate hallucination, and prevent context sa
 | **Documentation Persona Reorganization** | `[x]` | 3-track persona documentation (analysts, operators, developers), framework spec, recipes cookbook | `docs/`, `README.md` |
 | **Scoped CI Verification & E2E GitOps Live Validation** | `[x]` | Scoped diff compiler pre-merge dry-runs, fault tolerance docs, and live production reconciliation validation | `.github/workflows/`, `docs/operators/gitops_reconciliation.md` |
 | **YARA-L Synthesis & Identity Convergence** | `[x]` | Preserve Graft metadata.id in SecOps meta.id, 2-space logic indentation, dedented deconstruction, and semantic deconstruction equivalence | `src/graft/engines/secops/`, `docs/engines/secops.md` |
-| **Rule Content Review & Deprecation of Status** | `[x]` | Concise rule descriptions, MITRE deduplication, unwrap runbook context, and complete removal of metadata.status | `rules/`, `src/graft/core/models/`, `src/graft/core/schemas/` |
+| **Rule Content Review & Deprecation of Status** | `[x]` | Concise rule descriptions, MITRE deduplication, unwrap runbook context, and complete removal of metadata.status | `rulesets/`, `src/graft/core/models/`, `src/graft/core/schemas/` |
 | **Core Schema Packaging & Unified Test Hierarchy** | `[x]` | Relocate core schemas to `src/graft/core/schemas/` and consolidate engine tests under `tests/engines/<engine>/` | `src/graft/core/schemas/`, `tests/engines/` |
+| **Ruleset Taxonomy & Underscore Exclusion** | `[x]` | Migrate `rules/` -> `rulesets/`, standardize `_archived/`, ignore any `_<folder>` under rulesets | Commit `7774444`, `docs/analysts/rule_authoring.md` |
+| **Lifecycle & Rigor Indicators for Catalog Export** | `[x]` | Add `created_at`, `last_modified_at`, `review_count`, `contributor_count`, `has_tests`, `test_event_count`, `has_runbook` to CSV/JSON/MD exports | Commit `8a9d6ce`, `src/graft/core/catalog.py` |
 
 ---
 
@@ -349,7 +352,7 @@ Stop when Phase 1 exit criteria are satisfied.
   - Defines common blocks: `metadata` (`id`, `name`, `description`, `status`, `priority`, `authors`, `mitre` mapping tactic slug to technique IDs `^T\d{4}(\.\d{3})?$`, `tags`, `references`), `logic` (string), and `runbook` (`context`, `triage`, `response`).
 - Author engine-extended schema in `schemas/secops_custom.schema.json`:
   - Inherits `base_rule.schema.json` using `allOf: [{"$ref": "base_rule.schema.json"}, ...]` and defines Google SecOps-specific `deployment` (`enabled`, `alerting`, `run_frequency`).
-- Author managed detections schema in `schemas/secops_managed.schema.json` to validate the consolidated `rules/secops/managed.yaml` manifest.
+- Author managed detections schema in `schemas/secops_managed.schema.json` to validate the consolidated `rulesets/secops/managed.yaml` manifest.
 - Implement `src/graft/core/loader.py`: Safe parsing of YAML rule envelopes into `RuleEnvelope` domain objects.
 - Implement `src/graft/core/validation/schema_validator.py`: Wrapper around `jsonschema` supporting schema inheritance and clear error reporting with line/path attribution.
 - Implement `src/graft/core/validation/mitre_validator.py`: 100% offline validator verifying Technique existence and Technique-to-Tactic relationships against bundled `src/graft/data/mitre_attack.json`.
@@ -362,7 +365,7 @@ Stop when Phase 1 exit criteria are satisfied.
 - **Exit Criteria:**
   - All unit tests pass in <500ms without network calls.
   - Base and extended schemas validate against JSON Schema Draft 2020-12 meta-schema.
-  - Reference custom rules in `rules/secops/custom/` and reference managed manifest in `rules/secops/managed.yaml` validate cleanly.
+  - Reference custom rules in `rulesets/secops/custom/` and reference managed manifest in `rulesets/secops/managed.yaml` validate cleanly.
   - Remote push executed successfully: `git push origin <branch>`.
 
 #### 3. Session Kickstart Prompt (Phase 2)
@@ -380,7 +383,7 @@ Objectives:
 5. Bundle pre-indexed MITRE ATT&CK Enterprise data in `src/graft/data/mitre_attack.json`.
 6. Implement `src/graft/core/loader.py` for safe YAML loading.
 7. Implement `src/graft/core/validation/schema_validator.py` and `src/graft/core/validation/mitre_validator.py`.
-8. Create valid reference artifacts in `rules/secops/custom/` and `rules/secops/managed.yaml`.
+8. Create valid reference artifacts in `rulesets/secops/custom/` and `rulesets/secops/managed.yaml`.
 9. Verify with `pytest`, `mypy --strict`, and `ruff check`.
 10. Commit changes (`schemas: implement base and secops rule schemas with offline validators`), push to remote (`git push origin <branch>`), update Progress Tracker to [x], and report.
 
@@ -445,16 +448,16 @@ Stop when Phase 3 exit criteria are satisfied.
   - Introspects live curated rule sets from Chronicle v1alpha API (`curatedRuleSetCategories`, `curatedRuleSets`, `curatedRuleSetDeployments`).
   - Reads and updates deployment configurations (`PRECISE` and `BROAD` deployments: `enabled`, `alerting`).
   - Reads and binds rule exclusions (`RuleExclusion`).
-- Implement consolidated manifest reader/writer in `src/graft/adapters/secops/managed_loader.py` for `rules/secops/managed.yaml`:
+- Implement consolidated manifest reader/writer in `src/graft/adapters/secops/managed_loader.py` for `rulesets/secops/managed.yaml`:
   - Single declarative document capturing all curated rule set deployments and exclusion bindings.
 - Implement GitOps reconciliation service in `src/graft/core/reconciler.py`:
-  - `diff`: Compares `rules/secops/managed.yaml` against live tenant state, producing a structured delta.
+  - `diff`: Compares `rulesets/secops/managed.yaml` against live tenant state, producing a structured delta.
   - `apply`: Pushes desired state from Git to tenant.
-  - `pull`: Pulls newly released Google curated rule sets and tenant changes into `rules/secops/managed.yaml`.
+  - `pull`: Pulls newly released Google curated rule sets and tenant changes into `rulesets/secops/managed.yaml`.
 
 #### 2. TDD Test Plan & Exit Criteria
 - **Test Plan:**
-  - `tests/unit/core/test_managed_schema.py`: Validate `rules/secops/managed.yaml` structure against `schemas/secops_managed.schema.json`.
+  - `tests/unit/core/test_managed_schema.py`: Validate `rulesets/secops/managed.yaml` structure against `schemas/secops_managed.schema.json`.
   - `tests/unit/core/test_reconciler.py`: Test diff algorithms across status toggles (`enabled: true -> false`), precision changes, and exclusion adjustments.
   - `tests/adapters/secops/test_managed_adapter.py`: Mock API responses for curated rule set listing, deployment updates, and exclusion bindings.
 - **Exit Criteria:**
@@ -472,9 +475,9 @@ Objectives:
 1. Check repository baseline: `git status`, `git log -n 3`, `uv run pytest`.
 2. Write failing tests first in `tests/unit/core/test_managed_schema.py`, `tests/unit/core/test_reconciler.py`, and `tests/adapters/secops/test_managed_adapter.py`.
 3. Implement `ManagedEnginePort` in `src/graft/adapters/secops/managed.py` for Google Curated Rule Sets.
-4. Implement consolidated loader/serializer for `rules/secops/managed.yaml`.
+4. Implement consolidated loader/serializer for `rulesets/secops/managed.yaml`.
 5. Implement GitOps plan/apply reconciler in `src/graft/core/reconciler.py` (`diff`, `apply`, `pull`).
-6. Populate reference `rules/secops/managed.yaml` with realistic rule sets (Cloud Threats, Linux Threats).
+6. Populate reference `rulesets/secops/managed.yaml` with realistic rule sets (Cloud Threats, Linux Threats).
 7. Verify with `pytest`, `mypy --strict`, and `ruff check`.
 8. Commit changes (`secops: implement consolidated managed rule sets adapter and GitOps reconciler`), push to remote (`git push origin <branch>`), update Progress Tracker to [x], and report.
 
@@ -633,10 +636,10 @@ Stop when Phase 7 exit criteria are satisfied.
   - **Google SecOps Adapter Specification (`docs/adapters/secops.md`):** Document IAM prerequisites, dual-tenant coordinates, API v1alpha endpoints, `verifyRuleText` dry runs, and staging quarantine replay.
   - **Operational Runbooks for Detection Engineers:**
     - `docs/runbooks/authoring-custom-rules.md`: Step-by-step guide to filling the 5-block envelope, YARA-L 2.0 best practices, inline synthetic UDM testing, and triage runbook writing.
-    - `docs/runbooks/managing-curated-rules.md`: Working with `rules/secops/managed.yaml`, precision modes (`PRECISE` vs `BROAD`), exclusion definitions, and GitOps sync (`diff`, `apply`, `pull`).
+    - `docs/runbooks/managing-curated-rules.md`: Working with `rulesets/secops/managed.yaml`, precision modes (`PRECISE` vs `BROAD`), exclusion definitions, and GitOps sync (`diff`, `apply`, `pull`).
     - `docs/runbooks/staging-replay-testing.md`: Running replay tests locally and in CI, interpreting results, and troubleshooting execution delays.
   - **Repository Governance & Security Artifacts:**
-    - `.github/CODEOWNERS`: Enforce mandatory peer review by senior Detection Engineers for `rules/`, `schemas/`, and `src/graft/core/`.
+    - `.github/CODEOWNERS`: Enforce mandatory peer review by senior Detection Engineers for `rulesets/`, `schemas/`, and `src/graft/core/`.
     - `SECURITY.md`: Vulnerability reporting process and responsible disclosure timeline.
     - `CONTRIBUTING.md`: Contribution guidelines, Scoped Commits convention, and PR lifecycle.
     - `.github/dependabot.yml`: Automated weekly updates for GitHub Actions and dev dependencies.

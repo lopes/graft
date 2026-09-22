@@ -21,7 +21,7 @@
 > **Public Repository Notice & Operational Boundaries:**
 > - **Public Lab Environment:** This public repository (`lopes/graft`) is strictly connected to an isolated lab/demo environment for open-source development and experimentation. It is never connected to production tenants.
 > - **Production Repositories Must Be Private:** Any detection engineering team or operator adopting or forking Graft for production use **must maintain their repository in private version control** under strict organizational access controls. While the Graft engine is open-source, version-controlling live production deployment states (`enabled`, `alerting`) or operational exclusions (`findingsRefinements`) in a public repository will leak defensive postures, monitoring coverage blind spots, and internal entity identities (hostnames, IP ranges, usernames, service accounts).
-> - **Curated Content Is Public:** The vendor-managed detection catalog metadata tracked in `rules/secops/managed.yaml` (category names, ruleset titles, descriptions, and catalog UUIDs) represents standard vendor content that is **publicly published** in official Google Cloud documentation. See [Google SecOps Curated Detections](https://docs.cloud.google.com/chronicle/docs/detection/curated-detections) and [Review Curated Detection Categories](https://docs.cloud.google.com/chronicle/docs/detection/cloud-threats-category).
+> - **Curated Content Is Public:** The vendor-managed detection catalog metadata tracked in `rulesets/secops/managed.yaml` (category names, ruleset titles, descriptions, and catalog UUIDs) represents standard vendor content that is **publicly published** in official Google Cloud documentation. See [Google SecOps Curated Detections](https://docs.cloud.google.com/chronicle/docs/detection/curated-detections) and [Review Curated Detection Categories](https://docs.cloud.google.com/chronicle/docs/detection/cloud-threats-category).
 > - **Specification & Architecture:** Complete architectural foundations, component specifications, and engineering directives are documented in [GRAFT_MASTER_PLAN.md](GRAFT_MASTER_PLAN.md).
 
 ---
@@ -36,7 +36,7 @@ Graft acts as the unified trunk:
 
 - **Standardized Core:** Author, document, and test detection rules, metadata, and testing fixtures in a unified, version-controlled repository using a normalized 5-block envelope (`metadata`, `logic`, `deployment`, `runbook`, `tests`).
 - **Resilient Branches (Ports & Adapters):** Seamlessly "graft" rules into production engines. Deploy natively into **Google SecOps** using YARA-L 2.0 today, and branch into auxiliary SIEMs, EDRs, or cloud telemetry tomorrow without refactoring engineering workflows.
-- **Dual-Track Governance:** Manage bespoke organizational detections (`rules/<engine>/custom/`) side-by-side with vendor-managed detections (`rules/<engine>/managed.yaml`) under GitOps plan/apply reconciliation.
+- **Dual-Track Governance:** Manage bespoke organizational detections (`rulesets/<engine>/custom/`) side-by-side with vendor-managed detections (`rulesets/<engine>/managed.yaml`) under GitOps plan/apply reconciliation.
 - **Frictionless CI/CD:** Decouple detection authoring from manual UI workflows with automated schema validation, pre-merge API dry runs (`verifyRuleText`), and synthetic replay testing against dedicated staging infrastructure.
 
 ---
@@ -112,7 +112,7 @@ uv run graft secops pull --env production
 uv run graft lint
 
 # 3. Commit baseline and declare Git as authoritative Source of Truth
-git add rules/
+git add rulesets/
 git commit -m "secops: import production detection baseline"
 git push origin main
 ```
@@ -125,7 +125,7 @@ git push origin main
 graft lint
 
 # Lint a specific rule file
-graft lint rules/secops/custom/workspace_nrd_possible_phishing.yaml
+graft lint rulesets/secops/custom/workspace_nrd_possible_phishing.yaml
 
 # Output structured JSON diagnostics for CI/CD pipelines
 graft --json lint
@@ -145,7 +145,7 @@ graft new engine sentinel
 #### 3. Pre-Merge Verification & Staging Replay Testing
 ```bash
 # Dry-run YARA-L syntax against Google SecOps verifyRuleText (non-destructive)
-graft secops verify rules/secops/custom/workspace_nrd_possible_phishing.yaml
+graft secops verify rulesets/secops/custom/workspace_nrd_possible_phishing.yaml
 
 # Execute synthetic UDM replay tests in isolated staging quarantine
 graft secops test
@@ -196,11 +196,25 @@ graft export matrix --format table
 # Generate official MITRE ATT&CK Navigator v4.5 JSON layer for visual heatmaps
 graft export matrix --format navigator --out layers/attack_coverage.json
 
-# Export detection catalog with Git author attribution and deployment metrics
+# Export detection catalog with VCS lifecycle and engineering-rigor indicators
 graft export catalog --format markdown --out docs/RULE_CATALOG.md
 graft export catalog --format csv --out exports/detection_catalog.csv
 graft export catalog --format json
 ```
+
+> [!NOTE]
+> **Factual Lifecycle Indicators vs. Static "Maturity" Fields:**
+> Graft intentionally omits static `metadata.status` or `maturity` fields from rules. In real-world detection engineering, static maturity labels rapidly become stale, creating administrative toil and a false sense of security ("security theater"). Similarly, Graft avoids arbitrary 0–100 synthetic maturity scores.
+>
+> Instead, `graft export catalog` computes verified, objective indicators directly from version control and the rule envelope:
+> - **VCS Lifecycle:** First committed timestamp (`created_at`) and latest revision timestamp (`last_modified_at`).
+> - **Peer Review Scrutiny:** Total git commit count (`review_count`) and unique author count (`contributor_count`).
+> - **Engineering Rigor:** Presence of synthetic test vectors (`has_tests`), total replay events verified (`test_event_count`), and documented operational playbooks (`has_runbook`).
+>
+> Operators can pipe these indicators into data pipelines (e.g. BigQuery, Google Sheets, BI dashboards) and combine them with live operational telemetry from the SIEM (alert volume, true-positive precision, mean time to triage) to assess true detection maturity objectively.
+>
+> **Rule Decommissioning & Archiving:**
+> When retiring a rule, prefer moving it to `rulesets/<engine>/_archived/` (e.g. `rulesets/secops/_archived/`) rather than deleting it. Graft automatically excludes any directory or file starting with an underscore (`_`) under a ruleset (e.g. `_archived/`, `_deprecated/`, `_templates/`) from loading, linting, matrix exports, and CI/CD synchronization. This preserves full envelope history, context, and test vectors for audits without cluttering active deployments.
 
 ---
 

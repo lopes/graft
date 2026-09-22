@@ -33,7 +33,7 @@ graft new rule gcp_iam_service_account_key_create --engine secops
 ```
 
 ### Result
-Graft creates `rules/secops/custom/gcp_iam_service_account_key_create.yaml` with pre-populated `metadata`, `logic`, `deployment`, `runbook`, and `tests` blocks.
+Graft creates `rulesets/secops/custom/gcp_iam_service_account_key_create.yaml` with pre-populated `metadata`, `logic`, `deployment`, `runbook`, and `tests` blocks.
 
 ---
 
@@ -120,10 +120,10 @@ Verify that rule YAML files conform to Draft 2020-12 JSON Schema, contain valid 
 graft lint
 
 # Lint only your modified rule file
-graft lint rules/secops/custom/gcp_iam_service_account_key_create.yaml
+graft lint rulesets/secops/custom/gcp_iam_service_account_key_create.yaml
 
 # Output structured JSON for automation or pre-commit hooks
-graft --json lint rules/secops/custom/gcp_iam_service_account_key_create.yaml
+graft --json lint rulesets/secops/custom/gcp_iam_service_account_key_create.yaml
 ```
 
 ### Exit Codes
@@ -140,7 +140,7 @@ Verify that your YARA-L logic compiles cleanly against the real Google SecOps en
 ### Commands
 ```bash
 # Dry-run syntax compilation against staging SecOps tenant
-graft secops verify rules/secops/custom/gcp_iam_service_account_key_create.yaml
+graft secops verify rulesets/secops/custom/gcp_iam_service_account_key_create.yaml
 
 # Dry-run syntax across all custom rules in the engine
 graft secops verify
@@ -159,7 +159,7 @@ Test your detection logic against synthetic event fixtures in an isolated stagin
 ### Commands
 ```bash
 # Run replay tests for a specific rule
-graft secops test rules/secops/custom/gcp_iam_service_account_key_create.yaml
+graft secops test rulesets/secops/custom/gcp_iam_service_account_key_create.yaml
 
 # Run tests only for rules modified in your current Git branch
 graft secops test --changed-only
@@ -222,13 +222,14 @@ deployment:
   alerting: false
 ```
 
-### Scenario C: Retiring a Rule
-To decommission a rule, delete its YAML envelope file from `rules/<engine>/custom/`:
+### Scenario C: Retiring a Rule (Decommissioning)
+To decommission a rule while preserving its full history, context, and test vectors for audits, move its YAML envelope to the standardized `_archived/` directory:
 ```bash
-git rm rules/secops/custom/legacy_rule.yaml
-git commit -m "rules(secops): retire legacy_rule"
+mv rulesets/secops/custom/legacy_rule.yaml rulesets/secops/_archived/
+git add rulesets/secops/
+git commit -m "secops: retire legacy_rule to _archived"
 ```
-When merged to `main`, Graft's GitOps reconciler automatically detects the deletion and deprovisions the rule from the remote SIEM tenant.
+Rules placed in any underscore-prefixed folder (e.g. `_archived/`, `_deprecated/`, `_templates/`) are automatically excluded from loading, linting, matrix exports, and GitOps sync operations.
 
 ---
 

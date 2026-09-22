@@ -333,13 +333,13 @@ To avoid credential ambiguity across multiple platforms and engines, Graft enfor
 
 ---
 
-## 7. Google Curated Rule Sets & Managed Manifest (`rules/secops/managed.yaml`)
+## 7. Google Curated Rule Sets & Managed Manifest (`rulesets/secops/managed.yaml`)
 
-Google SecOps provides Curated Rule Sets—vendor-managed detection packages maintained by Google Cloud Threat Intelligence (GCTI). Graft manages the entire curated content lifecycle declaratively through a single consolidated manifest: [`rules/secops/managed.yaml`](file:///usr/local/google/home/joelopes/Projects/graft/rules/secops/managed.yaml).
+Google SecOps provides Curated Rule Sets—vendor-managed detection packages maintained by Google Cloud Threat Intelligence (GCTI). Graft manages the entire curated content lifecycle declaratively through a single consolidated manifest: [`rulesets/secops/managed.yaml`](file:///usr/local/google/home/joelopes/Projects/graft/rulesets/secops/managed.yaml).
 
 ```mermaid
 flowchart TD
-    MANIFEST["<b>rules/secops/managed.yaml</b>"]
+    MANIFEST["<b>rulesets/secops/managed.yaml</b>"]
     CATS["<b>categories:</b><br/>Curated RuleSet Categories & Deployments"]
     EXCLS["<b>exclusions:</b><br/>Detection Exclusions (findingsRefinements)"]
 
@@ -364,7 +364,7 @@ Google SecOps organizes curated detections in a 3-tier hierarchy:
 
 ### Managed Manifest Format
 
-The manifest [`rules/secops/managed.yaml`](file:///usr/local/google/home/joelopes/Projects/graft/rules/secops/managed.yaml) adheres to [`src/graft/engines/secops/schemas/managed.schema.json`](file:///usr/local/google/home/joelopes/Projects/graft/src/graft/engines/secops/schemas/managed.schema.json):
+The manifest [`rulesets/secops/managed.yaml`](file:///usr/local/google/home/joelopes/Projects/graft/rulesets/secops/managed.yaml) adheres to [`src/graft/engines/secops/schemas/managed.schema.json`](file:///usr/local/google/home/joelopes/Projects/graft/src/graft/engines/secops/schemas/managed.schema.json):
 
 ```yaml
 categories:
@@ -450,7 +450,7 @@ Exclusion queries evaluate against Unified Data Model (UDM) fields. Unlike YARA-
 Follow this step-by-step operational runbook:
 
 #### Step 1: Identify the Target RuleSet
-1. Open [`rules/secops/managed.yaml`](file:///usr/local/google/home/joelopes/Projects/graft/rules/secops/managed.yaml).
+1. Open [`rulesets/secops/managed.yaml`](file:///usr/local/google/home/joelopes/Projects/graft/rulesets/secops/managed.yaml).
 2. Locate the ruleset where false positives occur (e.g. search for `"Malware Signals - Suspicious Execution"`).
 3. Copy its `id` UUID (e.g. `1c4ab1f6-d801-d6a9-1177-3ec3dd5bcbe9`).
 
@@ -460,7 +460,7 @@ Formulate a precise UDM filter matching the benign activity without broadening s
 principal.user.userid = "svc-maintenance-runner"
 ```
 
-#### Step 3: Add to `rules/secops/managed.yaml`
+#### Step 3: Add to `rulesets/secops/managed.yaml`
 Add the exclusion entry to the `exclusions:` list at the bottom of the file:
 
 ```yaml
@@ -495,7 +495,7 @@ Open a Pull Request. Once reviewed and merged into `main`:
 
 #### Step 6: Retiring an Exclusion (Rollback / Decommission)
 When an exclusion is no longer needed:
-1. Delete its entry from the `exclusions:` block in `rules/secops/managed.yaml` (or leave `exclusions: []`).
+1. Delete its entry from the `exclusions:` block in `rulesets/secops/managed.yaml` (or leave `exclusions: []`).
 2. Run `uv run graft lint` and commit:
    ```bash
    git commit -am "secops: rollback test exclusion for suspicious execution curated ruleset"
@@ -606,8 +606,8 @@ To bootstrap Graft without manual transcription:
    uv run graft secops pull --env production
    ```
    This performs a two-track ingestion:
-   - **Custom Rules:** Fetches all tenant rules via `GET rules?view=FULL`, decompiles YARA-L headers and metadata, generates standard 5-block envelope YAMLs, and populates `rules/secops/custom/*.yaml`.
-   - **Managed Manifest:** Ingests live curated rulesets and exclusions into `rules/secops/managed.yaml`.
+   - **Custom Rules:** Fetches all tenant rules via `GET rules?view=FULL`, decompiles YARA-L headers and metadata, generates standard 5-block envelope YAMLs, and populates `rulesets/secops/custom/*.yaml`.
+   - **Managed Manifest:** Ingests live curated rulesets and exclusions into `rulesets/secops/managed.yaml`.
 
 2. **Verify & Enrich:**
    ```bash
@@ -617,7 +617,7 @@ To bootstrap Graft without manual transcription:
 
 3. **Commit & Cutover:**
    ```bash
-   git add rules/
+   git add rulesets/
    git commit -m "secops: import detection baseline from production tenant"
    git push origin main
    ```

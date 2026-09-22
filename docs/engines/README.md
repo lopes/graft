@@ -21,7 +21,8 @@ graft/
 │   ├── schemas/              # Co-located engine schemas (rule.schema.json)
 │   └── README.md             # Engine-specific documentation
 ├── tests/engines/<engine>/   # Engine unit & contract tests
-└── rules/<engine>/
+└── rulesets/<engine>/
+    ├── _archived/            # Decommissioned rules preserved for audit history
     ├── custom/               # 5-block envelope custom rules (.yaml)
     └── managed.yaml          # Declarative vendor-managed content manifest
 ```

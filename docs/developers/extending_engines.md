@@ -33,7 +33,7 @@ tests/engines/sentinel/
 
 Additionally, Graft maintains an engine-namespaced rule catalog:
 ```text
-rules/sentinel/
+rulesets/sentinel/
 └── custom/
     └── sentinel_example_rule.yaml  # Initial scaffolded rule envelope
 ```
@@ -51,7 +51,7 @@ uv run graft new engine sentinel
 This command:
 1. Validates the engine identifier slug (`^[a-z0-9_]+$`).
 2. Creates `src/graft/engines/sentinel/` and all boilerplate files.
-3. Creates `rules/sentinel/custom/` with an example detection envelope.
+3. Creates `rulesets/sentinel/custom/` with an example detection envelope.
 4. Generates initial in-tree test files.
 
 ---
@@ -122,7 +122,7 @@ Create `src/graft/engines/sentinel/schemas/rule_logic.schema.json`:
 }
 ```
 
-When an analyst runs `graft lint`, Graft automatically discovers this schema and validates all `rules/sentinel/custom/*.yaml` logic blocks against it.
+When an analyst runs `graft lint`, Graft automatically discovers this schema and validates all `rulesets/sentinel/custom/*.yaml` logic blocks against it.
 
 ---
 

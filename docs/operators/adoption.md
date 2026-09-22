@@ -27,8 +27,8 @@ flowchart TD
         SIEM["<b>Live SecOps Tenant</b><br/>• Active Curated Rule Sets & Exclusions<br/>• Active Custom YARA-L Rules & Deployments"]
         PULL["<code>graft secops pull --env production</code><br/><i>(Reverse Synchronization)</i>"]
         SIEM --> PULL
-        PULL --> MAN["<code>rules/secops/managed.yaml</code>"]
-        PULL --> CUST["<code>rules/secops/custom/*.yaml</code>"]
+        PULL --> MAN["<code>rulesets/secops/managed.yaml</code>"]
+        PULL --> CUST["<code>rulesets/secops/custom/*.yaml</code>"]
     end
 
     subgraph E2["Epoch 2: Baseline Enrichment & Cutover"]
@@ -77,10 +77,10 @@ Alternatively, you can target individual subsystems:
 
 ```bash
 # Pull custom YARA-L detection rules only
-uv run graft secops pull --target custom --env production --out-dir rules/secops/custom
+uv run graft secops pull --target custom --env production --out-dir rulesets/secops/custom
 
 # Pull vendor-managed curated content manifest only
-uv run graft secops pull --target managed --env production --out-manifest rules/secops/managed.yaml
+uv run graft secops pull --target managed --env production --out-manifest rulesets/secops/managed.yaml
 
 # Force overwrite existing local files without confirmation prompts
 uv run graft secops pull --env production --force
@@ -92,7 +92,7 @@ When pulling managed content:
 1. Graft queries the Chronicle Curated Rule Sets API (`curatedRuleSets`, `curatedRuleSetDeployments`, and `ruleExclusions`).
 2. It resolves category UUIDs to display names (e.g., `Cloud Threats`, `Linux Threats`).
 3. It captures deployment precision (`PRECISE` or `BROAD`), enabled/alerting toggles, and all active UDM exclusion filters (`findingsRefinements`).
-4. It serializes this unified posture into [`rules/secops/managed.yaml`](file:///usr/local/google/home/joelopes/Projects/graft/rules/secops/managed.yaml), conforming to [`src/graft/engines/secops/schemas/managed.schema.json`](file:///usr/local/google/home/joelopes/Projects/graft/src/graft/engines/secops/schemas/managed.schema.json).
+4. It serializes this unified posture into [`rulesets/secops/managed.yaml`](file:///usr/local/google/home/joelopes/Projects/graft/rulesets/secops/managed.yaml), conforming to [`src/graft/engines/secops/schemas/managed.schema.json`](file:///usr/local/google/home/joelopes/Projects/graft/src/graft/engines/secops/schemas/managed.schema.json).
 
 ### 3. How Custom Rules Are Ingested
 
@@ -104,7 +104,7 @@ When pulling custom rules:
    - Extracts embedded metadata (`description`, `author`) from the rule's `meta:` block.
    - Preserves clean YARA-L logic (`events:`, `match:`, `condition:`) in the envelope's `logic` block.
 3. Graft populates standard default runbook sections (`context`, `triage`, `response`) so that the resulting envelopes immediately pass strict schema validation.
-4. Each rule is saved to `rules/secops/custom/<rule_name>.yaml`. Existing files are protected against accidental overwrites unless `--force` is supplied.
+4. Each rule is saved to `rulesets/secops/custom/<rule_name>.yaml`. Existing files are protected against accidental overwrites unless `--force` is supplied.
 
 ---
 
@@ -165,7 +165,7 @@ Ensure all imported custom rules and the managed manifest return `0 errors`.
 Once validated, commit the baseline to Git:
 
 ```bash
-git add rules/
+git add rulesets/
 git commit -m "secops: import initial detection baseline from production tenant"
 git push origin main
 ```

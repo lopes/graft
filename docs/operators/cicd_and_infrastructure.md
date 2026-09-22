@@ -83,7 +83,7 @@ Runs on standard `ubuntu-latest` without requiring cloud credentials:
 
 ### 2. Cloud Gates (`secops-cloud-gates`)
 Requires WIF credentials and runs only on trusted internal branches:
-- **Gate 6 (Compiler Dry-Run):** `uv run graft secops verify rules/secops/custom/ --env production` invokes Chronicle's `:verifyRuleText` endpoint to ensure YARA-L logic compiles cleanly against the live tenant schema without saving or deploying anything.
+- **Gate 6 (Compiler Dry-Run):** `uv run graft secops verify rulesets/secops/custom/ --env production` invokes Chronicle's `:verifyRuleText` endpoint to ensure YARA-L logic compiles cleanly against the live tenant schema without saving or deploying anything.
 - **Gate 7 (Synthetic Replay):** `uv run graft secops test` runs synthetic test fixtures against staging infrastructure (or non-alerting quarantine).
 - **Gate 8 (Scoped Reconciliation Diff):** `uv run graft secops diff --env production` computes a Scoped diff of rules modified in the branch and posts the plan directly to the PR discussion.
 
@@ -119,7 +119,7 @@ To optimize runner efficiency and prevent unnecessary cloud API calls, both work
 ```yaml
 paths:
   - "src/**"
-  - "rules/**"
+  - "rulesets/**"
   - "schemas/**"
   - "tests/**"
   - "pyproject.toml"
@@ -128,7 +128,7 @@ paths:
 ```
 
 ### Path Filtering Directives
-- **Triggered:** Any commit modifying core platform code (`src/`), detection rules (`rules/`), validation schemas (`schemas/`), test fixtures (`tests/`), dependencies, or workflow definitions triggers full CI/CD execution.
+- **Triggered:** Any commit modifying core platform code (`src/`), detection rules (`rulesets/`), validation schemas (`schemas/`), test fixtures (`tests/`), dependencies, or workflow definitions triggers full CI/CD execution.
 - **Skipped:** Commits modifying exclusively documentation (`docs/`, `*.md`) or static visual assets (`assets/`) intentionally skip workflow execution.
 
 ---

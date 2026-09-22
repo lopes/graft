@@ -92,7 +92,7 @@ graft secops test
 graft secops test --changed-only
 
 # Target a specific rule file
-graft secops test rules/secops/custom/workspace_nrd_possible_phishing.yaml
+graft secops test rulesets/secops/custom/workspace_nrd_possible_phishing.yaml
 
 # Enforce hard failure if staging credentials are not configured (required in CI/CD)
 graft secops test --require-staging

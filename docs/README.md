@@ -50,8 +50,8 @@ Regardless of your persona, three foundational principles govern the platform:
 
 ### 2. Dual-Track Content Governance
 Graft organizes detection content into two separate, version-controlled tracks:
-- **Custom Rules (`rules/<engine>/custom/*.yaml`):** Bespoke organizational detections authored in a standardized 5-block envelope (`metadata`, `logic`, `deployment`, `runbook`, `tests`).
-- **Managed Vendor Content (`rules/<engine>/managed.yaml`):** Consolidated manifest managing deployment state (`PRECISE` vs. `BROAD`, `enabled`, `alerting`) and active exclusions for vendor-provided rulesets (e.g., Google Curated Rule Sets).
+- **Custom Rules (`rulesets/<engine>/custom/*.yaml`):** Bespoke organizational detections authored in a standardized 5-block envelope (`metadata`, `logic`, `deployment`, `runbook`, `tests`).
+- **Managed Vendor Content (`rulesets/<engine>/managed.yaml`):** Consolidated manifest managing deployment state (`PRECISE` vs. `BROAD`, `enabled`, `alerting`) and active exclusions for vendor-provided rulesets (e.g., Google Curated Rule Sets).
 
 ### 3. GitOps Reconciliation Lifecycle
 Git is declared the single authoritative Source of Truth for detection state:

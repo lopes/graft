@@ -56,21 +56,24 @@ For a comprehensive technical deep-dive into the framework, protocol signatures,
 
 ---
 
-## 3. Dual-Track Content Governance
+## 3. Dual-Track Content Governance & Ruleset Taxonomy
 
 Graft organizes detection content into two distinct tracks:
 
 ```mermaid
 flowchart LR
-    REPO["Graft Repository"] --> CUSTOM["<b>Custom Detections</b><br/>rules/&lt;engine&gt;/custom/*.yaml<br/>5-Block Envelope authored & owned by organization"]
-    REPO --> MANAGED["<b>Managed Detections</b><br/>rules/&lt;engine&gt;/managed.yaml<br/>Single manifest tracking vendor-managed content & active exclusions"]
+    REPO["Graft Repository"] --> CUSTOM["<b>Custom Detections</b><br/>rulesets/&lt;engine&gt;/custom/*.yaml<br/>5-Block Envelope authored & owned by organization"]
+    REPO --> MANAGED["<b>Managed Detections</b><br/>rulesets/&lt;engine&gt;/managed.yaml<br/>Single manifest tracking vendor-managed content & active exclusions"]
+    REPO --> ARCHIVED["<b>Archived Detections</b><br/>rulesets/&lt;engine&gt;/_archived/*.yaml<br/>Decommissioned rules preserved for audit history"]
 
     CUSTOM --> VERIFY["CI: Lint + verifyRuleText + Replay Test"]
     MANAGED --> RECONCILE["CI/CD: GitOps Plan (diff) & Apply"]
 ```
 
-- **Track 1: Custom Rules (`rules/<engine>/custom/*.yaml`):** Bespoke organizational detections packaged in the 5-block envelope (`metadata`, `logic`, `deployment`, `runbook`, `tests`).
-- **Track 2: Vendor-Managed Content (`rules/<engine>/managed.yaml`):** Single declarative manifest tracking deployment state (`PRECISE` vs. `BROAD`, `enabled`, `alerting`) and active exclusions for vendor-provided rulesets.
+- **Track 1: Custom Rules (`rulesets/<engine>/custom/*.yaml`):** Bespoke organizational detections packaged in the 5-block envelope (`metadata`, `logic`, `deployment`, `runbook`, `tests`).
+- **Track 2: Vendor-Managed Content (`rulesets/<engine>/managed.yaml`):** Single declarative manifest tracking deployment state (`PRECISE` vs. `BROAD`, `enabled`, `alerting`) and active exclusions for vendor-provided rulesets.
+- **Decommissioned Rules (`rulesets/<engine>/_archived/`):** Standard location for retired detections. Any directory or file starting with an underscore (`_`) under a ruleset (e.g. `_archived/`, `_deprecated/`, `_templates/`) is excluded from discovery, linting, matrix generation, and deployment synchronization.
+- **Objective Visibility & Rigor (`graft export catalog`):** Rather than tracking subjective or stale `status` and `maturity` fields in rule files, Graft extracts factual VCS and envelope indicators (`created_at`, `last_modified_at`, `review_count`, `contributor_count`, `has_tests`, `test_event_count`, `has_runbook`). Operators combine these with live SIEM performance data to measure true detection quality.
 
 ---
 

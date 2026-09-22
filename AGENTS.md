@@ -28,8 +28,9 @@
   - **`src/graft/engines/` (Driven Adapters):** Concrete engine implementations (e.g., `src/graft/engines/secops/`). **Engines carry the entire burden** of translating external SIEM APIs, authenticating, compiling queries, and handling synthetic replay vectors. Core never adapts to an engine; engines adapt to Core.
   - **`src/graft/cli/` (Driving Adapter):** Standard library `argparse` CLI routing commands to core services and engine adapters.
 - **Ruleset Taxonomy:**
-  - `rules/<engine>/custom/`: 5-block envelope YAML files (`metadata`, `logic`, `deployment`, `runbook`, `tests`) authored and owned by the organization.
-  - `rules/<engine>/managed.yaml`: Single consolidated manifest tracking vendor-managed content state (e.g., Google Curated Rule Sets: `PRECISE` vs `BROAD` deployments, `enabled`, `alerting`) and active exclusions.
+  - `rulesets/<engine>/custom/`: 5-block envelope YAML files (`metadata`, `logic`, `deployment`, `runbook`, `tests`) authored and owned by the organization.
+  - `rulesets/<engine>/managed.yaml`: Single consolidated manifest tracking vendor-managed content state (e.g., Google Curated Rule Sets: `PRECISE` vs `BROAD` deployments, `enabled`, `alerting`) and active exclusions.
+  - `rulesets/<engine>/_archived/`: Standardized directory for decommissioned rules. Any folder or file prefix starting with an underscore (`_`) under a ruleset is excluded from loading, linting, matrix exports, and sync operations.
 - **Environment Topologies:**
   - All SecOps credentials and tenant coordinates are split into Staging and Production according to `docs/engines/secops.md`.
 - **Three-Epoch Engine Lifecycle & Ingestion Protocol:**
@@ -120,7 +121,7 @@ Before declaring any work complete, the following checks must return 0 errors:
   - Commit frequently during the phase as logical increments pass tests.
   - Banned prefixes: `feat:`, `fix:`, `chore:`, `update:`.
 - **CI Workflow Path Filtering:**
-  - Mainline deployment (`deploy-production.yml`) and PR validation (`pr-validation.yml`) enforce strict path filters (`src/**`, `rules/**`, `schemas/**`, `tests/**`, `pyproject.toml`, `uv.lock`, `.github/workflows/**`).
+  - Mainline deployment (`deploy-production.yml`) and PR validation (`pr-validation.yml`) enforce strict path filters (`src/**`, `rulesets/**`, `schemas/**`, `tests/**`, `pyproject.toml`, `uv.lock`, `.github/workflows/**`).
   - Changes touching exclusively documentation (`.md`, `docs/`) or visual assets (`assets/`) intentionally skip CI execution to prevent redundant runner executions.
 - **Workflow Push Permission Requirements:**
   - GitHub OAuth tokens (`gh auth token`) reject pushing changes to `.github/workflows/` unless the token possesses the `workflow` scope (`gh auth refresh -s workflow`).

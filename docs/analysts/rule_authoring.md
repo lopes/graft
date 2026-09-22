@@ -27,6 +27,17 @@ Core identification and threat taxonomy mapping.
 - `tags` *(list of strings, optional)*: Categorical labels (e.g., `google_workspace`, `gcp`, `phishing`).
 - `references` *(list of strings, optional)*: Canonical URLs to threat research, documentation, or blog posts.
 
+> [!NOTE]
+> **Why Static `status` / `maturity` Fields Are Intentionally Omitted:**
+> In threat detection engineering, static enum fields like `status: production`, `maturity: mature`, or `lifecycle: testing` inevitably rot. Teams rarely remember to update them when rules evolve, creating administrative toil and a false sense of coverage security ("security theater").
+>
+> Graft rejects hardcoded maturity labels. Instead, maturity is treated as an **empirical, measurable property** reflected in objective indicators:
+> - **VCS Lifecycle:** First committed date (`created_at`) and latest revision date (`last_modified_at`).
+> - **Peer Scrutiny:** Total revision history (`review_count`) and breadth of peer review (`contributor_count`).
+> - **Engineering Rigor:** Synthetic unit test vectors (`has_tests`, `test_event_count`) and documented operational procedures (`has_runbook`).
+>
+> Graft also deliberately refuses to compute an arbitrary synthetic score (e.g. 0–100) from repo data alone ("no bullshit"). A rule with 10 commits and 5 tests might still produce 10,000 false positives in production. Instead, Graft surfaces these objective indicators via `graft export catalog` so detection engineering teams can join them with external SIEM/SOAR runtime metrics (true-positive rate, precision, alert volume, MTTR) to measure true health.
+
 ### Block 2: `logic`
 Engine-native query logic. For Google SecOps, this contains YARA-L 2.0 sections (`events:`, `match:`, `outcome:`, `condition:`). Graft automatically synthesizes the `rule <name> { meta: ... }` wrapper when sending to Chronicle APIs.
 
@@ -65,7 +76,7 @@ flowchart TD
     end
 
     subgraph EngineScope["Engine Scope (Per Engine)"]
-        NAME["<b>metadata.name (Engine-Scoped Uniqueness)</b><br/>Must be unique within the specific engine directory (rules/&lt;engine&gt;/custom/)<br/><i>e.g. Rules in different engines CAN share the same technical name</i>"]
+        NAME["<b>metadata.name (Engine-Scoped Uniqueness)</b><br/>Must be unique within the specific engine directory (rulesets/&lt;engine&gt;/custom/)<br/><i>e.g. Rules in different engines CAN share the same technical name</i>"]
     end
 ```
 
@@ -74,8 +85,8 @@ flowchart TD
 - **Rationale:** The `metadata.id` represents the immutable, canonical identity of the detection concept within the enterprise. It is referenced by audit logs, compliance exports, ATT&CK Navigator heatmaps, and cross-platform SIEM migration tooling. No two rule files in the repository may share an `id`, even if they target completely different detection engines (e.g., Google SecOps vs. CrowdStrike Falcon).
 
 ### 2. Engine Scope: `metadata.name`
-- **Constraint:** Must be a lowercase alphanumeric snake_case slug (`^[a-z0-9_]+$`, max 64 characters) and unique within the target engine (`rules/<engine>/custom/`).
-- **Rationale:** The `metadata.name` serves as the native SIEM identifier (such as the YARA-L rule identifier `rule <name> { ... }` in Chronicle or the detection title in other platforms). While two rules in the same engine cannot share a name (which would create an overwrite collision on the tenant), rules across different engines **can** share the same `name` (e.g. `rules/secops/custom/gcp_iam_service_account_key_create.yaml` and a corresponding `rules/crowdstrike/custom/gcp_iam_service_account_key_create.yaml`).
+- **Constraint:** Must be a lowercase alphanumeric snake_case slug (`^[a-z0-9_]+$`, max 64 characters) and unique within the target engine (`rulesets/<engine>/custom/`).
+- **Rationale:** The `metadata.name` serves as the native SIEM identifier (such as the YARA-L rule identifier `rule <name> { ... }` in Chronicle or the detection title in other platforms). While two rules in the same engine cannot share a name (which would create an overwrite collision on the tenant), rules across different engines **can** share the same `name` (e.g. `rulesets/secops/custom/gcp_iam_service_account_key_create.yaml` and a corresponding `rulesets/crowdstrike/custom/gcp_iam_service_account_key_create.yaml`).
 
 ### 3. Automated Verification
 Rule uniqueness is enforced automatically during:
@@ -87,7 +98,7 @@ Rule uniqueness is enforced automatically during:
 
 ## 3. Reference Rule Example (Google Workspace)
 
-Below is an authentic reference rule implemented in [`rules/secops/custom/workspace_nrd_possible_phishing.yaml`](file:///usr/local/google/home/joelopes/Projects/graft/rules/secops/custom/workspace_nrd_possible_phishing.yaml):
+Below is an authentic reference rule implemented in [`rulesets/secops/custom/workspace_nrd_possible_phishing.yaml`](file:///usr/local/google/home/joelopes/Projects/graft/rulesets/secops/custom/workspace_nrd_possible_phishing.yaml):
 
 ```yaml
 metadata:
@@ -220,7 +231,7 @@ graft secops new gcp_cloud_storage_public_bucket
 graft new rule gcp_cloud_storage_public_bucket --engine secops
 
 # Specify a custom target path:
-graft secops new gcp_cloud_storage_public_bucket --out rules/secops/custom/tier1/storage.yaml
+graft secops new gcp_cloud_storage_public_bucket --out rulesets/secops/custom/tier1/storage.yaml
 ```
 
 The generated file includes pre-populated runbook sections, deployment defaults (`enabled: false`, `alerting: false`, `run_frequency: "live"`), and a template test fixture.
@@ -231,7 +242,7 @@ Graft's linter validates JSON Schema constraints and verifies MITRE techniques a
 
 ```bash
 # Lint specific rule
-graft lint rules/secops/custom/workspace_nrd_possible_phishing.yaml
+graft lint rulesets/secops/custom/workspace_nrd_possible_phishing.yaml
 
 # Lint entire repository
 graft lint
@@ -245,15 +256,15 @@ graft --json lint
 
 #### Example Linter Output:
 ```text
-[PASS] rules/secops/custom/workspace_nrd_possible_phishing.yaml
-[PASS] rules/secops/custom/gcp_iam_service_account_key_create.yaml
-[PASS] rules/secops/managed.yaml
+[PASS] rulesets/secops/custom/workspace_nrd_possible_phishing.yaml
+[PASS] rulesets/secops/custom/gcp_iam_service_account_key_create.yaml
+[PASS] rulesets/secops/managed.yaml
 Checked 4 rules across 1 engines. All rules passed validation.
 ```
 
 When schema constraints or invalid MITRE tactics/techniques are detected:
 ```text
-[FAIL] rules/secops/custom/broken_rule.yaml:
+[FAIL] rulesets/secops/custom/broken_rule.yaml:
   - Schema Error: 'run_frequency' is a required property in 'deployment'
   - MITRE Error: Unknown technique 'T9999.001' under tactic 'initial_access'
 Linting failed with 2 error(s).
@@ -272,4 +283,38 @@ Whenever you run `git commit`, the hook executes `ruff format --check`, `ruff ch
 ```bash
 git config --unset core.hooksPath
 ```
+
+---
+
+## 5. Decommissioning Rules & Underscore Convention
+
+When a detection is retired, superseded, or taken offline, **do not hard-delete the file**. Deleting rules destroys version history context, runbook guidance, and synthetic test payloads that may be needed for historic incident triage, post-mortems, or compliance audits.
+
+### The `_archived` Standard
+
+Instead, move decommissioned rules into the standardized `_archived/` directory under that ruleset:
+
+```bash
+# Decommission a rule by moving it to _archived/
+mv rulesets/secops/custom/workspace_nrd_possible_phishing.yaml rulesets/secops/_archived/
+git add rulesets/secops/
+git commit -m "secops: decommission workspace_nrd_possible_phishing to _archived"
+```
+
+### The Underscore (`_`) Exclusion Rule
+
+Graft's rule loader and linter automatically ignore **any directory or file starting with an underscore (`_`)** within `rulesets/<engine>/`. 
+
+This provides operators with flexible organizational options:
+- `rulesets/<engine>/_archived/`: Standardized resting place for decommissioned or obsolete rules.
+- `rulesets/<engine>/_deprecated/`: Alternative folder for rules pending planned sunset or migration.
+- `rulesets/<engine>/_templates/`: Reusable rule scaffolding templates or partial snippets.
+- `rulesets/<engine>/_drafts/`: Work-in-progress detection experiments not yet ready for linting or CI/CD gates.
+
+Rules located in underscore-prefixed directories are completely skipped during:
+- Rule discovery and loading (`load_rules_for_engine`).
+- Schema and MITRE taxonomy linting (`graft lint`).
+- Threat coverage matrix generation (`graft export matrix`).
+- Visibility catalog exports (`graft export catalog`).
+- GitOps reconciliation and deployment (`graft <engine> diff / apply`).
 

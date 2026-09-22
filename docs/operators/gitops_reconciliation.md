@@ -15,21 +15,21 @@ flowchart TD
 
     CLI --> TARGET
 
-    TARGET -- "custom / all" --> CUSTOM_FLOW["<b>Custom Rules Reconciler</b><br/><code>rules/secops/custom/*.yaml</code>"]
-    TARGET -- "managed / all" --> MANAGED_FLOW["<b>Managed Content Reconciler</b><br/><code>rules/secops/managed.yaml</code>"]
+    TARGET -- "custom / all" --> CUSTOM_FLOW["<b>Custom Rules Reconciler</b><br/><code>rulesets/secops/custom/*.yaml</code>"]
+    TARGET -- "managed / all" --> MANAGED_FLOW["<b>Managed Content Reconciler</b><br/><code>rulesets/secops/managed.yaml</code>"]
 
     CUSTOM_FLOW --> MATCH["Match by metadata.name<br/>Preserve Graft metadata.id"]
     MATCH --> CUSTOM_API["Chronicle Rules & Deployments API<br/><code>POST rules</code> / <code>PATCH rules/{id}</code>"]
 
     MANAGED_FLOW --> MAN_DIFF["Evaluate Ruleset & Exclusion Diff"]
-    MAN_DIFF --> MANAGED_API["Chronicle CuratedRuleSets API<br/><code>deployments</code> / <code>exclusions</code>"]
+    MANAGED_API["Chronicle CuratedRuleSets API<br/><code>deployments</code> / <code>exclusions</code>"]
 
     CUSTOM_API --> TENANT["<b>Google SecOps Tenant</b>"]
     MANAGED_API --> TENANT
 ```
 
 ### Supported Scopes (`--target`)
-- **`all` (Default):** Reconciles both custom detection rules (`rules/<engine>/custom/`) and vendor-managed content (`rules/<engine>/managed.yaml`).
+- **`all` (Default):** Reconciles both custom detection rules (`rulesets/<engine>/custom/`) and vendor-managed content (`rulesets/<engine>/managed.yaml`).
 - **`custom`:** Scopes reconciliation strictly to custom rules owned by your team.
 - **`managed`:** Scopes reconciliation strictly to vendor-managed rule sets and exclusions.
 
@@ -37,7 +37,7 @@ flowchart TD
 
 ## 2. Custom Rule Reconciliation Lifecycle
 
-Custom detection rules are authored in 5-block envelope YAML files under `rules/<engine>/custom/`. During reconciliation:
+Custom detection rules are authored in 5-block envelope YAML files under `rulesets/<engine>/custom/`. During reconciliation:
 
 1. **Identity Matching:** Local rules are mapped to tenant rules by `metadata.name` (corresponding to Chronicle `displayName`).
 2. **Creations:** Rules declared in Git but absent from the tenant are compiled into YARA-L via `synthesize_yaral_rule` (preserving Graft's `metadata.id` in `meta: id = "..."`) and created via `POST rules`. Their deployment toggles (`enabled`, `alerting`) are set via `PATCH rules/{rule_id}/deployment`.
@@ -49,7 +49,7 @@ Custom detection rules are authored in 5-block envelope YAML files under `rules/
 
 ---
 
-## 3. Vendor-Managed Content Manifest (`rules/<engine>/managed.yaml`)
+## 3. Vendor-Managed Content Manifest (`rulesets/<engine>/managed.yaml`)
 
 Vendor-managed content state (Google Cloud Curated Rule Sets) is tracked in a single declarative manifest:
 
@@ -160,7 +160,7 @@ graft secops managed diff --env production
 graft secops managed apply --env production
 
 # Pull live Curated Rule Sets and exclusions into managed.yaml
-graft secops managed pull --env production --out rules/secops/managed.yaml
+graft secops managed pull --env production --out rulesets/secops/managed.yaml
 ```
 
 ### 4. Reverse Synchronization & Brownfield Ingestion (`graft secops pull`)
@@ -172,7 +172,7 @@ Extracts the live detection posture from the SIEM tenant into the local reposito
 graft secops pull --env production
 
 # Pull custom rules only into a custom directory
-graft secops pull --target custom --env production --out-dir rules/secops/custom
+graft secops pull --target custom --env production --out-dir rulesets/secops/custom
 
 # Overwrite existing rule files (default prompts for confirmation)
 graft secops pull --target custom --env production --force

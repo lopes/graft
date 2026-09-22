@@ -258,7 +258,7 @@ In modern SIEM architectures, detection content falls into two fundamentally dis
 | Concept | Custom Detection Rules | Vendor-Managed Content |
 | :--- | :--- | :--- |
 | **Ownership** | Authored and maintained 100% by the organization's detection engineers. | Authored and maintained by the SIEM vendor (e.g., Google Cloud Threat Intelligence, Microsoft Threat Experts). |
-| **Representation** | Individual 5-block envelope YAML files under `rules/<engine>/custom/<rule>.yaml`. | Single consolidated manifest under `rules/<engine>/managed.yaml`. |
+| **Representation** | Individual 5-block envelope YAML files under `rulesets/<engine>/custom/<rule>.yaml`. | Single consolidated manifest under `rulesets/<engine>/managed.yaml`. |
 | **Logic Visibility** | Full query logic (`events`, `match`, `condition`) is authored and visible. | Proprietary vendor logic is black-boxed; operators configure operational parameters. |
 | **Operator Control** | Complete CRUD control over queries, test vectors, and runbooks. | Toggles precision (`PRECISE` vs `BROAD`), activation, alert generation, and customer exclusion filters. |
 | **Engine Port** | Handled via [`RuleDeployerPort`](file:///usr/local/google/home/joelopes/Projects/graft/src/graft/core/ports/deployer.py). | Handled via [`ManagedEnginePort`](file:///usr/local/google/home/joelopes/Projects/graft/src/graft/core/ports/managed.py). |
