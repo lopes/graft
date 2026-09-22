@@ -1,0 +1,92 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 780 330" width="100%" height="100%">
+  <defs>
+    <style>
+      .bg-cli { fill: #1f6feb; stroke: #388bfd; stroke-width: 1.5; }
+      .bg-gitops { fill: #6e40c9; stroke: #8957e5; stroke-width: 1.5; }
+      .bg-core { fill: #161b22; stroke: #d29922; stroke-width: 1.5; }
+      .bg-engines-container { fill: #0d1117; stroke: #30363d; stroke-width: 1; }
+      .bg-secops { fill: #1b4728; stroke: #3fb950; stroke-width: 1.5; }
+      .bg-plug { fill: #161b22; stroke: #388bfd88; stroke-width: 1.2; }
+      
+      .text-header { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; font-size: 13px; font-weight: 600; fill: #ffffff; text-anchor: middle; }
+      .text-sub { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; font-size: 10.5px; fill: #e6edf3; text-anchor: middle; }
+      .text-core-title { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; font-size: 13px; font-weight: 600; fill: #f0883e; text-anchor: middle; }
+      .text-core-sub { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; font-size: 10.5px; fill: #c9d1d9; text-anchor: middle; }
+      
+      .card-title { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; font-size: 12.5px; font-weight: 600; text-anchor: middle; }
+      .card-sub { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; font-size: 10px; fill: #8b949e; text-anchor: middle; }
+      .card-badge { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; font-size: 9.5px; font-weight: 600; text-anchor: middle; }
+      
+      .arrow { stroke: #58a6ff; stroke-width: 1.5; fill: none; }
+      .arrow-head { fill: #58a6ff; }
+      .flow-label { font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace; font-size: 9.5px; fill: #8b949e; }
+      .bypass-line { stroke: #58a6ff88; stroke-width: 1.2; stroke-dasharray: 4 3; fill: none; }
+    </style>
+    <marker id="arrow" viewBox="0 0 10 10" refX="5" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" class="arrow-head" />
+    </marker>
+  </defs>
+
+  <!-- Background Canvas -->
+  <rect width="780" height="330" rx="8" fill="#0d1117" stroke="#30363d" stroke-width="1" />
+
+  <!-- Local Bypass Flow (Left Side) -->
+  <path d="M 120 34 C 40 34, 40 162, 110 162" class="bypass-line" marker-end="url(#arrow)" />
+  <text x="32" y="102" class="flow-label">local dry-run</text>
+
+  <!-- Layer 1: CLI Layer -->
+  <rect x="110" y="14" width="560" height="40" rx="6" class="bg-cli" />
+  <text x="390" y="31" class="text-header">1. Unified CLI (graft)</text>
+  <text x="390" y="46" class="text-sub">Rule Authoring · Taxonomy Linting · Local Diff Previews · Visibility Exports</text>
+
+  <!-- Flow 1 -> 2 -->
+  <line x1="390" y1="54" x2="390" y2="70" class="arrow" marker-end="url(#arrow)" />
+  <text x="402" y="65" class="flow-label">git commit / PR</text>
+
+  <!-- Layer 2: GitOps & CI/CD Pipelines -->
+  <rect x="110" y="72" width="560" height="40" rx="6" class="bg-gitops" />
+  <text x="390" y="89" class="text-header">2. GitOps &amp; CI/CD Pipelines (GitHub Actions / Cloud Build)</text>
+  <text x="390" y="104" class="text-sub">Authoritative Git Source of Truth · Pre-Merge Dry-Runs · Continuous Convergence</text>
+
+  <!-- Flow 2 -> 3 -->
+  <line x1="390" y1="112" x2="390" y2="128" class="arrow" marker-end="url(#arrow)" />
+  <text x="402" y="123" class="flow-label">orchestrates</text>
+
+  <!-- Layer 3: Core & Hexagonal Ports Layer -->
+  <rect x="110" y="130" width="560" height="46" rx="6" class="bg-core" />
+  <text x="390" y="149" class="text-core-title">3. Graft Core (Hexagonal Architecture &amp; Port Protocols)</text>
+  <text x="390" y="165" class="text-core-sub">5-Block Envelope Models · Schema &amp; ATT&amp;CK Matrix Validation · Dual-Track Reconciler</text>
+
+  <!-- Flow 3 -> 4 (Three Ports Down) -->
+  <line x1="200" y1="176" x2="200" y2="194" class="arrow" marker-end="url(#arrow)" />
+  <line x1="390" y1="176" x2="390" y2="194" class="arrow" marker-end="url(#arrow)" />
+  <line x1="580" y1="176" x2="580" y2="194" class="arrow" marker-end="url(#arrow)" />
+
+  <!-- Layer 4: Pluggable Security Engines Container -->
+  <rect x="40" y="196" width="700" height="118" rx="8" class="bg-engines-container" />
+  <text x="390" y="213" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="11px" font-weight="600" fill="#8b949e" text-anchor="middle">4. Pluggable Security Engines (src/graft/engines/)</text>
+
+  <!-- Card 1: Google SecOps (Chronicle) - Active -->
+  <rect x="56" y="222" width="212" height="80" rx="6" class="bg-secops" />
+  <text x="162" y="244" class="card-title" fill="#3fb950">Google SecOps</text>
+  <text x="162" y="260" class="card-sub">Chronicle SIEM · YARA-L 2.0</text>
+  <text x="162" y="274" class="card-sub">Curated Rulesets · UDM Ingestion</text>
+  <rect x="96" y="282" width="132" height="14" rx="3" fill="#238636" />
+  <text x="162" y="293" class="card-badge" fill="#ffffff">Active Production Engine</text>
+
+  <!-- Card 2: Google Cloud SCC - Extensible -->
+  <rect x="284" y="222" width="212" height="80" rx="6" class="bg-plug" />
+  <text x="390" y="244" class="card-title" fill="#58a6ff">Google Cloud SCC</text>
+  <text x="390" y="260" class="card-sub">Security Command Center</text>
+  <text x="390" y="274" class="card-sub">Posture Policies · Cloud Findings</text>
+  <rect x="324" y="282" width="132" height="14" rx="3" fill="#388bfd1a" stroke="#388bfd44" stroke-width="1" />
+  <text x="390" y="293" class="card-badge" fill="#58a6ff">Pluggable Engine Port</text>
+
+  <!-- Card 3: Wiz - Extensible -->
+  <rect x="512" y="222" width="212" height="80" rx="6" class="bg-plug" />
+  <text x="618" y="244" class="card-title" fill="#58a6ff">Wiz (Cloud Detection)</text>
+  <text x="618" y="260" class="card-sub">Cloud Posture &amp; Vulnerabilities</text>
+  <text x="618" y="274" class="card-sub">Configuration &amp; Threat Rules</text>
+  <rect x="552" y="282" width="132" height="14" rx="3" fill="#388bfd1a" stroke="#388bfd44" stroke-width="1" />
+  <text x="618" y="293" class="card-badge" fill="#58a6ff">Pluggable Engine Port</text>
+</svg>

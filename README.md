@@ -43,48 +43,11 @@ Graft acts as the unified trunk:
 
 ## Architecture at a Glance
 
-Graft follows strict **Hexagonal Architecture (Ports & Adapters)** structured as an operating system stack:
+Graft follows strict **Hexagonal Architecture (Ports & Adapters)** structured into four decoupled layers:
 
-```mermaid
-flowchart TD
-    subgraph DRIVING["Driving Interfaces (User Space)"]
-        direction LR
-        CLI["<b>Unified CLI Router</b><br/><code>graft lint</code> · <code>graft export</code> · <code>graft &lt;engine&gt;</code>"]
-        GITOPS["<b>GitOps CI/CD Pipelines</b><br/>Pre-Merge Dry-Runs · Auto-Sync on Merge"]
-        HOOKS["<b>Developer Quality Hooks</b><br/>Native Fast Offline Pre-Commit Gates"]
-    end
-
-    subgraph ENGINES["Modular Pluggable Engines (src/graft/engines/)"]
-        direction LR
-        SECOPS["<b>Google SecOps Engine</b><br/><i>(Production-Ready Adapter)</i><br/>• YARA-L 2.0 REST API Client<br/>• Non-Destructive <code>verifyRuleText</code><br/>• Curated Rule Set Sync &amp; Exclusions<br/>• Staging UDM Replay Quarantine"]
-        SENTINEL["<b>Microsoft Sentinel</b><br/><i>(Extensible Port)</i><br/>• KQL Query Compilation<br/>• ARM / Bicep Sync<br/>• Analytic Rule Packaging"]
-        SPLUNK["<b>Splunk ES</b><br/><i>(Extensible Port)</i><br/>• SPL / SPL2 Correlation<br/>• Saved Searches REST API<br/>• App Manifest Packaging"]
-        ELASTIC["<b>Elastic Security</b><br/><i>(Extensible Port)</i><br/>• EQL / ES|QL Query Engine<br/>• Rules API Integration<br/>• Prebuilt Package Mapping"]
-    end
-
-    subgraph CORE["Graft Core Kernel Substrate (src/graft/core/)"]
-        direction TB
-        subgraph PORTS["Hexagonal Port Interfaces (Protocols)"]
-            direction LR
-            P_DEPLOY["<code>RuleDeployerPort</code>"]
-            P_COMP["<code>SyntaxCompilerPort</code>"]
-            P_MNG["<code>ManagedEnginePort</code>"]
-            P_REPLAY["<code>ReplayTestPort</code>"]
-        end
-        subgraph KERNEL["Engine-Agnostic Core Services"]
-            direction LR
-            MODELS["<b>5-Block Envelope Domain Models</b><br/>Immutable Dataclasses · Metadata · Runbook"]
-            SCHEMA["<b>Draft 2020-12 Schema Validator</b><br/>Sub-Second Strict Taxonomies"]
-            RECON["<b>Dual-Track GitOps Reconciler</b><br/>Custom Rules + Vendor Managed Drift"]
-            BLAME["<b>Git Blame Lifecycle Engine</b><br/>Factual Commits &amp; Author Indicators"]
-            ATTACK["<b>ATT&amp;CK v19.2 Matrix Engine</b><br/>Cross-Engine Navigator Layering"]
-        end
-    end
-
-    DRIVING --> ENGINES
-    ENGINES --> PORTS
-    PORTS --> KERNEL
-```
+<p align="center">
+  <img src="assets/architecture-overview.svg" alt="Graft Architecture: CLI, GitOps, Core Hexagonal, and Pluggable Engines" width="780">
+</p>
 
 ---
 
