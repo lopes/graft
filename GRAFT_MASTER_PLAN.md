@@ -219,6 +219,7 @@ To guarantee state preservation, eliminate hallucination, and prevent context sa
 | **Ruleset Taxonomy & Underscore Exclusion** | `[x]` | Migrate `rules/` -> `rulesets/`, standardize `_archived/`, ignore any `_<folder>` under rulesets | Commit `7774444`, `docs/analysts/rule_authoring.md` |
 | **Lifecycle & Rigor Indicators for Catalog Export** | `[x]` | Add factual indicators (`created_at`, `last_modified_at`, `review_count`, `contributor_count`, `has_runbook`, unified `mitre_attack`, resolved deployment `status`) to CSV/JSON/MD exports; omit experimental rule test blocks | Commit `8a9d6ce`, `src/graft/core/catalog.py` |
 | **ATT&CK v19.2 & Unified Catalog/Matrix Exports** | `[x]` | Upgraded ATT&CK to v19.2, tri-state engine deployment status, unified TA:T mappings, Navigator tactic scoping, multi-engine layer colors, and gap analysis docs | Commit `a978d05`, `docs/analysts/recipes.md` |
+| **Release Readiness & Quality Audit** | `[x]` | Comprehensive code audit, pagination/git diff defect fixes, documentation alignment, OS-layered architecture diagram, Key Features showcase, and dedicated `exports/` directory | Commits `0615aa1`, `db6f068`, `540ba2a` |
 
 ---
 
