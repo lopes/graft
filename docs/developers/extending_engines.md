@@ -208,9 +208,7 @@ class SentinelCompilerAdapter(RuleCompilerPort):
         self.config = config
 
     def verify_syntax(self, rule_text: str) -> CompilationResult:
-        """Verifies KQL query syntax against the Azure Sentinel query parser."""
         if not self.config or not self.config.auth_token:
-            # Fallback to local basic syntax verification if credentials are absent
             if "where" not in rule_text and "summarize" not in rule_text:
                 return CompilationResult(
                     success=False,
@@ -220,7 +218,6 @@ class SentinelCompilerAdapter(RuleCompilerPort):
                 )
             return CompilationResult(success=True)
 
-        # Call remote API using urllib.request (stdlib only)
         url = (
             f"https://management.azure.com/subscriptions/{self.config.subscription_id}"
             f"/resourceGroups/{self.config.resource_group}"
@@ -254,7 +251,6 @@ class SentinelCompilerAdapter(RuleCompilerPort):
             )
 
     def verify_rule(self, rule: RuleEnvelope) -> CompilationResult:
-        """Verifies rule envelope syntax."""
         return self.verify_syntax(rule.logic)
 ```
 
@@ -282,35 +278,24 @@ class SentinelDeployerAdapter(RuleDeployerPort):
         self.config = config
 
     def list_rules(self) -> tuple[RuleEnvelope, ...]:
-        """Fetches all alert rules from Azure Sentinel and transforms them into RuleEnvelopes."""
         url = (
             f"https://management.azure.com/subscriptions/{self.config.subscription_id}"
             f"/resourceGroups/{self.config.resource_group}"
             f"/providers/Microsoft.OperationalInsights/workspaces/{self.config.workspace_name}"
             f"/providers/Microsoft.SecurityInsights/alertRules?api-version=2023-02-01"
         )
-        # Fetch, parse JSON, and construct RuleEnvelope dataclasses
         return ()
 
     def create_rule(self, rule: RuleEnvelope) -> str:
-        """Translates RuleEnvelope to Azure ScheduledAlertRule payload and issues PUT request."""
-        rule_id = rule.metadata.id
-        # PUT alertRules/{rule_id}
-        return rule_id
+        return rule.metadata.id
 
     def update_rule(self, rule: RuleEnvelope) -> None:
-        """Updates an existing scheduled alert rule in-place."""
-        # PUT alertRules/{rule.metadata.id}
         pass
 
     def delete_rule(self, rule_id: str) -> None:
-        """Retires or deletes an alert rule."""
-        # DELETE alertRules/{rule_id}
         pass
 
     def set_rule_state(self, rule_id: str, enabled: bool, alerting: bool) -> None:
-        """Updates rule enabled/alerting state toggles."""
-        # PATCH alertRules/{rule_id}
         pass
 ```
 
@@ -318,7 +303,7 @@ class SentinelDeployerAdapter(RuleDeployerPort):
 
 ## 8. Step 7: Assemble the Composite Adapter (`adapter.py`)
 
-The composite adapter implements [`EngineAdapter`](../../src/graft/core/ports/engine.py):
+The composite adapter implements [`EngineAdapter`](../../src/graft/core/ports/engine.py). Inheriting from `EngineAdapter` provides default implementations for `resolve_deployment_status`, `are_rules_equal`, `deconstruct_rule`, `load_managed_manifest`, and `dump_managed_manifest`, which your adapter can override when needed (for example, `SecOpsAdapter` overrides `are_rules_equal` and `deconstruct_rule` to inject/extract YAML `metadata` and `runbook` fields into the YARA-L `meta:` block):
 
 ```python
 from __future__ import annotations
@@ -352,15 +337,12 @@ class SentinelAdapter(EngineAdapter):
         return self._deployer
 
     def get_managed(self) -> ManagedEnginePort | None:
-        # Sentinel adapter does not support managed curated content in this phase
         return None
 
     def get_replay(self) -> ReplayHarnessPort | None:
-        # Sentinel adapter does not support synthetic replay in this phase
         return None
 
     def resolve_deployment_status(self, rule: RuleEnvelope) -> str:
-        """Translates engine deployment configuration to enabled | silent | disabled."""
         if not rule.deployment.enabled:
             return "disabled"
         return "enabled" if rule.deployment.alerting else "silent"

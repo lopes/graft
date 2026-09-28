@@ -143,13 +143,30 @@ class DummyAdapter(EngineAdapter):
         return "enabled" if rule.deployment.enabled else "disabled"
 
 
-def test_engine_adapter_protocol_conformance() -> None:
+def test_engine_adapter_protocol_conformance(tmp_path: Path) -> None:
+    from graft.core.models.rule import BaseDeploymentConfig, RuleMetadata, Runbook
+
     adapter = DummyAdapter(env="staging")
     assert isinstance(adapter, EngineAdapter)
     assert adapter.get_compiler() is None
     assert adapter.get_deployer() is None
     assert adapter.get_managed() is None
     assert adapter.get_replay() is None
+
+    dummy_rule = RuleEnvelope(
+        metadata=RuleMetadata(
+            id="00000000-0000-0000-0000-000000000001",
+            name="test_rule",
+            description="desc",
+        ),
+        logic="events: $e condition: $e",
+        deployment=BaseDeploymentConfig(enabled=True, alerting=False),
+        runbook=Runbook(),
+        tests=(),
+    )
+    assert adapter.are_rules_equal(dummy_rule, dummy_rule) is True
+    assert adapter.deconstruct_rule(dummy_rule) == dummy_rule
+    assert adapter.load_managed_manifest(tmp_path / "managed.yaml") is None
 
 
 def test_engine_registry_loads_adapter_class(

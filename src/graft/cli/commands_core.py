@@ -26,6 +26,22 @@ from graft.core.validation.mitre_validator import update_mitre_taxonomy
 from graft.core.validation.schema_validator import SchemaValidator
 
 
+def _infer_engine_from_path(file_path: Path) -> str:
+    parts = file_path.parts
+    if "rulesets" in parts:
+        idx = parts.index("rulesets")
+        if idx + 1 < len(parts):
+            return parts[idx + 1]
+    elif "rules" in parts:
+        idx = parts.index("rules")
+        if idx + 1 < len(parts):
+            return parts[idx + 1]
+    engines = EngineRegistry().list_engines()
+    if engines:
+        return engines[0].name
+    return "custom"
+
+
 def execute_lint(
     paths: list[str] | None = None,
     rules_dir: str = "rulesets",
@@ -91,16 +107,7 @@ def execute_lint(
             ):
                 continue
             try:
-                parts = other_path.parts
-                engine = "secops"
-                if "rulesets" in parts:
-                    idx = parts.index("rulesets")
-                    if idx + 1 < len(parts):
-                        engine = parts[idx + 1]
-                elif "rules" in parts:
-                    idx = parts.index("rules")
-                    if idx + 1 < len(parts):
-                        engine = parts[idx + 1]
+                engine = _infer_engine_from_path(other_path)
                 other_rule = load_rule_from_yaml(other_path, validate_mitre=False)
                 uniqueness_validator.add_and_validate(other_rule, engine=engine, path=other_path)
             except (RuleLoadError, ValueError, OSError):
@@ -116,16 +123,7 @@ def execute_lint(
         }
 
         try:
-            parts = file_path.parts
-            engine = "secops"
-            if "rulesets" in parts:
-                idx = parts.index("rulesets")
-                if idx + 1 < len(parts):
-                    engine = parts[idx + 1]
-            elif "rules" in parts:
-                idx = parts.index("rules")
-                if idx + 1 < len(parts):
-                    engine = parts[idx + 1]
+            engine = _infer_engine_from_path(file_path)
 
             if is_managed:
                 raw_text = file_path.read_text(encoding="utf-8")
@@ -251,16 +249,7 @@ def _load_all_rules(rules_dir: Path | str = "rulesets") -> list[tuple[RuleEnvelo
         ):
             continue
         try:
-            parts = yaml_path.parts
-            engine = "secops"
-            if "rulesets" in parts:
-                idx = parts.index("rulesets")
-                if idx + 1 < len(parts):
-                    engine = parts[idx + 1]
-            elif "rules" in parts:
-                idx = parts.index("rules")
-                if idx + 1 < len(parts):
-                    engine = parts[idx + 1]
+            engine = _infer_engine_from_path(yaml_path)
             rule = load_rule_from_yaml(yaml_path, validate_mitre=False)
             loaded.append((rule, engine, yaml_path))
         except (RuleLoadError, ValueError, OSError):

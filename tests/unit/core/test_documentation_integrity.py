@@ -92,3 +92,20 @@ def test_governance_and_release_files_complete() -> None:
 
     license_text = Path("LICENSE").read_text(encoding="utf-8")
     assert "[yyyy] [name of copyright owner]" not in license_text
+
+
+def test_core_and_cli_have_no_hardcoded_secops_coupled_branches() -> None:
+    for core_py in sorted(Path("src/graft/core").rglob("*.py")):
+        content = core_py.read_text(encoding="utf-8")
+        assert "secops" not in content.lower(), (
+            f"Driving Core file {core_py} contains engine-specific 'secops' reference"
+        )
+
+    commands_core = Path("src/graft/cli/commands_core.py").read_text(encoding="utf-8")
+    assert 'engine = "secops"' not in commands_core, (
+        "commands_core.py must not hardcode engine = 'secops' fallback"
+    )
+    engine_controller = Path("src/graft/cli/engine_controller.py").read_text(encoding="utf-8")
+    assert "adapter: Any" not in engine_controller, (
+        "engine_controller.py must type adapter as EngineAdapter, not Any"
+    )

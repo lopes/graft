@@ -15,6 +15,7 @@ from graft.core.loader import dump_rule_to_yaml, load_rule_from_yaml
 from graft.core.models.engine import EngineManifest
 from graft.core.models.managed import ManagedState
 from graft.core.models.rule import RuleEnvelope
+from graft.core.ports.engine import EngineAdapter
 from graft.core.ports.managed import ManagedEnginePort
 from graft.core.reconciler import (
     CustomRuleReconciler,
@@ -689,7 +690,7 @@ class EngineCommandController:
                 )
         return 0
 
-    def _diff_managed(self, port: ManagedEnginePort, adapter: Any) -> ReconciliationDiff:
+    def _diff_managed(self, port: ManagedEnginePort, adapter: EngineAdapter) -> ReconciliationDiff:
         manifest_path = Path(f"rulesets/{self.manifest.name}/managed.yaml")
         reconciler = GitOpsReconciler()
         if not manifest_path.is_file():
@@ -712,12 +713,12 @@ class EngineCommandController:
         current = port.fetch_managed_state()
         return reconciler.diff(current=current, desired=target_state)
 
-    def _load_managed_state(self, path: Path, adapter: Any) -> ManagedState | None:
+    def _load_managed_state(self, path: Path, adapter: EngineAdapter) -> ManagedState | None:
         if hasattr(adapter, "load_managed_manifest"):
-            return adapter.load_managed_manifest(path)  # type: ignore[no-any-return]
+            return adapter.load_managed_manifest(path)
         return None
 
-    def _write_managed_state(self, path: Path, state: ManagedState, adapter: Any) -> None:
+    def _write_managed_state(self, path: Path, state: ManagedState, adapter: EngineAdapter) -> None:
         if hasattr(adapter, "dump_managed_manifest"):
             adapter.dump_managed_manifest(state, path)
 

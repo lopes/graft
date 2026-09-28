@@ -108,10 +108,10 @@ class SchemaValidator:
                 if stem == "rule":
                     self._validators[f"{engine_name}_custom"] = validator
                     self._validators[f"{engine_name}:custom"] = validator
-                elif stem == "secops_custom":
+                elif stem.endswith("_custom"):
                     self._validators[f"{engine_name}:rule"] = validator
                     self._validators[f"{engine_name}_rule"] = validator
-                elif stem == "secops_managed":
+                elif stem.endswith("_managed"):
                     self._validators[f"{engine_name}:managed"] = validator
                     self._validators[f"{engine_name}_managed"] = validator
             else:

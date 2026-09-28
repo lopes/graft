@@ -274,7 +274,11 @@ def test_{name}_adapter_protocol_conformance() -> None:
     )
     created_files["test_adapter"] = test_adapter_file
 
-    # 7. Append engine config section to .env.example and .env if present
+    # 7. Initial example rule in rulesets/{name}/custom/{name}_example_rule.yaml
+    example_rule_file = scaffold_rule(name, f"{name}_example_rule", project_root=root)
+    created_files["example_rule"] = example_rule_file
+
+    # 8. Append engine config section to .env.example and .env if present
     section_tag = f"# ENGINE: {name.upper()}"
     section_stub = f"""
 
@@ -315,6 +319,18 @@ def scaffold_rule(
     dest.parent.mkdir(parents=True, exist_ok=True)
     rule_uuid = str(uuid.uuid4())
 
+    default_logic = (
+        f"""rule {rule_name} {{
+  meta:
+  events:
+    $e.metadata.event_type = "USER_LOGIN"
+  condition:
+    $e
+}}"""
+        if engine == "secops"
+        else f'events | where rule_name == "{rule_name}" and event_type == "USER_LOGIN"'
+    )
+
     doc: dict[str, object] = {
         "metadata": {
             "id": rule_uuid,
@@ -328,13 +344,7 @@ def scaffold_rule(
             "tags": [engine, "custom"],
             "references": [],
         },
-        "logic": f"""rule {rule_name} {{
-  meta:
-  events:
-    $e.metadata.event_type = "USER_LOGIN"
-  condition:
-    $e
-}}""",
+        "logic": default_logic,
         "deployment": {
             "enabled": False,
             "alerting": False,

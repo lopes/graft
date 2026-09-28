@@ -100,8 +100,10 @@ Graft uses Python's `typing.Protocol` with structural subtyping (duck typing). A
 Defined in [`src/graft/core/ports/engine.py`](../../src/graft/core/ports/engine.py):
 
 ```python
+from pathlib import Path
 from typing import Protocol, runtime_checkable
 
+from graft.core.models.managed import ManagedState
 from graft.core.models.rule import RuleEnvelope
 from graft.core.ports.compiler import RuleCompilerPort
 from graft.core.ports.deployer import RuleDeployerPort
@@ -122,9 +124,22 @@ class EngineAdapter(Protocol):
     def get_replay(self) -> ReplayHarnessPort | None: ...
 
     def resolve_deployment_status(self, rule: RuleEnvelope) -> str: ...
+
+    def are_rules_equal(self, desired: RuleEnvelope, remote: RuleEnvelope) -> bool: ...
+
+    def deconstruct_rule(self, remote_rule: RuleEnvelope) -> RuleEnvelope: ...
+
+    def load_managed_manifest(self, path: Path) -> ManagedState | None: ...
+
+    def dump_managed_manifest(self, state: ManagedState, path: Path) -> None: ...
 ```
 
-The composite adapter acts as a capabilities factory and status resolver. Depending on which capabilities the engine supports, it returns the appropriate port implementation or `None`, and translates engine-specific deployment toggles into an engine-agnostic status (`enabled`, `silent`, `disabled`).
+The composite adapter acts as a capabilities factory and lifecycle hook provider:
+- **Port Factories (`get_compiler`, `get_deployer`, `get_managed`, `get_replay`):** Return the concrete port implementation or `None` when a capability is unsupported.
+- **`resolve_deployment_status(rule)`:** Translates engine-specific deployment toggles into an engine-agnostic status (`enabled`, `silent`, `disabled`).
+- **`are_rules_equal(desired, remote)`:** Compares a desired Git `RuleEnvelope` against a remote tenant `RuleEnvelope` during `diff`/`apply` (defaults to trimmed `logic` comparison; engines that compile metadata into the query payload, such as `SecOpsAdapter`, override this to compare compiled payloads).
+- **`deconstruct_rule(remote_rule)`:** Extracts embedded metadata from a raw remote rule during `pull` (defaults to returning `remote_rule` unchanged).
+- **`load_managed_manifest(path)` / `dump_managed_manifest(state, path)`:** Parses and serializes `rulesets/<engine>/managed.yaml` when `managed_rules: true` (defaults to `None`).
 
 ---
 
@@ -138,13 +153,9 @@ from graft.core.models.rule import RuleEnvelope
 
 
 class RuleCompilerPort(Protocol):
-    def verify_syntax(self, rule_text: str) -> CompilationResult:
-        """Verifies rule syntax with the remote engine API without deploying it."""
-        ...
+    def verify_syntax(self, rule_text: str) -> CompilationResult: ...
 
-    def verify_rule(self, rule: RuleEnvelope) -> CompilationResult:
-        """Verifies full rule envelope syntax against the engine API."""
-        ...
+    def verify_rule(self, rule: RuleEnvelope) -> CompilationResult: ...
 ```
 
 The returned [`CompilationResult`](../../src/graft/core/models/compiler.py) is an engine-agnostic dataclass:
@@ -153,7 +164,7 @@ The returned [`CompilationResult`](../../src/graft/core/models/compiler.py) is a
 class CompilationResult:
     success: bool
     diagnostics: tuple[CompilationDiagnostic, ...] = ()
-    raw_Error: str | None = None
+    raw_response: dict[str, object] = field(default_factory=dict)
 ```
 
 ---
@@ -167,25 +178,15 @@ from graft.core.models.rule import RuleEnvelope
 
 
 class RuleDeployerPort(Protocol):
-    def list_rules(self) -> tuple[RuleEnvelope, ...]:
-        """Fetches all custom detection rules from the live tenant."""
-        ...
+    def list_rules(self) -> tuple[RuleEnvelope, ...]: ...
 
-    def create_rule(self, rule: RuleEnvelope) -> str:
-        """Creates a new detection rule on the tenant and returns its remote ID."""
-        ...
+    def create_rule(self, rule: RuleEnvelope) -> str: ...
 
-    def update_rule(self, rule: RuleEnvelope) -> None:
-        """Updates an existing rule's logic and configuration in-place."""
-        ...
+    def update_rule(self, rule: RuleEnvelope) -> None: ...
 
-    def delete_rule(self, rule_id: str) -> None:
-        """Retires or deletes a rule on the remote tenant."""
-        ...
+    def delete_rule(self, rule_id: str) -> None: ...
 
-    def set_rule_state(self, rule_id: str, enabled: bool, alerting: bool) -> None:
-        """Updates deployment toggles without altering detection logic."""
-        ...
+    def set_rule_state(self, rule_id: str, enabled: bool, alerting: bool) -> None: ...
 ```
 
 ---
@@ -199,13 +200,9 @@ from graft.core.models.managed import ManagedExclusion, ManagedState
 
 
 class ManagedEnginePort(Protocol):
-    def fetch_managed_state(self) -> ManagedState:
-        """Fetches active vendor-curated ruleset deployments and exclusions."""
-        ...
+    def fetch_managed_state(self) -> ManagedState: ...
 
-    def apply_managed_state(self, target_state: ManagedState) -> None:
-        """Applies desired curated ruleset deployments and customer exclusions."""
-        ...
+    def apply_managed_state(self, target_state: ManagedState) -> None: ...
 
     def set_ruleset_deployment(
         self,
@@ -214,21 +211,13 @@ class ManagedEnginePort(Protocol):
         enabled: bool,
         alerting: bool,
         category: str | None = None,
-    ) -> None:
-        """Updates a vendor ruleset deployment (e.g. PRECISE vs BROAD, enabled, alerting)."""
-        ...
+    ) -> None: ...
 
-    def create_exclusion(self, exclusion: ManagedExclusion) -> str:
-        """Creates a tuning filter/exclusion and returns its remote ID."""
-        ...
+    def create_exclusion(self, exclusion: ManagedExclusion) -> str: ...
 
-    def update_exclusion(self, exclusion: ManagedExclusion) -> None:
-        """Updates an existing tuning exclusion."""
-        ...
+    def update_exclusion(self, exclusion: ManagedExclusion) -> None: ...
 
-    def delete_exclusion(self, exclusion_id: str) -> None:
-        """Deletes a tuning exclusion from the tenant."""
-        ...
+    def delete_exclusion(self, exclusion_id: str) -> None: ...
 ```
 
 ---
@@ -242,13 +231,9 @@ from graft.core.models.rule import RuleEnvelope, TestVector
 
 
 class ReplayHarnessPort(Protocol):
-    def run_test_vector(self, rule: RuleEnvelope, vector: TestVector) -> ReplayResult:
-        """Injects synthetic test events and verifies match count."""
-        ...
+    def run_test_vector(self, rule: RuleEnvelope, vector: TestVector) -> ReplayResult: ...
 
-    def is_available(self) -> bool:
-        """Checks if the replay infrastructure or staging tenant is accessible."""
-        ...
+    def is_available(self) -> bool: ...
 ```
 
 ---

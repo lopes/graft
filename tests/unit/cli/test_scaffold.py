@@ -32,9 +32,14 @@ def test_scaffold_engine_creates_structure_and_files(tmp_path: Path) -> None:
     schema_file = engine_dir / "schemas" / "rule.schema.json"
     assert schema_file.exists()
 
-    # 3. Rulesets directory
+    # 3. Rulesets directory & initial example rule
     rules_dir = tmp_path / "rulesets" / "sentinel" / "custom"
     assert rules_dir.is_dir()
+    example_rule = rules_dir / "sentinel_example_rule.yaml"
+    assert example_rule.is_file()
+    example_envelope = load_rule_from_yaml(example_rule, schema_name="base_rule")
+    assert example_envelope.metadata.name == "sentinel_example_rule"
+    assert "$e.metadata.event_type" not in example_envelope.logic
     assert (tmp_path / "rulesets" / "sentinel" / "_archived").is_dir()
 
     # 4. Engine tests in tests/engines/sentinel/
