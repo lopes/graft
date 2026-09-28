@@ -1,3 +1,9 @@
+import tomllib
+from pathlib import Path
+
+import pytest
+
+from graft import __version__
 from graft.cli.main import build_parser
 
 
@@ -7,6 +13,29 @@ def test_parse_root_flags() -> None:
     assert args.verbose is True
     assert args.json is True
     assert args.quiet is False
+
+
+def test_parse_version_flag(capsys: pytest.CaptureFixture[str]) -> None:
+    parser = build_parser()
+    with pytest.raises(SystemExit) as exc_info:
+        parser.parse_args(["--version"])
+    assert exc_info.value.code == 0
+    captured = capsys.readouterr()
+    assert f"graft {__version__}" in captured.out
+
+
+def test_pyproject_release_metadata() -> None:
+    pyproject_path = Path("pyproject.toml")
+    data = tomllib.loads(pyproject_path.read_text(encoding="utf-8"))
+    project = data["project"]
+    assert project["version"] == __version__
+    assert "authors" in project and len(project["authors"]) >= 1
+    assert "keywords" in project and len(project["keywords"]) >= 3
+    assert "classifiers" in project and len(project["classifiers"]) >= 3
+    assert "urls" in project
+    assert "Repository" in project["urls"]
+    assert "Documentation" in project["urls"]
+    assert "Issues" in project["urls"]
 
 
 def test_parse_lint_command() -> None:

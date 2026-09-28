@@ -78,7 +78,12 @@ def calculate_mitre_coverage(
 
     for rule, engine, path in normalized:
         rule_name = rule.metadata.name
-        status = "enabled" if rule.deployment.enabled else "disabled"
+        if not rule.deployment.enabled:
+            status = "disabled"
+        elif not rule.deployment.alerting:
+            status = "silent"
+        else:
+            status = "enabled"
         has_runbook = bool(
             rule.runbook.context.strip()
             or rule.runbook.triage.strip()

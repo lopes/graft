@@ -14,7 +14,7 @@ name: Deploy Production & Publish Catalogs
       - ".github/workflows/deploy-production.yml"
 
 permissions:
-  contents: write
+  contents: read
   id-token: write
 
 concurrency:

@@ -9,10 +9,41 @@ description = "Extensible Detection-as-Code platform for Google SecOps and moder
 readme = "README.md"
 requires-python = ">=3.13"
 license = "Apache-2.0"
+authors = [
+    { name = "Joe Lopes" },
+]
+keywords = [
+    "detection-as-code",
+    "secops",
+    "chronicle",
+    "siem",
+    "yara-l",
+    "mitre-attack",
+    "gitops",
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Environment :: Console",
+    "Intended Audience :: Information Technology",
+    "Intended Audience :: System Administrators",
+    "License :: OSI Approved :: Apache Software License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Security",
+    "Typing :: Typed",
+]
 dependencies = [
     "jsonschema>=4.26.0",
     "pyyaml>=6.0.2",
 ]
+
+[project.urls]
+Homepage = "https://github.com/lopes/graft"
+Repository = "https://github.com/lopes/graft"
+Documentation = "https://github.com/lopes/graft/tree/main/docs"
+Issues = "https://github.com/lopes/graft/issues"
+Changelog = "https://github.com/lopes/graft/blob/main/CHANGELOG.md"
 
 [project.scripts]
 graft = "graft.cli.main:main"

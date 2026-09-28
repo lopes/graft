@@ -19,9 +19,6 @@ name: PR Quality & Verification Gates
 
 permissions:
   contents: read
-  id-token: write
-  pull-requests: write
-  issues: write
 
 concurrency:
   group: pr-${{ github.workflow }}-${{ github.head_ref || github.run_id }}
@@ -68,6 +65,11 @@ jobs:
     needs: [lint-and-unit-gates]
     runs-on: ubuntu-latest
     if: github.event.pull_request.head.repo.full_name == github.repository
+    permissions:
+      contents: read
+      id-token: write
+      pull-requests: write
+      issues: write
     env:
       GRAFT_SECOPS_PROD_PROJECT: ${{ vars.GRAFT_SECOPS_PROD_PROJECT }}
       GRAFT_SECOPS_PROD_LOCATION: ${{ vars.GRAFT_SECOPS_PROD_LOCATION }}
@@ -104,7 +106,7 @@ jobs:
       - name: Gate 6 - Chronicle verifyRuleText pre-merge compiler dry-run
         env:
           GRAFT_SECOPS_TOKEN: ${{ steps.auth.outputs.access_token }}
-        run: uv run graft secops verify --env production
+        run: uv run graft secops verify --env staging
 
       - name: Gate 7 - Synthetic UDM replay test harness
         env:

@@ -96,3 +96,25 @@ def test_render_matrix_table() -> None:
     assert "T1098.001" in table
     assert "rule_gcp" in table
     assert "Covered Techniques: 1" in table or "Total Rules: 1" in table
+
+
+def test_export_navigator_layer_silent_status() -> None:
+    silent_rule = RuleEnvelope(
+        metadata=RuleMetadata(
+            id="00000000-0000-0000-0000-000000000009",
+            name="silent_rule",
+            description="Silent mode rule",
+            mitre={"persistence": ("T1098.001",)},
+        ),
+        logic="events: $e condition: $e",
+        deployment=BaseDeploymentConfig(enabled=True, alerting=False, run_frequency="live"),
+        runbook=Runbook(context="ctx", triage="tr", response="res"),
+        tests=(),
+    )
+    report = calculate_mitre_coverage(
+        [(silent_rule, "secops", Path("rulesets/secops/custom/silent_rule.yaml"))]
+    )
+    layer = export_navigator_layer(report)
+    t0 = layer["techniques"][0]
+    status_meta = next(m for m in t0["metadata"] if m["name"] == "status")
+    assert status_meta["value"] == "silent"

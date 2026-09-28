@@ -5,6 +5,7 @@ import sys
 from collections.abc import Sequence
 from pathlib import Path
 
+from graft import __version__
 from graft.cli.commands_core import execute_export, execute_lint, execute_update_mitre
 from graft.cli.engines import discover_and_register_engines
 from graft.cli.scaffold import ScaffoldError, scaffold_engine, scaffold_rule
@@ -16,6 +17,7 @@ def build_parser() -> argparse.ArgumentParser:
         prog="graft",
         description="Graft: Extensible Detection-as-Code Platform",
     )
+    parser.add_argument("-V", "--version", action="version", version=f"%(prog)s {__version__}")
     parser.add_argument("-v", "--verbose", action="store_true", help="Enable verbose debug output")
     parser.add_argument(
         "-q", "--quiet", action="store_true", help="Suppress informational messages"

@@ -74,6 +74,7 @@ env_vars:
     adapter_py = engine_dir / "adapter.py"
     adapter_content = f"""from __future__ import annotations
 
+from graft.core.models.rule import RuleEnvelope
 from graft.core.ports.compiler import RuleCompilerPort
 from graft.core.ports.deployer import RuleDeployerPort
 from graft.core.ports.engine import EngineAdapter
@@ -100,6 +101,13 @@ class {class_prefix}Adapter(EngineAdapter):
 
     def get_replay(self) -> ReplayHarnessPort | None:
         return None
+
+    def resolve_deployment_status(self, rule: RuleEnvelope) -> str:
+        if not rule.deployment.enabled:
+            return "disabled"
+        if not rule.deployment.alerting:
+            return "silent"
+        return "enabled"
 """
     adapter_py.write_text(adapter_content, encoding="utf-8")
     created_files["adapter"] = adapter_py
@@ -260,6 +268,7 @@ def test_{name}_adapter_protocol_conformance() -> None:
     assert isinstance(adapter, EngineAdapter)
     assert adapter.get_compiler() is not None
     assert adapter.get_deployer() is not None
+    assert callable(adapter.resolve_deployment_status)
 """,
         encoding="utf-8",
     )

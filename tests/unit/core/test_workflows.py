@@ -34,17 +34,25 @@ def test_pr_validation_workflow_structure() -> None:
     assert triggers is not None, "Workflow must define triggers"
     assert "pull_request" in triggers, "Workflow must trigger on pull_request"
 
-    # 2. Permissions
+    # 2. Least-privilege permissions
     permissions = data.get("permissions", {})
-    # Either top-level or in jobs
+    assert permissions == {"contents": "read"}, (
+        "Top-level workflow permissions must be restricted to contents: read"
+    )
     jobs = data.get("jobs", {})
     assert len(jobs) >= 1, "Workflow must define at least one job"
 
-    # Look for id-token: write in top-level permissions or job permissions
-    has_id_token = permissions.get("id-token") == "write" or any(
-        j.get("permissions", {}).get("id-token") == "write" for j in jobs.values()
+    cloud_job = jobs.get("secops-cloud-gates", {})
+    cloud_perms = cloud_job.get("permissions", {})
+    assert cloud_perms.get("id-token") == "write", (
+        "secops-cloud-gates must declare id-token: write for WIF OIDC"
     )
-    assert has_id_token, "Workflow must declare id-token: write for WIF OIDC"
+    assert cloud_perms.get("pull-requests") == "write", (
+        "secops-cloud-gates must declare pull-requests: write for PR diff comments"
+    )
+    assert cloud_perms.get("issues") == "write", (
+        "secops-cloud-gates must declare issues: write for PR diff comments"
+    )
 
     # 3. Step verification
     all_steps: list[dict[str, Any]] = []
@@ -63,7 +71,9 @@ def test_pr_validation_workflow_structure() -> None:
     assert any("google-github-actions/auth" in u for u in step_uses), (
         "Must use google-github-actions/auth for WIF"
     )
-    assert any("graft secops verify" in r for r in step_runs), "Must execute graft secops verify"
+    assert any("graft secops verify --env staging" in r for r in step_runs), (
+        "Must execute graft secops verify --env staging to match staging/fallback SA token"
+    )
     assert any("graft secops test" in r for r in step_runs), "Must execute graft secops test"
     assert any("graft secops diff" in r for r in step_runs), "Must execute graft secops diff"
 
@@ -78,8 +88,11 @@ def test_deploy_production_workflow_structure() -> None:
     assert triggers is not None, "Workflow must define triggers"
     assert "push" in triggers, "Workflow must trigger on push to main"
 
-    # 2. Permissions
+    # 2. Least-privilege permissions
     permissions = data.get("permissions", {})
+    assert permissions.get("contents") == "read", (
+        "deploy-production.yml only needs contents: read (uploads Actions artifacts)"
+    )
     jobs = data.get("jobs", {})
     has_id_token = permissions.get("id-token") == "write" or any(
         j.get("permissions", {}).get("id-token") == "write" for j in jobs.values()
