@@ -23,7 +23,7 @@ Core identification and threat taxonomy mapping.
 - `name` *(string, required)*: Unique snake_case rule identifier (`^[a-z0-9_]+$`, max 64 chars).
 - `description` *(string, required)*: Plain-text explanation of the detection objective (max 128 chars).
 - `authors` *(list of strings, optional)*: Rule authors and engineering teams.
-- `mitre` *(mapping of tactic to techniques, optional)*: MITRE ATT&CK Enterprise taxonomy mapping. Must use valid lowercase tactic names (`initial_access`, `execution`, `persistence`, etc.) and real technique IDs (`T1566.002`, `T1098.001`). Validated against pre-indexed matrix during linting.
+- `mitre` *(mapping of tactic to techniques, optional)*: MITRE ATT&CK Enterprise taxonomy mapping. Must use MITRE's normalized tactic names (lowercase with spaces replaced by dashes, e.g., `initial-access`, `privilege-escalation`, `execution` — see [MITRE Enterprise Tactics](https://attack.mitre.org/tactics/enterprise/)) and real technique IDs (`T1566.002`, `T1098.001`). Validated against the pre-indexed matrix during linting.
 - `tags` *(list of strings, optional)*: Categorical labels (e.g., `google_workspace`, `gcp`, `phishing`).
 - `references` *(list of strings, optional)*: Canonical URLs to threat research, documentation, or blog posts.
 
@@ -112,7 +112,7 @@ metadata:
     - "Joe Lopes <lopes.id>"
     - "Detection Engineering"
   mitre:
-    initial_access:
+    initial-access:
       - "T1566.002"
   tags:
     - "google_workspace"
@@ -269,7 +269,7 @@ When schema constraints or invalid MITRE tactics/techniques are detected:
 ```text
 [FAIL] rulesets/secops/custom/broken_rule.yaml:
   - Schema Error: 'run_frequency' is a required property in 'deployment'
-  - MITRE Error: Unknown technique 'T9999.001' under tactic 'initial_access'
+  - MITRE Error: Unknown technique 'T9999.001' under tactic 'initial-access'
 Linting failed with 2 error(s).
 ```
 

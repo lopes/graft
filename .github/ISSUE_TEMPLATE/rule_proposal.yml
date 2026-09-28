@@ -37,7 +37,7 @@ body:
     attributes:
       label: MITRE ATT&CK Mapping
       description: Primary Tactic and Technique IDs (e.g. `persistence: T1098.001`).
-      placeholder: "initial_access: T1566.002"
+      placeholder: "initial-access: T1566.002"
     validations:
       required: true
   - type: textarea

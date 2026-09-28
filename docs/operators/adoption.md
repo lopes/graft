@@ -133,7 +133,7 @@ Before committing the baseline to version control, detection engineers review an
   mitre:
     persistence:
       - "T1098.001"
-    privilege_escalation:
+    privilege-escalation:
       - "T1078.004"
   ```
 - **Synthetic Test Vectors:** Add deterministic UDM events and expected match counts:

@@ -5,9 +5,9 @@ metadata:
   authors:
     - "Cloud Security Operations"
   mitre:
-    initial_access:
+    initial-access:
       - "T1078.004"
-    defense_impairment:
+    defense-impairment:
       - "T1685"
   tags:
     - "gcp"

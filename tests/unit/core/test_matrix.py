@@ -29,9 +29,9 @@ def make_dummy_rule(name: str, mitre: dict[str, tuple[str, ...]]) -> RuleEnvelop
 
 
 def test_calculate_mitre_coverage_aggregation() -> None:
-    rule1 = make_dummy_rule("rule_one", {"initial_access": ("T1566.002",)})
+    rule1 = make_dummy_rule("rule_one", {"initial-access": ("T1566.002",)})
     rule2 = make_dummy_rule(
-        "rule_two", {"initial_access": ("T1566.002",), "persistence": ("T1098.001",)}
+        "rule_two", {"initial-access": ("T1566.002",), "persistence": ("T1098.001",)}
     )
     rule3 = make_dummy_rule("rule_three", {"persistence": ("T1098.001",)})
 

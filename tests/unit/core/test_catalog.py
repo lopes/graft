@@ -24,7 +24,7 @@ from graft.core.models.rule import (
 
 def test_resolve_mitre_attack_pairs() -> None:
     mitre_data = {
-        "initial_access": ("T1566.002",),
+        "initial-access": ("T1566.002",),
         "stealth": ("T1055.011",),
     }
     pairs = resolve_mitre_attack_pairs(mitre_data)
@@ -67,7 +67,7 @@ def test_build_catalog_entry_from_rule() -> None:
             description="NRD Phishing Test",
             priority="high",
             authors=("Joe Lopes",),
-            mitre={"initial_access": ("T1566.002",)},
+            mitre={"initial-access": ("T1566.002",)},
             tags=("workspace", "phishing"),
         ),
         logic="events: $e condition: $e",

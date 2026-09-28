@@ -27,10 +27,9 @@ def parse_attack_stix_bundle(stix_data: dict[str, Any], version: str = "19.2") -
             shortname = o.get("x_mitre_shortname")
             name = o.get("name")
             if ref and shortname and name:
-                slug = str(shortname).replace("-", "_")
-                tactics[slug] = {"id": str(ref), "name": str(name), "shortname": str(shortname)}
+                tactics[str(shortname)] = {"id": str(ref), "name": str(name)}
 
-    tactics["none"] = {"id": "TA0000", "name": "Unmapped / Forwarded Alerts", "shortname": "none"}
+    tactics["none"] = {"id": "TA0000", "name": "Unmapped / Forwarded Alerts"}
 
     techniques: dict[str, dict[str, Any]] = {}
     for o in stix_data.get("objects", []):
@@ -49,7 +48,7 @@ def parse_attack_stix_bundle(stix_data: dict[str, Any], version: str = "19.2") -
             )
             name = o.get("name")
             tech_tactics = [
-                p.get("phase_name", "").replace("-", "_")
+                p.get("phase_name", "")
                 for p in o.get("kill_chain_phases", [])
                 if p.get("kill_chain_name") == "mitre-attack"
             ]

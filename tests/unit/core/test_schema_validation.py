@@ -130,6 +130,21 @@ def test_invalid_rule_name_pattern(
     assert len(errors) >= 1
 
 
+def test_mitre_tactic_property_names_use_dashes_and_reject_underscores(
+    validator: SchemaValidator, valid_secops_custom_dict: dict[str, object]
+) -> None:
+    metadata = valid_secops_custom_dict["metadata"]
+    assert isinstance(metadata, dict)
+
+    metadata["mitre"] = {"initial-access": ["T1566.002"], "privilege-escalation": ["T1098.001"]}
+    assert validator.is_valid(valid_secops_custom_dict, schema_name="secops_custom") is True
+
+    metadata["mitre"] = {"initial_access": ["T1566.002"]}
+    errors = validator.validate(valid_secops_custom_dict, schema_name="secops_custom")
+    assert len(errors) >= 1
+    assert validator.is_valid(valid_secops_custom_dict, schema_name="secops_custom") is False
+
+
 def test_deployment_run_frequency_mandatory_and_valid_values(
     validator: SchemaValidator, valid_secops_custom_dict: dict[str, object]
 ) -> None:

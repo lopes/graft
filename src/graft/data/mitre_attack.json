@@ -3,83 +3,67 @@
   "tactics": {
     "collection": {
       "id": "TA0009",
-      "name": "Collection",
-      "shortname": "collection"
+      "name": "Collection"
     },
-    "command_and_control": {
+    "command-and-control": {
       "id": "TA0011",
-      "name": "Command and Control",
-      "shortname": "command-and-control"
+      "name": "Command and Control"
     },
-    "credential_access": {
+    "credential-access": {
       "id": "TA0006",
-      "name": "Credential Access",
-      "shortname": "credential-access"
+      "name": "Credential Access"
     },
-    "defense_impairment": {
+    "defense-impairment": {
       "id": "TA0112",
-      "name": "Defense Impairment",
-      "shortname": "defense-impairment"
+      "name": "Defense Impairment"
     },
     "discovery": {
       "id": "TA0007",
-      "name": "Discovery",
-      "shortname": "discovery"
+      "name": "Discovery"
     },
     "execution": {
       "id": "TA0002",
-      "name": "Execution",
-      "shortname": "execution"
+      "name": "Execution"
     },
     "exfiltration": {
       "id": "TA0010",
-      "name": "Exfiltration",
-      "shortname": "exfiltration"
+      "name": "Exfiltration"
     },
     "impact": {
       "id": "TA0040",
-      "name": "Impact",
-      "shortname": "impact"
+      "name": "Impact"
     },
-    "initial_access": {
+    "initial-access": {
       "id": "TA0001",
-      "name": "Initial Access",
-      "shortname": "initial-access"
+      "name": "Initial Access"
     },
-    "lateral_movement": {
+    "lateral-movement": {
       "id": "TA0008",
-      "name": "Lateral Movement",
-      "shortname": "lateral-movement"
+      "name": "Lateral Movement"
     },
     "none": {
       "id": "TA0000",
-      "name": "Unmapped / Forwarded Alerts",
-      "shortname": "none"
+      "name": "Unmapped / Forwarded Alerts"
     },
     "persistence": {
       "id": "TA0003",
-      "name": "Persistence",
-      "shortname": "persistence"
+      "name": "Persistence"
     },
-    "privilege_escalation": {
+    "privilege-escalation": {
       "id": "TA0004",
-      "name": "Privilege Escalation",
-      "shortname": "privilege-escalation"
+      "name": "Privilege Escalation"
     },
     "reconnaissance": {
       "id": "TA0043",
-      "name": "Reconnaissance",
-      "shortname": "reconnaissance"
+      "name": "Reconnaissance"
     },
-    "resource_development": {
+    "resource-development": {
       "id": "TA0042",
-      "name": "Resource Development",
-      "shortname": "resource-development"
+      "name": "Resource Development"
     },
     "stealth": {
       "id": "TA0005",
-      "name": "Stealth",
-      "shortname": "stealth"
+      "name": "Stealth"
     }
   },
   "techniques": {
@@ -92,79 +76,79 @@
     "T1001": {
       "name": "Data Obfuscation",
       "tactics": [
-        "command_and_control"
+        "command-and-control"
       ]
     },
     "T1001.001": {
       "name": "Junk Data",
       "tactics": [
-        "command_and_control"
+        "command-and-control"
       ]
     },
     "T1001.002": {
       "name": "Steganography",
       "tactics": [
-        "command_and_control"
+        "command-and-control"
       ]
     },
     "T1001.003": {
       "name": "Protocol or Service Impersonation",
       "tactics": [
-        "command_and_control"
+        "command-and-control"
       ]
     },
     "T1003": {
       "name": "OS Credential Dumping",
       "tactics": [
-        "credential_access"
+        "credential-access"
       ]
     },
     "T1003.001": {
       "name": "LSASS Memory",
       "tactics": [
-        "credential_access"
+        "credential-access"
       ]
     },
     "T1003.002": {
       "name": "Security Account Manager",
       "tactics": [
-        "credential_access"
+        "credential-access"
       ]
     },
     "T1003.003": {
       "name": "NTDS",
       "tactics": [
-        "credential_access"
+        "credential-access"
       ]
     },
     "T1003.004": {
       "name": "LSA Secrets",
       "tactics": [
-        "credential_access"
+        "credential-access"
       ]
     },
     "T1003.005": {
       "name": "Cached Domain Credentials",
       "tactics": [
-        "credential_access"
+        "credential-access"
       ]
     },
     "T1003.006": {
       "name": "DCSync",
       "tactics": [
-        "credential_access"
+        "credential-access"
       ]
     },
     "T1003.007": {
       "name": "Proc Filesystem",
       "tactics": [
-        "credential_access"
+        "credential-access"
       ]
     },
     "T1003.008": {
       "name": "/etc/passwd and /etc/shadow",
       "tactics": [
-        "credential_access"
+        "credential-access"
       ]
     },
     "T1005": {
@@ -188,7 +172,7 @@
     "T1008": {
       "name": "Fallback Channels",
       "tactics": [
-        "command_and_control"
+        "command-and-control"
       ]
     },
     "T1010": {
@@ -260,55 +244,55 @@
     "T1021": {
       "name": "Remote Services",
       "tactics": [
-        "lateral_movement"
+        "lateral-movement"
       ]
     },
     "T1021.001": {
       "name": "Remote Desktop Protocol",
       "tactics": [
-        "lateral_movement"
+        "lateral-movement"
       ]
     },
     "T1021.002": {
       "name": "SMB/Windows Admin Shares",
       "tactics": [
-        "lateral_movement"
+        "lateral-movement"
       ]
     },
     "T1021.003": {
       "name": "Distributed Component Object Model",
       "tactics": [
-        "lateral_movement"
+        "lateral-movement"
       ]
     },
     "T1021.004": {
       "name": "SSH",
       "tactics": [
-        "lateral_movement"
+        "lateral-movement"
       ]
     },
     "T1021.005": {
       "name": "VNC",
       "tactics": [
-        "lateral_movement"
+        "lateral-movement"
       ]
     },
     "T1021.006": {
       "name": "Windows Remote Management",
       "tactics": [
-        "lateral_movement"
+        "lateral-movement"
       ]
     },
     "T1021.007": {
       "name": "Cloud Services",
       "tactics": [
-        "lateral_movement"
+        "lateral-movement"
       ]
     },
     "T1021.008": {
       "name": "Direct Cloud VM Connections",
       "tactics": [
-        "lateral_movement"
+        "lateral-movement"
       ]
     },
     "T1025": {
@@ -531,42 +515,42 @@
       "name": "Boot or Logon Initialization Scripts",
       "tactics": [
         "persistence",
-        "privilege_escalation"
+        "privilege-escalation"
       ]
     },
     "T1037.001": {
       "name": "Logon Script (Windows)",
       "tactics": [
         "persistence",
-        "privilege_escalation"
+        "privilege-escalation"
       ]
     },
     "T1037.002": {
       "name": "Login Hook",
       "tactics": [
         "persistence",
-        "privilege_escalation"
+        "privilege-escalation"
       ]
     },
     "T1037.003": {
       "name": "Network Logon Script",
       "tactics": [
         "persistence",
-        "privilege_escalation"
+        "privilege-escalation"
       ]
     },
     "T1037.004": {
       "name": "RC Scripts",
       "tactics": [
         "persistence",
-        "privilege_escalation"
+        "privilege-escalation"
       ]
     },
     "T1037.005": {
       "name": "Startup Items",
       "tactics": [
         "persistence",
-        "privilege_escalation"
+        "privilege-escalation"
       ]
     },
     "T1039": {
@@ -578,7 +562,7 @@
     "T1040": {
       "name": "Network Sniffing",
       "tactics": [
-        "credential_access",
+        "credential-access",
         "discovery"
       ]
     },
@@ -647,7 +631,7 @@
       "tactics": [
         "execution",
         "persistence",
-        "privilege_escalation"
+        "privilege-escalation"
       ]
     },
     "T1053.002": {
@@ -655,7 +639,7 @@
       "tactics": [
         "execution",
         "persistence",
-        "privilege_escalation"
+        "privilege-escalation"
       ]
     },
     "T1053.003": {
@@ -663,7 +647,7 @@
       "tactics": [
         "execution",
         "persistence",
-        "privilege_escalation"
+        "privilege-escalation"
       ]
     },
     "T1053.005": {
@@ -671,7 +655,7 @@
       "tactics": [
         "execution",
         "persistence",
-        "privilege_escalation"
+        "privilege-escalation"
       ]
     },
     "T1053.006": {
@@ -679,7 +663,7 @@
       "tactics": [
         "execution",
         "persistence",
-        "privilege_escalation"
+        "privilege-escalation"
       ]
     },
     "T1053.007": {
@@ -687,97 +671,97 @@
       "tactics": [
         "execution",
         "persistence",
-        "privilege_escalation"
+        "privilege-escalation"
       ]
     },
     "T1055": {
       "name": "Process Injection",
       "tactics": [
-        "privilege_escalation",
+        "privilege-escalation",
         "stealth"
       ]
     },
     "T1055.001": {
       "name": "Dynamic-link Library Injection",
       "tactics": [
-        "privilege_escalation",
+        "privilege-escalation",
         "stealth"
       ]
     },
     "T1055.002": {
       "name": "Portable Executable Injection",
       "tactics": [
-        "privilege_escalation",
+        "privilege-escalation",
         "stealth"
       ]
     },
     "T1055.003": {
       "name": "Thread Execution Hijacking",
       "tactics": [
-        "privilege_escalation",
+        "privilege-escalation",
         "stealth"
       ]
     },
     "T1055.004": {
       "name": "Asynchronous Procedure Call",
       "tactics": [
-        "privilege_escalation",
+        "privilege-escalation",
         "stealth"
       ]
     },
     "T1055.005": {
       "name": "Thread Local Storage",
       "tactics": [
-        "privilege_escalation",
+        "privilege-escalation",
         "stealth"
       ]
     },
     "T1055.008": {
       "name": "Ptrace System Calls",
       "tactics": [
-        "privilege_escalation",
+        "privilege-escalation",
         "stealth"
       ]
     },
     "T1055.009": {
       "name": "Proc Memory",
       "tactics": [
-        "privilege_escalation",
+        "privilege-escalation",
         "stealth"
       ]
     },
     "T1055.011": {
       "name": "Extra Window Memory Injection",
       "tactics": [
-        "privilege_escalation",
+        "privilege-escalation",
         "stealth"
       ]
     },
     "T1055.012": {
       "name": "Process Hollowing",
       "tactics": [
-        "privilege_escalation",
+        "privilege-escalation",
         "stealth"
       ]
     },
     "T1055.013": {
       "name": "Process Doppelg\u00e4nging",
       "tactics": [
-        "privilege_escalation",
+        "privilege-escalation",
         "stealth"
       ]
     },
     "T1055.014": {
       "name": "VDSO Hijacking",
       "tactics": [
-        "privilege_escalation",
+        "privilege-escalation",
         "stealth"
       ]
     },
     "T1055.015": {
       "name": "ListPlanting",
       "tactics": [
-        "privilege_escalation",
+        "privilege-escalation",
         "stealth"
       ]
     },
@@ -785,35 +769,35 @@
       "name": "Input Capture",
       "tactics": [
         "collection",
-        "credential_access"
+        "credential-access"
       ]
     },
     "T1056.001": {
       "name": "Keylogging",
       "tactics": [
         "collection",
-        "credential_access"
+        "credential-access"
       ]
     },
     "T1056.002": {
       "name": "GUI Input Capture",
       "tactics": [
         "collection",
-        "credential_access"
+        "credential-access"
       ]
     },
     "T1056.003": {
       "name": "Web Portal Capture",
       "tactics": [
         "collection",
-        "credential_access"
+        "credential-access"
       ]
     },
     "T1056.004": {
       "name": "Credential API Hooking",
       "tactics": [
         "collection",
-        "credential_access"
+        "credential-access"
       ]
     },
     "T1057": {
@@ -909,7 +893,7 @@
     "T1068": {
       "name": "Exploitation for Privilege Escalation",
       "tactics": [
-        "privilege_escalation"
+        "privilege-escalation"
       ]
     },
     "T1069": {
@@ -993,44 +977,44 @@
     "T1071": {
       "name": "Application Layer Protocol",
       "tactics": [
-        "command_and_control"
+        "command-and-control"
       ]
     },
     "T1071.001": {
       "name": "Web Protocols",
       "tactics": [
-        "command_and_control"
+        "command-and-control"
       ]
     },
     "T1071.002": {
       "name": "File Transfer Protocols",
       "tactics": [
-        "command_and_control"
+        "command-and-control"
       ]
     },
     "T1071.003": {
       "name": "Mail Protocols",
       "tactics": [
-        "command_and_control"
+        "command-and-control"
       ]
     },
     "T1071.004": {
       "name": "DNS",
       "tactics": [
-        "command_and_control"
+        "command-and-control"
       ]
     },
     "T1071.005": {
       "name": "Publish/Subscribe Protocols",
       "tactics": [
-        "command_and_control"
+        "command-and-control"
       ]
     },
     "T1072": {
       "name": "Software Deployment Tools",
       "tactics": [
         "execution",
-        "lateral_movement"
+        "lateral-movement"
       ]
     },
     "T1074": {
@@ -1054,52 +1038,52 @@
     "T1078": {
       "name": "Valid Accounts",
       "tactics": [
-        "initial_access",
+        "initial-access",
         "persistence",
-        "privilege_escalation",
+        "privilege-escalation",
         "stealth"
       ]
     },
     "T1078.001": {
       "name": "Default Accounts",
       "tactics": [
-        "initial_access",
+        "initial-access",
         "persistence",
-        "privilege_escalation",
+        "privilege-escalation",
         "stealth"
       ]
     },
     "T1078.002": {
       "name": "Domain Accounts",
       "tactics": [
-        "initial_access",
+        "initial-access",
         "persistence",
-        "privilege_escalation",
+        "privilege-escalation",
         "stealth"
       ]
     },
     "T1078.003": {
       "name": "Local Accounts",
       "tactics": [
-        "initial_access",
+        "initial-access",
         "persistence",
-        "privilege_escalation",
+        "privilege-escalation",
         "stealth"
       ]
     },
     "T1078.004": {
       "name": "Cloud Accounts",
       "tactics": [
-        "initial_access",
+        "initial-access",
         "persistence",
-        "privilege_escalation",
+        "privilege-escalation",
         "stealth"
       ]
     },
     "T1080": {
       "name": "Taint Shared Content",
       "tactics": [
-        "lateral_movement"
+        "lateral-movement"
       ]
     },
     "T1082": {
@@ -1147,142 +1131,142 @@
     "T1090": {
       "name": "Proxy",
       "tactics": [
-        "command_and_control"
+        "command-and-control"
       ]
     },
     "T1090.001": {
       "name": "Internal Proxy",
       "tactics": [
-        "command_and_control"
+        "command-and-control"
       ]
     },
     "T1090.002": {
       "name": "External Proxy",
       "tactics": [
-        "command_and_control"
+        "command-and-control"
       ]
     },
     "T1090.003": {
       "name": "Multi-hop Proxy",
       "tactics": [
-        "command_and_control"
+        "command-and-control"
       ]
     },
     "T1090.004": {
       "name": "Domain Fronting",
       "tactics": [
-        "command_and_control"
+        "command-and-control"
       ]
     },
     "T1091": {
       "name": "Replication Through Removable Media",
       "tactics": [
-        "initial_access",
-        "lateral_movement"
+        "initial-access",
+        "lateral-movement"
       ]
     },
     "T1092": {
       "name": "Communication Through Removable Media",
       "tactics": [
-        "command_and_control"
+        "command-and-control"
       ]
     },
     "T1095": {
       "name": "Non-Application Layer Protocol",
       "tactics": [
-        "command_and_control"
+        "command-and-control"
       ]
     },
     "T1098": {
       "name": "Account Manipulation",
       "tactics": [
         "persistence",
-        "privilege_escalation"
+        "privilege-escalation"
       ]
     },
     "T1098.001": {
       "name": "Additional Cloud Credentials",
       "tactics": [
         "persistence",
-        "privilege_escalation"
+        "privilege-escalation"
       ]
     },
     "T1098.002": {
       "name": "Additional Email Delegate Permissions",
       "tactics": [
         "persistence",
-        "privilege_escalation"
+        "privilege-escalation"
       ]
     },
     "T1098.003": {
       "name": "Additional Cloud Roles",
       "tactics": [
         "persistence",
-        "privilege_escalation"
+        "privilege-escalation"
       ]
     },
     "T1098.004": {
       "name": "SSH Authorized Keys",
       "tactics": [
         "persistence",
-        "privilege_escalation"
+        "privilege-escalation"
       ]
     },
     "T1098.005": {
       "name": "Device Registration",
       "tactics": [
         "persistence",
-        "privilege_escalation"
+        "privilege-escalation"
       ]
     },
     "T1098.006": {
       "name": "Additional Container Cluster Roles",
       "tactics": [
         "persistence",
-        "privilege_escalation"
+        "privilege-escalation"
       ]
     },
     "T1098.007": {
       "name": "Additional Local or Domain Groups",
       "tactics": [
         "persistence",
-        "privilege_escalation"
+        "privilege-escalation"
       ]
     },
     "T1102": {
       "name": "Web Service",
       "tactics": [
-        "command_and_control"
+        "command-and-control"
       ]
     },
     "T1102.001": {
       "name": "Dead Drop Resolver",
       "tactics": [
-        "command_and_control"
+        "command-and-control"
       ]
     },
     "T1102.002": {
       "name": "Bidirectional Communication",
       "tactics": [
-        "command_and_control"
+        "command-and-control"
       ]
     },
     "T1102.003": {
       "name": "One-Way Communication",
       "tactics": [
-        "command_and_control"
+        "command-and-control"
       ]
     },
     "T1104": {
       "name": "Multi-Stage Channels",
       "tactics": [
-        "command_and_control"
+        "command-and-control"
       ]
     },
     "T1105": {
       "name": "Ingress Tool Transfer",
       "tactics": [
-        "command_and_control"
+        "command-and-control"
       ]
     },
     "T1106": {
@@ -1294,43 +1278,43 @@
     "T1110": {
       "name": "Brute Force",
       "tactics": [
-        "credential_access"
+        "credential-access"
       ]
     },
     "T1110.001": {
       "name": "Password Guessing",
       "tactics": [
-        "credential_access"
+        "credential-access"
       ]
     },
     "T1110.002": {
       "name": "Password Cracking",
       "tactics": [
-        "credential_access"
+        "credential-access"
       ]
     },
     "T1110.003": {
       "name": "Password Spraying",
       "tactics": [
-        "credential_access"
+        "credential-access"
       ]
     },
     "T1110.004": {
       "name": "Credential Stuffing",
       "tactics": [
-        "credential_access"
+        "credential-access"
       ]
     },
     "T1111": {
       "name": "Multi-Factor Authentication Interception",
       "tactics": [
-        "credential_access"
+        "credential-access"
       ]
     },
     "T1112": {
       "name": "Modify Registry",
       "tactics": [
-        "defense_impairment",
+        "defense-impairment",
         "persistence"
       ]
     },
@@ -1437,67 +1421,67 @@
     "T1132": {
       "name": "Data Encoding",
       "tactics": [
-        "command_and_control"
+        "command-and-control"
       ]
     },
     "T1132.001": {
       "name": "Standard Encoding",
       "tactics": [
-        "command_and_control"
+        "command-and-control"
       ]
     },
     "T1132.002": {
       "name": "Non-Standard Encoding",
       "tactics": [
-        "command_and_control"
+        "command-and-control"
       ]
     },
     "T1133": {
       "name": "External Remote Services",
       "tactics": [
-        "initial_access",
+        "initial-access",
         "persistence"
       ]
     },
     "T1134": {
       "name": "Access Token Manipulation",
       "tactics": [
-        "privilege_escalation",
+        "privilege-escalation",
         "stealth"
       ]
     },
     "T1134.001": {
       "name": "Token Impersonation/Theft",
       "tactics": [
-        "privilege_escalation",
+        "privilege-escalation",
         "stealth"
       ]
     },
     "T1134.002": {
       "name": "Create Process with Token",
       "tactics": [
-        "privilege_escalation",
+        "privilege-escalation",
         "stealth"
       ]
     },
     "T1134.003": {
       "name": "Make and Impersonate Token",
       "tactics": [
-        "privilege_escalation",
+        "privilege-escalation",
         "stealth"
       ]
     },
     "T1134.004": {
       "name": "Parent PID Spoofing",
       "tactics": [
-        "privilege_escalation",
+        "privilege-escalation",
         "stealth"
       ]
     },
     "T1134.005": {
       "name": "SID-History Injection",
       "tactics": [
-        "privilege_escalation",
+        "privilege-escalation",
         "stealth"
       ]
     },
@@ -1606,43 +1590,43 @@
     "T1187": {
       "name": "Forced Authentication",
       "tactics": [
-        "credential_access"
+        "credential-access"
       ]
     },
     "T1189": {
       "name": "Drive-by Compromise",
       "tactics": [
-        "initial_access"
+        "initial-access"
       ]
     },
     "T1190": {
       "name": "Exploit Public-Facing Application",
       "tactics": [
-        "initial_access"
+        "initial-access"
       ]
     },
     "T1195": {
       "name": "Supply Chain Compromise",
       "tactics": [
-        "initial_access"
+        "initial-access"
       ]
     },
     "T1195.001": {
       "name": "Compromise Software Dependencies and Development Tools",
       "tactics": [
-        "initial_access"
+        "initial-access"
       ]
     },
     "T1195.002": {
       "name": "Compromise Software Supply Chain",
       "tactics": [
-        "initial_access"
+        "initial-access"
       ]
     },
     "T1195.003": {
       "name": "Compromise Hardware Supply Chain",
       "tactics": [
-        "initial_access"
+        "initial-access"
       ]
     },
     "T1197": {
@@ -1656,13 +1640,13 @@
     "T1199": {
       "name": "Trusted Relationship",
       "tactics": [
-        "initial_access"
+        "initial-access"
       ]
     },
     "T1200": {
       "name": "Hardware Additions",
       "tactics": [
-        "initial_access"
+        "initial-access"
       ]
     },
     "T1201": {
@@ -1722,7 +1706,7 @@
     "T1205": {
       "name": "Traffic Signaling",
       "tactics": [
-        "command_and_control",
+        "command-and-control",
         "persistence",
         "stealth"
       ]
@@ -1730,7 +1714,7 @@
     "T1205.001": {
       "name": "Port Knocking",
       "tactics": [
-        "command_and_control",
+        "command-and-control",
         "persistence",
         "stealth"
       ]
@@ -1738,7 +1722,7 @@
     "T1205.002": {
       "name": "Socket Filters",
       "tactics": [
-        "command_and_control",
+        "command-and-control",
         "persistence",
         "stealth"
       ]
@@ -1746,13 +1730,13 @@
     "T1207": {
       "name": "Rogue Domain Controller",
       "tactics": [
-        "defense_impairment"
+        "defense-impairment"
       ]
     },
     "T1210": {
       "name": "Exploitation of Remote Services",
       "tactics": [
-        "lateral_movement"
+        "lateral-movement"
       ]
     },
     "T1211": {
@@ -1764,7 +1748,7 @@
     "T1212": {
       "name": "Exploitation for Credential Access",
       "tactics": [
-        "credential_access"
+        "credential-access"
       ]
     },
     "T1213": {
@@ -1926,25 +1910,25 @@
     "T1219": {
       "name": "Remote Access Tools",
       "tactics": [
-        "command_and_control"
+        "command-and-control"
       ]
     },
     "T1219.001": {
       "name": "IDE Tunneling",
       "tactics": [
-        "command_and_control"
+        "command-and-control"
       ]
     },
     "T1219.002": {
       "name": "Remote Desktop Software",
       "tactics": [
-        "command_and_control"
+        "command-and-control"
       ]
     },
     "T1219.003": {
       "name": "Remote Access Hardware",
       "tactics": [
-        "command_and_control"
+        "command-and-control"
       ]
     },
     "T1220": {
@@ -1962,19 +1946,19 @@
     "T1222": {
       "name": "File and Directory Permissions Modification",
       "tactics": [
-        "defense_impairment"
+        "defense-impairment"
       ]
     },
     "T1222.001": {
       "name": "Windows Permissions",
       "tactics": [
-        "defense_impairment"
+        "defense-impairment"
       ]
     },
     "T1222.002": {
       "name": "Linux and Mac Permissions",
       "tactics": [
-        "defense_impairment"
+        "defense-impairment"
       ]
     },
     "T1480": {
@@ -2004,22 +1988,22 @@
     "T1484": {
       "name": "Domain or Tenant Policy Modification",
       "tactics": [
-        "defense_impairment",
-        "privilege_escalation"
+        "defense-impairment",
+        "privilege-escalation"
       ]
     },
     "T1484.001": {
       "name": "Group Policy Modification",
       "tactics": [
-        "defense_impairment",
-        "privilege_escalation"
+        "defense-impairment",
+        "privilege-escalation"
       ]
     },
     "T1484.002": {
       "name": "Trust Modification",
       "tactics": [
-        "defense_impairment",
-        "privilege_escalation"
+        "defense-impairment",
+        "privilege-escalation"
       ]
     },
     "T1485": {
@@ -2257,7 +2241,7 @@
     "T1528": {
       "name": "Steal Application Access Token",
       "tactics": [
-        "credential_access"
+        "credential-access"
       ]
     },
     "T1529": {
@@ -2281,7 +2265,7 @@
     "T1534": {
       "name": "Internal Spearphishing",
       "tactics": [
-        "lateral_movement"
+        "lateral-movement"
       ]
     },
     "T1535": {
@@ -2305,7 +2289,7 @@
     "T1539": {
       "name": "Steal Web Session Cookie",
       "tactics": [
-        "credential_access"
+        "credential-access"
       ]
     },
     "T1542": {
@@ -2354,448 +2338,448 @@
       "name": "Create or Modify System Process",
       "tactics": [
         "persistence",
-        "privilege_escalation"
+        "privilege-escalation"
       ]
     },
     "T1543.001": {
       "name": "Launch Agent",
       "tactics": [
         "persistence",
-        "privilege_escalation"
+        "privilege-escalation"
       ]
     },
     "T1543.002": {
       "name": "Systemd Service",
       "tactics": [
         "persistence",
-        "privilege_escalation"
+        "privilege-escalation"
       ]
     },
     "T1543.003": {
       "name": "Windows Service",
       "tactics": [
         "persistence",
-        "privilege_escalation"
+        "privilege-escalation"
       ]
     },
     "T1543.004": {
       "name": "Launch Daemon",
       "tactics": [
         "persistence",
-        "privilege_escalation"
+        "privilege-escalation"
       ]
     },
     "T1543.005": {
       "name": "Container Service",
       "tactics": [
         "persistence",
-        "privilege_escalation"
+        "privilege-escalation"
       ]
     },
     "T1546": {
       "name": "Event Triggered Execution",
       "tactics": [
         "persistence",
-        "privilege_escalation"
+        "privilege-escalation"
       ]
     },
     "T1546.001": {
       "name": "Change Default File Association",
       "tactics": [
         "persistence",
-        "privilege_escalation"
+        "privilege-escalation"
       ]
     },
     "T1546.002": {
       "name": "Screensaver",
       "tactics": [
         "persistence",
-        "privilege_escalation"
+        "privilege-escalation"
       ]
     },
     "T1546.003": {
       "name": "Windows Management Instrumentation Event Subscription",
       "tactics": [
         "persistence",
-        "privilege_escalation"
+        "privilege-escalation"
       ]
     },
     "T1546.004": {
       "name": "Unix Shell Configuration Modification",
       "tactics": [
         "persistence",
-        "privilege_escalation"
+        "privilege-escalation"
       ]
     },
     "T1546.005": {
       "name": "Trap",
       "tactics": [
         "persistence",
-        "privilege_escalation"
+        "privilege-escalation"
       ]
     },
     "T1546.006": {
       "name": "LC_LOAD_DYLIB Addition",
       "tactics": [
         "persistence",
-        "privilege_escalation"
+        "privilege-escalation"
       ]
     },
     "T1546.007": {
       "name": "Netsh Helper DLL",
       "tactics": [
         "persistence",
-        "privilege_escalation"
+        "privilege-escalation"
       ]
     },
     "T1546.008": {
       "name": "Accessibility Features",
       "tactics": [
         "persistence",
-        "privilege_escalation"
+        "privilege-escalation"
       ]
     },
     "T1546.009": {
       "name": "AppCert DLLs",
       "tactics": [
         "persistence",
-        "privilege_escalation"
+        "privilege-escalation"
       ]
     },
     "T1546.010": {
       "name": "AppInit DLLs",
       "tactics": [
         "persistence",
-        "privilege_escalation"
+        "privilege-escalation"
       ]
     },
     "T1546.011": {
       "name": "Application Shimming",
       "tactics": [
         "persistence",
-        "privilege_escalation"
+        "privilege-escalation"
       ]
     },
     "T1546.012": {
       "name": "Image File Execution Options Injection",
       "tactics": [
         "persistence",
-        "privilege_escalation"
+        "privilege-escalation"
       ]
     },
     "T1546.013": {
       "name": "PowerShell Profile",
       "tactics": [
         "persistence",
-        "privilege_escalation"
+        "privilege-escalation"
       ]
     },
     "T1546.014": {
       "name": "Emond",
       "tactics": [
         "persistence",
-        "privilege_escalation"
+        "privilege-escalation"
       ]
     },
     "T1546.015": {
       "name": "Component Object Model Hijacking",
       "tactics": [
         "persistence",
-        "privilege_escalation"
+        "privilege-escalation"
       ]
     },
     "T1546.016": {
       "name": "Installer Packages",
       "tactics": [
         "persistence",
-        "privilege_escalation"
+        "privilege-escalation"
       ]
     },
     "T1546.017": {
       "name": "Udev Rules",
       "tactics": [
         "persistence",
-        "privilege_escalation"
+        "privilege-escalation"
       ]
     },
     "T1546.018": {
       "name": "Python Startup Hooks",
       "tactics": [
         "persistence",
-        "privilege_escalation"
+        "privilege-escalation"
       ]
     },
     "T1547": {
       "name": "Boot or Logon Autostart Execution",
       "tactics": [
         "persistence",
-        "privilege_escalation"
+        "privilege-escalation"
       ]
     },
     "T1547.001": {
       "name": "Registry Run Keys / Startup Folder",
       "tactics": [
         "persistence",
-        "privilege_escalation"
+        "privilege-escalation"
       ]
     },
     "T1547.002": {
       "name": "Authentication Package",
       "tactics": [
         "persistence",
-        "privilege_escalation"
+        "privilege-escalation"
       ]
     },
     "T1547.003": {
       "name": "Time Providers",
       "tactics": [
         "persistence",
-        "privilege_escalation"
+        "privilege-escalation"
       ]
     },
     "T1547.004": {
       "name": "Winlogon Helper DLL",
       "tactics": [
         "persistence",
-        "privilege_escalation"
+        "privilege-escalation"
       ]
     },
     "T1547.005": {
       "name": "Security Support Provider",
       "tactics": [
         "persistence",
-        "privilege_escalation"
+        "privilege-escalation"
       ]
     },
     "T1547.006": {
       "name": "Kernel Modules and Extensions",
       "tactics": [
         "persistence",
-        "privilege_escalation"
+        "privilege-escalation"
       ]
     },
     "T1547.007": {
       "name": "Re-opened Applications",
       "tactics": [
         "persistence",
-        "privilege_escalation"
+        "privilege-escalation"
       ]
     },
     "T1547.008": {
       "name": "LSASS Driver",
       "tactics": [
         "persistence",
-        "privilege_escalation"
+        "privilege-escalation"
       ]
     },
     "T1547.009": {
       "name": "Shortcut Modification",
       "tactics": [
         "persistence",
-        "privilege_escalation"
+        "privilege-escalation"
       ]
     },
     "T1547.010": {
       "name": "Port Monitors",
       "tactics": [
         "persistence",
-        "privilege_escalation"
+        "privilege-escalation"
       ]
     },
     "T1547.012": {
       "name": "Print Processors",
       "tactics": [
         "persistence",
-        "privilege_escalation"
+        "privilege-escalation"
       ]
     },
     "T1547.013": {
       "name": "XDG Autostart Entries",
       "tactics": [
         "persistence",
-        "privilege_escalation"
+        "privilege-escalation"
       ]
     },
     "T1547.014": {
       "name": "Active Setup",
       "tactics": [
         "persistence",
-        "privilege_escalation"
+        "privilege-escalation"
       ]
     },
     "T1547.015": {
       "name": "Login Items",
       "tactics": [
         "persistence",
-        "privilege_escalation"
+        "privilege-escalation"
       ]
     },
     "T1548": {
       "name": "Abuse Elevation Control Mechanism",
       "tactics": [
-        "privilege_escalation"
+        "privilege-escalation"
       ]
     },
     "T1548.001": {
       "name": "Setuid and Setgid",
       "tactics": [
-        "privilege_escalation"
+        "privilege-escalation"
       ]
     },
     "T1548.002": {
       "name": "Bypass User Account Control",
       "tactics": [
-        "privilege_escalation"
+        "privilege-escalation"
       ]
     },
     "T1548.003": {
       "name": "Sudo and Sudo Caching",
       "tactics": [
-        "privilege_escalation"
+        "privilege-escalation"
       ]
     },
     "T1548.004": {
       "name": "Elevated Execution with Prompt",
       "tactics": [
-        "privilege_escalation"
+        "privilege-escalation"
       ]
     },
     "T1548.005": {
       "name": "Temporary Elevated Cloud Access",
       "tactics": [
-        "privilege_escalation"
+        "privilege-escalation"
       ]
     },
     "T1548.006": {
       "name": "TCC Manipulation",
       "tactics": [
-        "privilege_escalation"
+        "privilege-escalation"
       ]
     },
     "T1550": {
       "name": "Use Alternate Authentication Material",
       "tactics": [
-        "lateral_movement"
+        "lateral-movement"
       ]
     },
     "T1550.001": {
       "name": "Application Access Token",
       "tactics": [
-        "lateral_movement"
+        "lateral-movement"
       ]
     },
     "T1550.002": {
       "name": "Pass the Hash",
       "tactics": [
-        "lateral_movement"
+        "lateral-movement"
       ]
     },
     "T1550.003": {
       "name": "Pass the Ticket",
       "tactics": [
-        "lateral_movement"
+        "lateral-movement"
       ]
     },
     "T1550.004": {
       "name": "Web Session Cookie",
       "tactics": [
-        "lateral_movement"
+        "lateral-movement"
       ]
     },
     "T1552": {
       "name": "Unsecured Credentials",
       "tactics": [
-        "credential_access"
+        "credential-access"
       ]
     },
     "T1552.001": {
       "name": "Credentials In Files",
       "tactics": [
-        "credential_access"
+        "credential-access"
       ]
     },
     "T1552.002": {
       "name": "Credentials in Registry",
       "tactics": [
-        "credential_access"
+        "credential-access"
       ]
     },
     "T1552.003": {
       "name": "Shell History",
       "tactics": [
-        "credential_access"
+        "credential-access"
       ]
     },
     "T1552.004": {
       "name": "Private Keys",
       "tactics": [
-        "credential_access"
+        "credential-access"
       ]
     },
     "T1552.005": {
       "name": "Cloud Instance Metadata API",
       "tactics": [
-        "credential_access"
+        "credential-access"
       ]
     },
     "T1552.006": {
       "name": "Group Policy Preferences",
       "tactics": [
-        "credential_access"
+        "credential-access"
       ]
     },
     "T1552.007": {
       "name": "Container API",
       "tactics": [
-        "credential_access"
+        "credential-access"
       ]
     },
     "T1552.008": {
       "name": "Chat Messages",
       "tactics": [
-        "credential_access"
+        "credential-access"
       ]
     },
     "T1553": {
       "name": "Subvert Trust Controls",
       "tactics": [
-        "defense_impairment"
+        "defense-impairment"
       ]
     },
     "T1553.001": {
       "name": "Gatekeeper Bypass",
       "tactics": [
-        "defense_impairment"
+        "defense-impairment"
       ]
     },
     "T1553.002": {
       "name": "Code Signing",
       "tactics": [
-        "defense_impairment"
+        "defense-impairment"
       ]
     },
     "T1553.003": {
       "name": "SIP and Trust Provider Hijacking",
       "tactics": [
-        "defense_impairment"
+        "defense-impairment"
       ]
     },
     "T1553.004": {
       "name": "Install Root Certificate",
       "tactics": [
-        "defense_impairment"
+        "defense-impairment"
       ]
     },
     "T1553.005": {
       "name": "Mark-of-the-Web Bypass",
       "tactics": [
-        "defense_impairment"
+        "defense-impairment"
       ]
     },
     "T1553.006": {
       "name": "Code Signing Policy Modification",
       "tactics": [
-        "defense_impairment"
+        "defense-impairment"
       ]
     },
     "T1554": {
@@ -2807,122 +2791,122 @@
     "T1555": {
       "name": "Credentials from Password Stores",
       "tactics": [
-        "credential_access"
+        "credential-access"
       ]
     },
     "T1555.001": {
       "name": "Keychain",
       "tactics": [
-        "credential_access"
+        "credential-access"
       ]
     },
     "T1555.002": {
       "name": "Securityd Memory",
       "tactics": [
-        "credential_access"
+        "credential-access"
       ]
     },
     "T1555.003": {
       "name": "Credentials from Web Browsers",
       "tactics": [
-        "credential_access"
+        "credential-access"
       ]
     },
     "T1555.004": {
       "name": "Windows Credential Manager",
       "tactics": [
-        "credential_access"
+        "credential-access"
       ]
     },
     "T1555.005": {
       "name": "Password Managers",
       "tactics": [
-        "credential_access"
+        "credential-access"
       ]
     },
     "T1555.006": {
       "name": "Cloud Secrets Management Stores",
       "tactics": [
-        "credential_access"
+        "credential-access"
       ]
     },
     "T1556": {
       "name": "Modify Authentication Process",
       "tactics": [
-        "credential_access",
-        "defense_impairment",
+        "credential-access",
+        "defense-impairment",
         "persistence"
       ]
     },
     "T1556.001": {
       "name": "Domain Controller Authentication",
       "tactics": [
-        "credential_access",
-        "defense_impairment",
+        "credential-access",
+        "defense-impairment",
         "persistence"
       ]
     },
     "T1556.002": {
       "name": "Password Filter DLL",
       "tactics": [
-        "credential_access",
-        "defense_impairment",
+        "credential-access",
+        "defense-impairment",
         "persistence"
       ]
     },
     "T1556.003": {
       "name": "Pluggable Authentication Modules",
       "tactics": [
-        "credential_access",
-        "defense_impairment",
+        "credential-access",
+        "defense-impairment",
         "persistence"
       ]
     },
     "T1556.004": {
       "name": "Network Device Authentication",
       "tactics": [
-        "credential_access",
-        "defense_impairment",
+        "credential-access",
+        "defense-impairment",
         "persistence"
       ]
     },
     "T1556.005": {
       "name": "Reversible Encryption",
       "tactics": [
-        "credential_access",
-        "defense_impairment",
+        "credential-access",
+        "defense-impairment",
         "persistence"
       ]
     },
     "T1556.006": {
       "name": "Multi-Factor Authentication",
       "tactics": [
-        "credential_access",
-        "defense_impairment",
+        "credential-access",
+        "defense-impairment",
         "persistence"
       ]
     },
     "T1556.007": {
       "name": "Hybrid Identity",
       "tactics": [
-        "credential_access",
-        "defense_impairment",
+        "credential-access",
+        "defense-impairment",
         "persistence"
       ]
     },
     "T1556.008": {
       "name": "Network Provider DLL",
       "tactics": [
-        "credential_access",
-        "defense_impairment",
+        "credential-access",
+        "defense-impairment",
         "persistence"
       ]
     },
     "T1556.009": {
       "name": "Conditional Access Policies",
       "tactics": [
-        "credential_access",
-        "defense_impairment",
+        "credential-access",
+        "defense-impairment",
         "persistence"
       ]
     },
@@ -2930,71 +2914,71 @@
       "name": "Adversary-in-the-Middle",
       "tactics": [
         "collection",
-        "credential_access"
+        "credential-access"
       ]
     },
     "T1557.001": {
       "name": "Name Resolution Poisoning and SMB Relay",
       "tactics": [
         "collection",
-        "credential_access"
+        "credential-access"
       ]
     },
     "T1557.002": {
       "name": "ARP Cache Poisoning",
       "tactics": [
         "collection",
-        "credential_access"
+        "credential-access"
       ]
     },
     "T1557.003": {
       "name": "DHCP Spoofing",
       "tactics": [
         "collection",
-        "credential_access"
+        "credential-access"
       ]
     },
     "T1557.004": {
       "name": "Evil Twin",
       "tactics": [
         "collection",
-        "credential_access"
+        "credential-access"
       ]
     },
     "T1558": {
       "name": "Steal or Forge Kerberos Tickets",
       "tactics": [
-        "credential_access"
+        "credential-access"
       ]
     },
     "T1558.001": {
       "name": "Golden Ticket",
       "tactics": [
-        "credential_access"
+        "credential-access"
       ]
     },
     "T1558.002": {
       "name": "Silver Ticket",
       "tactics": [
-        "credential_access"
+        "credential-access"
       ]
     },
     "T1558.003": {
       "name": "Kerberoasting",
       "tactics": [
-        "credential_access"
+        "credential-access"
       ]
     },
     "T1558.004": {
       "name": "AS-REP Roasting",
       "tactics": [
-        "credential_access"
+        "credential-access"
       ]
     },
     "T1558.005": {
       "name": "Ccache Files",
       "tactics": [
-        "credential_access"
+        "credential-access"
       ]
     },
     "T1559": {
@@ -3066,19 +3050,19 @@
     "T1563": {
       "name": "Remote Service Session Hijacking",
       "tactics": [
-        "lateral_movement"
+        "lateral-movement"
       ]
     },
     "T1563.001": {
       "name": "SSH Hijacking",
       "tactics": [
-        "lateral_movement"
+        "lateral-movement"
       ]
     },
     "T1563.002": {
       "name": "RDP Hijacking",
       "tactics": [
-        "lateral_movement"
+        "lateral-movement"
       ]
     },
     "T1564": {
@@ -3198,31 +3182,31 @@
     "T1566": {
       "name": "Phishing",
       "tactics": [
-        "initial_access"
+        "initial-access"
       ]
     },
     "T1566.001": {
       "name": "Spearphishing Attachment",
       "tactics": [
-        "initial_access"
+        "initial-access"
       ]
     },
     "T1566.002": {
       "name": "Spearphishing Link",
       "tactics": [
-        "initial_access"
+        "initial-access"
       ]
     },
     "T1566.003": {
       "name": "Spearphishing via Service",
       "tactics": [
-        "initial_access"
+        "initial-access"
       ]
     },
     "T1566.004": {
       "name": "Spearphishing Voice",
       "tactics": [
-        "initial_access"
+        "initial-access"
       ]
     },
     "T1567": {
@@ -3258,25 +3242,25 @@
     "T1568": {
       "name": "Dynamic Resolution",
       "tactics": [
-        "command_and_control"
+        "command-and-control"
       ]
     },
     "T1568.001": {
       "name": "Fast Flux DNS",
       "tactics": [
-        "command_and_control"
+        "command-and-control"
       ]
     },
     "T1568.002": {
       "name": "Domain Generation Algorithms",
       "tactics": [
-        "command_and_control"
+        "command-and-control"
       ]
     },
     "T1568.003": {
       "name": "DNS Calculation",
       "tactics": [
-        "command_and_control"
+        "command-and-control"
       ]
     },
     "T1569": {
@@ -3306,37 +3290,37 @@
     "T1570": {
       "name": "Lateral Tool Transfer",
       "tactics": [
-        "lateral_movement"
+        "lateral-movement"
       ]
     },
     "T1571": {
       "name": "Non-Standard Port",
       "tactics": [
-        "command_and_control"
+        "command-and-control"
       ]
     },
     "T1572": {
       "name": "Protocol Tunneling",
       "tactics": [
-        "command_and_control"
+        "command-and-control"
       ]
     },
     "T1573": {
       "name": "Encrypted Channel",
       "tactics": [
-        "command_and_control"
+        "command-and-control"
       ]
     },
     "T1573.001": {
       "name": "Symmetric Cryptography",
       "tactics": [
-        "command_and_control"
+        "command-and-control"
       ]
     },
     "T1573.002": {
       "name": "Asymmetric Cryptography",
       "tactics": [
-        "command_and_control"
+        "command-and-control"
       ]
     },
     "T1574": {
@@ -3433,37 +3417,37 @@
     "T1578": {
       "name": "Modify Cloud Compute Infrastructure",
       "tactics": [
-        "defense_impairment"
+        "defense-impairment"
       ]
     },
     "T1578.001": {
       "name": "Create Snapshot",
       "tactics": [
-        "defense_impairment"
+        "defense-impairment"
       ]
     },
     "T1578.002": {
       "name": "Create Cloud Instance",
       "tactics": [
-        "defense_impairment"
+        "defense-impairment"
       ]
     },
     "T1578.003": {
       "name": "Delete Cloud Instance",
       "tactics": [
-        "defense_impairment"
+        "defense-impairment"
       ]
     },
     "T1578.004": {
       "name": "Revert Cloud Instance",
       "tactics": [
-        "defense_impairment"
+        "defense-impairment"
       ]
     },
     "T1578.005": {
       "name": "Modify Cloud Compute Configurations",
       "tactics": [
-        "defense_impairment"
+        "defense-impairment"
       ]
     },
     "T1580": {
@@ -3475,235 +3459,235 @@
     "T1583": {
       "name": "Acquire Infrastructure",
       "tactics": [
-        "resource_development"
+        "resource-development"
       ]
     },
     "T1583.001": {
       "name": "Domains",
       "tactics": [
-        "resource_development"
+        "resource-development"
       ]
     },
     "T1583.002": {
       "name": "DNS Server",
       "tactics": [
-        "resource_development"
+        "resource-development"
       ]
     },
     "T1583.003": {
       "name": "Virtual Private Server",
       "tactics": [
-        "resource_development"
+        "resource-development"
       ]
     },
     "T1583.004": {
       "name": "Server",
       "tactics": [
-        "resource_development"
+        "resource-development"
       ]
     },
     "T1583.005": {
       "name": "Botnet",
       "tactics": [
-        "resource_development"
+        "resource-development"
       ]
     },
     "T1583.006": {
       "name": "Web Services",
       "tactics": [
-        "resource_development"
+        "resource-development"
       ]
     },
     "T1583.007": {
       "name": "Serverless",
       "tactics": [
-        "resource_development"
+        "resource-development"
       ]
     },
     "T1583.008": {
       "name": "Malvertising",
       "tactics": [
-        "resource_development"
+        "resource-development"
       ]
     },
     "T1584": {
       "name": "Compromise Infrastructure",
       "tactics": [
-        "resource_development"
+        "resource-development"
       ]
     },
     "T1584.001": {
       "name": "Domains",
       "tactics": [
-        "resource_development"
+        "resource-development"
       ]
     },
     "T1584.002": {
       "name": "DNS Server",
       "tactics": [
-        "resource_development"
+        "resource-development"
       ]
     },
     "T1584.003": {
       "name": "Virtual Private Server",
       "tactics": [
-        "resource_development"
+        "resource-development"
       ]
     },
     "T1584.004": {
       "name": "Server",
       "tactics": [
-        "resource_development"
+        "resource-development"
       ]
     },
     "T1584.005": {
       "name": "Botnet",
       "tactics": [
-        "resource_development"
+        "resource-development"
       ]
     },
     "T1584.006": {
       "name": "Web Services",
       "tactics": [
-        "resource_development"
+        "resource-development"
       ]
     },
     "T1584.007": {
       "name": "Serverless",
       "tactics": [
-        "resource_development"
+        "resource-development"
       ]
     },
     "T1584.008": {
       "name": "Network Devices",
       "tactics": [
-        "resource_development"
+        "resource-development"
       ]
     },
     "T1585": {
       "name": "Establish Accounts",
       "tactics": [
-        "resource_development"
+        "resource-development"
       ]
     },
     "T1585.001": {
       "name": "Social Media Accounts",
       "tactics": [
-        "resource_development"
+        "resource-development"
       ]
     },
     "T1585.002": {
       "name": "Email Accounts",
       "tactics": [
-        "resource_development"
+        "resource-development"
       ]
     },
     "T1585.003": {
       "name": "Cloud Accounts",
       "tactics": [
-        "resource_development"
+        "resource-development"
       ]
     },
     "T1586": {
       "name": "Compromise Accounts",
       "tactics": [
-        "resource_development"
+        "resource-development"
       ]
     },
     "T1586.001": {
       "name": "Social Media Accounts",
       "tactics": [
-        "resource_development"
+        "resource-development"
       ]
     },
     "T1586.002": {
       "name": "Email Accounts",
       "tactics": [
-        "resource_development"
+        "resource-development"
       ]
     },
     "T1586.003": {
       "name": "Cloud Accounts",
       "tactics": [
-        "resource_development"
+        "resource-development"
       ]
     },
     "T1587": {
       "name": "Develop Capabilities",
       "tactics": [
-        "resource_development"
+        "resource-development"
       ]
     },
     "T1587.001": {
       "name": "Malware",
       "tactics": [
-        "resource_development"
+        "resource-development"
       ]
     },
     "T1587.002": {
       "name": "Code Signing Certificates",
       "tactics": [
-        "resource_development"
+        "resource-development"
       ]
     },
     "T1587.003": {
       "name": "Digital Certificates",
       "tactics": [
-        "resource_development"
+        "resource-development"
       ]
     },
     "T1587.004": {
       "name": "Exploits",
       "tactics": [
-        "resource_development"
+        "resource-development"
       ]
     },
     "T1588": {
       "name": "Obtain Capabilities",
       "tactics": [
-        "resource_development"
+        "resource-development"
       ]
     },
     "T1588.001": {
       "name": "Malware",
       "tactics": [
-        "resource_development"
+        "resource-development"
       ]
     },
     "T1588.002": {
       "name": "Tool",
       "tactics": [
-        "resource_development"
+        "resource-development"
       ]
     },
     "T1588.003": {
       "name": "Code Signing Certificates",
       "tactics": [
-        "resource_development"
+        "resource-development"
       ]
     },
     "T1588.004": {
       "name": "Digital Certificates",
       "tactics": [
-        "resource_development"
+        "resource-development"
       ]
     },
     "T1588.005": {
       "name": "Exploits",
       "tactics": [
-        "resource_development"
+        "resource-development"
       ]
     },
     "T1588.006": {
       "name": "Vulnerabilities",
       "tactics": [
-        "resource_development"
+        "resource-development"
       ]
     },
     "T1588.007": {
       "name": "Artificial Intelligence",
       "tactics": [
-        "resource_development"
+        "resource-development"
       ]
     },
     "T1589": {
@@ -3973,49 +3957,49 @@
     "T1599": {
       "name": "Network Boundary Bridging",
       "tactics": [
-        "defense_impairment"
+        "defense-impairment"
       ]
     },
     "T1599.001": {
       "name": "Network Address Translation Traversal",
       "tactics": [
-        "defense_impairment"
+        "defense-impairment"
       ]
     },
     "T1600": {
       "name": "Weaken Encryption",
       "tactics": [
-        "defense_impairment"
+        "defense-impairment"
       ]
     },
     "T1600.001": {
       "name": "Reduce Key Space",
       "tactics": [
-        "defense_impairment"
+        "defense-impairment"
       ]
     },
     "T1600.002": {
       "name": "Disable Crypto Hardware",
       "tactics": [
-        "defense_impairment"
+        "defense-impairment"
       ]
     },
     "T1601": {
       "name": "Modify System Image",
       "tactics": [
-        "defense_impairment"
+        "defense-impairment"
       ]
     },
     "T1601.001": {
       "name": "Patch System Image",
       "tactics": [
-        "defense_impairment"
+        "defense-impairment"
       ]
     },
     "T1601.002": {
       "name": "Downgrade System Image",
       "tactics": [
-        "defense_impairment"
+        "defense-impairment"
       ]
     },
     "T1602": {
@@ -4039,61 +4023,61 @@
     "T1606": {
       "name": "Forge Web Credentials",
       "tactics": [
-        "credential_access"
+        "credential-access"
       ]
     },
     "T1606.001": {
       "name": "Web Cookies",
       "tactics": [
-        "credential_access"
+        "credential-access"
       ]
     },
     "T1606.002": {
       "name": "SAML Tokens",
       "tactics": [
-        "credential_access"
+        "credential-access"
       ]
     },
     "T1608": {
       "name": "Stage Capabilities",
       "tactics": [
-        "resource_development"
+        "resource-development"
       ]
     },
     "T1608.001": {
       "name": "Upload Malware",
       "tactics": [
-        "resource_development"
+        "resource-development"
       ]
     },
     "T1608.002": {
       "name": "Upload Tool",
       "tactics": [
-        "resource_development"
+        "resource-development"
       ]
     },
     "T1608.003": {
       "name": "Install Digital Certificate",
       "tactics": [
-        "resource_development"
+        "resource-development"
       ]
     },
     "T1608.004": {
       "name": "Drive-by Target",
       "tactics": [
-        "resource_development"
+        "resource-development"
       ]
     },
     "T1608.005": {
       "name": "Link Target",
       "tactics": [
-        "resource_development"
+        "resource-development"
       ]
     },
     "T1608.006": {
       "name": "SEO Poisoning",
       "tactics": [
-        "resource_development"
+        "resource-development"
       ]
     },
     "T1609": {
@@ -4111,7 +4095,7 @@
     "T1611": {
       "name": "Escape to Host",
       "tactics": [
-        "privilege_escalation"
+        "privilege-escalation"
       ]
     },
     "T1612": {
@@ -4159,7 +4143,7 @@
     "T1621": {
       "name": "Multi-Factor Authentication Request Generation",
       "tactics": [
-        "credential_access"
+        "credential-access"
       ]
     },
     "T1622": {
@@ -4172,7 +4156,7 @@
     "T1647": {
       "name": "Plist File Modification",
       "tactics": [
-        "defense_impairment"
+        "defense-impairment"
       ]
     },
     "T1648": {
@@ -4184,13 +4168,13 @@
     "T1649": {
       "name": "Steal or Forge Authentication Certificates",
       "tactics": [
-        "credential_access"
+        "credential-access"
       ]
     },
     "T1650": {
       "name": "Acquire Access",
       "tactics": [
-        "resource_development"
+        "resource-development"
       ]
     },
     "T1651": {
@@ -4226,20 +4210,20 @@
     "T1659": {
       "name": "Content Injection",
       "tactics": [
-        "command_and_control",
-        "initial_access"
+        "command-and-control",
+        "initial-access"
       ]
     },
     "T1665": {
       "name": "Hide Infrastructure",
       "tactics": [
-        "command_and_control"
+        "command-and-control"
       ]
     },
     "T1666": {
       "name": "Modify Cloud Resource Hierarchy",
       "tactics": [
-        "defense_impairment"
+        "defense-impairment"
       ]
     },
     "T1667": {
@@ -4257,7 +4241,7 @@
     "T1669": {
       "name": "Wi-Fi Networks",
       "tactics": [
-        "initial_access"
+        "initial-access"
       ]
     },
     "T1671": {
@@ -4323,19 +4307,19 @@
     "T1683": {
       "name": "Generate Content",
       "tactics": [
-        "resource_development"
+        "resource-development"
       ]
     },
     "T1683.001": {
       "name": "Written Content",
       "tactics": [
-        "resource_development"
+        "resource-development"
       ]
     },
     "T1683.002": {
       "name": "Audio-Visual Content",
       "tactics": [
-        "resource_development"
+        "resource-development"
       ]
     },
     "T1684": {
@@ -4359,91 +4343,91 @@
     "T1685": {
       "name": "Disable or Modify Tools",
       "tactics": [
-        "defense_impairment"
+        "defense-impairment"
       ]
     },
     "T1685.001": {
       "name": "Disable or Modify Windows Event Log",
       "tactics": [
-        "defense_impairment"
+        "defense-impairment"
       ]
     },
     "T1685.002": {
       "name": "Disable or Modify Cloud Log",
       "tactics": [
-        "defense_impairment"
+        "defense-impairment"
       ]
     },
     "T1685.003": {
       "name": "Modify or Spoof Tool UI",
       "tactics": [
-        "defense_impairment"
+        "defense-impairment"
       ]
     },
     "T1685.004": {
       "name": "Disable or Modify Linux Audit System Log",
       "tactics": [
-        "defense_impairment"
+        "defense-impairment"
       ]
     },
     "T1685.005": {
       "name": "Clear Windows Event Logs",
       "tactics": [
-        "defense_impairment"
+        "defense-impairment"
       ]
     },
     "T1685.006": {
       "name": "Clear Linux or Mac System Logs",
       "tactics": [
-        "defense_impairment"
+        "defense-impairment"
       ]
     },
     "T1686": {
       "name": "Disable or Modify System Firewall",
       "tactics": [
-        "defense_impairment"
+        "defense-impairment"
       ]
     },
     "T1686.001": {
       "name": "Cloud Firewall",
       "tactics": [
-        "defense_impairment"
+        "defense-impairment"
       ]
     },
     "T1686.002": {
       "name": "Network Device Firewall",
       "tactics": [
-        "defense_impairment"
+        "defense-impairment"
       ]
     },
     "T1686.003": {
       "name": "Windows Host Firewall",
       "tactics": [
-        "defense_impairment"
+        "defense-impairment"
       ]
     },
     "T1687": {
       "name": "Exploitation for Defense Impairment",
       "tactics": [
-        "defense_impairment"
+        "defense-impairment"
       ]
     },
     "T1688": {
       "name": "Safe Mode Boot",
       "tactics": [
-        "defense_impairment"
+        "defense-impairment"
       ]
     },
     "T1689": {
       "name": "Downgrade Attack",
       "tactics": [
-        "defense_impairment"
+        "defense-impairment"
       ]
     },
     "T1690": {
       "name": "Prevent Command History Logging",
       "tactics": [
-        "defense_impairment"
+        "defense-impairment"
       ]
     }
   }

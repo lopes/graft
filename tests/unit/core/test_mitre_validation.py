@@ -23,11 +23,11 @@ def test_valid_mitre_mapping_passes(mitre_validator: MitreValidator) -> None:
 
 def test_unknown_tactic_rejected(mitre_validator: MitreValidator) -> None:
     mitre_data = {
-        "invalid_tactic": ["T1059.001"],
+        "invalid-tactic": ["T1059.001"],
     }
     errors = mitre_validator.validate(mitre_data)
     assert len(errors) == 1
-    assert errors[0].tactic == "invalid_tactic"
+    assert errors[0].tactic == "invalid-tactic"
     assert "Unknown MITRE tactic" in errors[0].message
     assert mitre_validator.is_valid(mitre_data) is False
 
@@ -46,15 +46,15 @@ def test_unknown_technique_rejected(mitre_validator: MitreValidator) -> None:
 def test_technique_wrong_tactic_rejected_with_suggestion(
     mitre_validator: MitreValidator,
 ) -> None:
-    # T1059.001 (PowerShell) belongs to execution, not initial_access
+    # T1059.001 (PowerShell) belongs to execution, not initial-access
     mitre_data = {
-        "initial_access": ["T1059.001"],
+        "initial-access": ["T1059.001"],
     }
     errors = mitre_validator.validate(mitre_data)
     assert len(errors) == 1
-    assert errors[0].tactic == "initial_access"
+    assert errors[0].tactic == "initial-access"
     assert errors[0].technique == "T1059.001"
-    assert "does not belong to tactic 'initial_access'" in errors[0].message
+    assert "does not belong to tactic 'initial-access'" in errors[0].message
     assert "execution" in errors[0].message
     assert mitre_validator.is_valid(mitre_data) is False
 
@@ -83,14 +83,15 @@ def test_unmapped_forwarder_technique_on_real_tactic_rejected(
 def test_mitre_v192_stealth_and_defense_impairment(mitre_validator: MitreValidator) -> None:
     assert mitre_validator.version == "19.2"
     assert "stealth" in mitre_validator.tactics
-    assert "defense_impairment" in mitre_validator.tactics
-    assert mitre_validator.tactics["stealth"]["id"] == "TA0005"
-    assert mitre_validator.tactics["stealth"]["shortname"] == "stealth"
-    assert mitre_validator.tactics["defense_impairment"]["id"] == "TA0112"
-    assert mitre_validator.tactics["defense_impairment"]["shortname"] == "defense-impairment"
+    assert "defense-impairment" in mitre_validator.tactics
+    assert mitre_validator.tactics["stealth"] == {"id": "TA0005", "name": "Stealth"}
+    assert mitre_validator.tactics["defense-impairment"] == {
+        "id": "TA0112",
+        "name": "Defense Impairment",
+    }
 
-    # T1685 belongs to defense_impairment
-    valid_data = {"defense_impairment": ["T1685"]}
+    # T1685 belongs to defense-impairment
+    valid_data = {"defense-impairment": ["T1685"]}
     assert mitre_validator.is_valid(valid_data) is True
 
 
@@ -123,12 +124,18 @@ def test_parse_attack_stix_bundle() -> None:
 
     result = parse_attack_stix_bundle(sample_stix, version="19.2")
     assert result["version"] == "19.2"
-    assert "initial_access" in result["tactics"]
-    assert result["tactics"]["initial_access"]["id"] == "TA0001"
-    assert result["tactics"]["initial_access"]["shortname"] == "initial-access"
+    assert "initial-access" in result["tactics"]
+    assert result["tactics"]["initial-access"] == {
+        "id": "TA0001",
+        "name": "Initial Access",
+    }
     assert "none" in result["tactics"]
+    assert result["tactics"]["none"] == {
+        "id": "TA0000",
+        "name": "Unmapped / Forwarded Alerts",
+    }
     assert "T1566.002" in result["techniques"]
-    assert result["techniques"]["T1566.002"]["tactics"] == ["initial_access"]
+    assert result["techniques"]["T1566.002"]["tactics"] == ["initial-access"]
     assert "T0000" in result["techniques"]
 
 

@@ -122,7 +122,7 @@ def test_load_rule_mitre_validation_failure() -> None:
   name: "rule_test"
   description: "Test rule description"
   mitre:
-    initial_access:
+    initial-access:
       - "T1059.001"
 logic: |
   events:

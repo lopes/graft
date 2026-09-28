@@ -5,7 +5,7 @@ metadata:
   authors:
     - "Joe Lopes <lopes.id>"
   mitre:
-    initial_access:
+    initial-access:
       - "T1566.002"
   tags:
     - "google_workspace"

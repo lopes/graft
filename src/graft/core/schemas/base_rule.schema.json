@@ -56,7 +56,7 @@
         "mitre": {
           "type": "object",
           "propertyNames": {
-            "pattern": "^[a-z0-9_]+$"
+            "pattern": "^[a-z0-9-]+$"
           },
           "additionalProperties": {
             "type": "array",

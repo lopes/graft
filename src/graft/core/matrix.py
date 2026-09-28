@@ -38,26 +38,22 @@ class MatrixCoverageReport:
     tactic_coverages: list[TechniqueTacticCoverage]
 
 
-def _load_mitre_taxonomy() -> tuple[str, dict[str, dict[str, str]], dict[str, dict[str, Any]]]:
+def _load_mitre_taxonomy() -> dict[str, dict[str, Any]]:
     try:
         resource = importlib.resources.files("graft.data").joinpath("mitre_attack.json")
         content = resource.read_text(encoding="utf-8")
         data: dict[str, Any] = json.loads(content)
-        version = str(data.get("version", "19.2"))
-        tactics: dict[str, dict[str, str]] = data.get("tactics", {})
         techniques: dict[str, dict[str, Any]] = data.get("techniques", {})
-        return version, tactics, techniques
+        return techniques
     except (OSError, ValueError, TypeError):
-        return "19.2", {}, {}
+        return {}
 
 
 def calculate_mitre_coverage(
     rules: Sequence[RuleEnvelope | tuple[RuleEnvelope, str, Path | str | None]],
     matrix_data: dict[str, dict[str, Any]] | None = None,
 ) -> MatrixCoverageReport:
-    _version, tactics_db, techniques_db = _load_mitre_taxonomy()
-    if matrix_data is not None:
-        techniques_db = matrix_data
+    techniques_db = matrix_data if matrix_data is not None else _load_mitre_taxonomy()
 
     # Normalize rules input
     normalized: list[tuple[RuleEnvelope, str, str | None]] = []
@@ -90,15 +86,12 @@ def calculate_mitre_coverage(
             or rule.runbook.response.strip()
         )
 
-        for tactic_slug, tech_list in rule.metadata.mitre.items():
-            tactic_info = tactics_db.get(tactic_slug, {})
-            shortname = tactic_info.get("shortname", tactic_slug.replace("_", "-"))
-
+        for tactic, tech_list in rule.metadata.mitre.items():
             for tech_id in tech_list:
                 tech_rules_map.setdefault(tech_id, set()).add(rule_name)
-                tech_tactics_map.setdefault(tech_id, set()).add(tactic_slug)
+                tech_tactics_map.setdefault(tech_id, set()).add(tactic)
 
-                pair_key = (tech_id, shortname)
+                pair_key = (tech_id, tactic)
                 if pair_key not in pair_map:
                     pair_map[pair_key] = {
                         "rules": [],

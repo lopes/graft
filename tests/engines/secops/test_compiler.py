@@ -24,7 +24,7 @@ def sample_rule() -> RuleEnvelope:
         name="test_network_beaconing",
         description="Detects beaconing to C2",
         authors=("Detection Team",),
-        mitre={"command_and_control": ("T1071.001",)},
+        mitre={"command-and-control": ("T1071.001",)},
     )
     logic = """events:
   $e.metadata.event_type = "NETWORK_CONNECTION"

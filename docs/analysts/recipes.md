@@ -54,7 +54,7 @@ metadata:
     persistence:
       - "T1098"
       - "T1098.001"
-    privilege_escalation:
+    privilege-escalation:
       - "T1078.004"
   tags:
     - "gcp"
@@ -309,9 +309,9 @@ Each technique in the layer is enriched with:
 
 ### MITRE ATT&CK Enterprise v19.2 Taxonomy
 Graft stays current with modern adversary tactics and techniques, pinning to ATT&CK Enterprise v19.2:
-- **Stealth Tactic (`TA0005`):** In v19.2, MITRE renamed `TA0005` from "Defense Evasion" to "Stealth". The corresponding YAML slug is `stealth`.
-- **Defense Impairment Tactic (`TA0112`):** Introduced in v19.2 to capture actions that disable, corrupt, or modify defenses. The corresponding YAML slug is `defense_impairment`.
-- **Technique Revocations & Replacements:** Techniques revoked by MITRE are rejected by `graft lint`. For example, `T1562.001` (Disable or Modify Tools) was revoked in v19.2 and replaced by `T1685` under `defense_impairment`. Graft adopts the latest taxonomy forward.
+- **Stealth Tactic (`TA0005`):** In v19.2, MITRE renamed `TA0005` from "Defense Evasion" to "Stealth". The corresponding YAML tactic name is `stealth`.
+- **Defense Impairment Tactic (`TA0112`):** Introduced in v19.2 to capture actions that disable, corrupt, or modify defenses. The corresponding YAML tactic name is `defense-impairment`.
+- **Technique Revocations & Replacements:** Techniques revoked by MITRE are rejected by `graft lint`. For example, `T1562.001` (Disable or Modify Tools) was revoked in v19.2 and replaced by `T1685` under `defense-impairment`. Graft adopts the latest taxonomy forward.
 
 ### Objective Catalog Schema (14 Fields)
 Every catalog export (`table`, `csv`, `json`, `markdown`) normalizes to 14 objective indicators:
