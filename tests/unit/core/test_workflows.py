@@ -43,6 +43,10 @@ def test_pr_validation_workflow_structure() -> None:
     assert len(jobs) >= 1, "Workflow must define at least one job"
 
     cloud_job = jobs.get("secops-cloud-gates", {})
+    assert "dependabot[bot]" in str(cloud_job.get("if", "")), (
+        "secops-cloud-gates must skip dependabot[bot] PRs "
+        "because Actions secrets are not exposed to Dependabot"
+    )
     cloud_perms = cloud_job.get("permissions", {})
     assert cloud_perms.get("id-token") == "write", (
         "secops-cloud-gates must declare id-token: write for WIF OIDC"
@@ -68,8 +72,10 @@ def test_pr_validation_workflow_structure() -> None:
     assert any("pytest" in r for r in step_runs), "Must execute pytest"
     assert any("graft lint" in r for r in step_runs), "Must execute graft lint"
 
-    assert any("google-github-actions/auth" in u for u in step_uses), (
-        "Must use google-github-actions/auth for WIF"
+    assert any("actions/checkout@v7" in u for u in step_uses), "Must use actions/checkout@v7"
+    assert any("astral-sh/setup-uv@v7" in u for u in step_uses), "Must use astral-sh/setup-uv@v7"
+    assert any("google-github-actions/auth@v3" in u for u in step_uses), (
+        "Must use google-github-actions/auth@v3 for WIF"
     )
     assert any("graft secops verify --env staging" in r for r in step_runs), (
         "Must execute graft secops verify --env staging to match staging/fallback SA token"
@@ -107,13 +113,17 @@ def test_deploy_production_workflow_structure() -> None:
     step_runs = [s.get("run", "") for s in all_steps if "run" in s]
     step_uses = [s.get("uses", "") for s in all_steps if "uses" in s]
 
-    assert any("google-github-actions/auth" in u for u in step_uses), (
-        "Must use google-github-actions/auth"
+    assert any("actions/checkout@v7" in u for u in step_uses), "Must use actions/checkout@v7"
+    assert any("astral-sh/setup-uv@v7" in u for u in step_uses), "Must use astral-sh/setup-uv@v7"
+    assert any("google-github-actions/auth@v3" in u for u in step_uses), (
+        "Must use google-github-actions/auth@v3"
     )
     assert any("graft secops apply" in r for r in step_runs), "Must execute graft secops apply"
     assert any("graft export matrix" in r for r in step_runs), "Must export threat matrix layer"
     assert any("graft export catalog" in r for r in step_runs), "Must export catalog"
-    assert any("actions/upload-artifact" in u for u in step_uses), "Must upload release artifacts"
+    assert any("actions/upload-artifact@v7" in u for u in step_uses), (
+        "Must upload release artifacts with actions/upload-artifact@v7"
+    )
 
 
 def test_pre_commit_hook_exists_and_is_executable() -> None:

@@ -33,12 +33,12 @@ jobs:
 
     steps:
       - name: Checkout repository (full history for git blame)
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
       - name: Install uv
-        uses: astral-sh/setup-uv@v5
+        uses: astral-sh/setup-uv@v7
         with:
           enable-cache: true
 
@@ -53,7 +53,7 @@ jobs:
 
       - name: Authenticate to Google Cloud via Workload Identity Federation
         id: auth
-        uses: google-github-actions/auth@v2
+        uses: google-github-actions/auth@v3
         with:
           token_format: "access_token"
           workload_identity_provider: ${{ secrets.GRAFT_SECOPS_WIF_PROVIDER }}
@@ -72,7 +72,7 @@ jobs:
           uv run graft export catalog --format csv --out exports/ruleset_catalog.csv
 
       - name: Upload release & audit artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: graft-governance-artifacts-${{ github.sha }}
           path: |
