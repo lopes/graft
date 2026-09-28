@@ -90,39 +90,45 @@ env_vars:
 
 ---
 
-## 4. Step 3: Define Engine Logic Schema (`schemas/rule_logic.schema.json`)
+## 4. Step 3: Define Engine Rule Schema (`schemas/rule.schema.json`)
 
-Custom detection envelopes use a 5-block structure: `metadata`, `logic`, `deployment`, `runbook`, `tests`. The `logic:` block contains engine-specific queries.
+Custom detection envelopes use a 5-block structure: `metadata`, `logic`, `deployment`, `runbook`, `tests`. Each engine co-locates a Draft 2020-12 JSON schema that extends `base_rule.schema.json` via `allOf`.
 
-Create `src/graft/engines/sentinel/schemas/rule_logic.schema.json`:
+Edit `src/graft/engines/sentinel/schemas/rule.schema.json`:
 
 ```json
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "sentinel_rule.schema.json",
+  "title": "Sentinel Custom Rule Envelope Schema",
   "type": "object",
-  "required": ["query", "query_frequency", "query_period"],
-  "properties": {
-    "query": {
-      "type": "string",
-      "minLength": 5,
-      "description": "Kusto Query Language (KQL) detection expression"
+  "allOf": [
+    {
+      "$ref": "base_rule.schema.json"
     },
-    "query_frequency": {
-      "type": "string",
-      "pattern": "^PT[0-9]+[MH]$",
-      "description": "ISO 8601 duration (e.g., PT5M, PT1H)"
-    },
-    "query_period": {
-      "type": "string",
-      "pattern": "^PT[0-9]+[MH]$",
-      "description": "ISO 8601 lookback period"
+    {
+      "type": "object",
+      "properties": {
+        "deployment": {
+          "type": "object",
+          "required": ["enabled", "alerting"],
+          "properties": {
+            "enabled": { "type": "boolean" },
+            "alerting": { "type": "boolean" },
+            "run_frequency": {
+              "type": "string",
+              "enum": ["unspecified", "live", "hourly", "daily"]
+            }
+          },
+          "additionalProperties": false
+        }
+      }
     }
-  },
-  "additionalProperties": false
+  ]
 }
 ```
 
-When an analyst runs `graft lint`, Graft automatically discovers this schema and validates all `rulesets/sentinel/custom/*.yaml` logic blocks against it.
+When an analyst runs `graft lint`, Graft automatically discovers `schemas/rule.schema.json` and validates all `rulesets/sentinel/custom/*.yaml` envelopes against it.
 
 ---
 
@@ -182,7 +188,7 @@ class SentinelConfig:
 
 ## 6. Step 5: Implement the Compiler (`compiler.py`)
 
-The compiler implements [`RuleCompilerPort`](file:///usr/local/google/home/joelopes/Projects/graft/src/graft/core/ports/compiler.py):
+The compiler implements [`RuleCompilerPort`](../../src/graft/core/ports/compiler.py):
 
 ```python
 from __future__ import annotations
@@ -191,7 +197,8 @@ import json
 import urllib.error
 import urllib.request
 
-from graft.core.models.compiler import CompilationError, CompilationResult
+from graft.core.models.compiler import CompilationDiagnostic, CompilationResult
+from graft.core.models.rule import RuleEnvelope
 from graft.core.ports.compiler import RuleCompilerPort
 from graft.engines.sentinel.config import SentinelConfig
 
@@ -207,7 +214,9 @@ class SentinelCompilerAdapter(RuleCompilerPort):
             if "where" not in rule_text and "summarize" not in rule_text:
                 return CompilationResult(
                     success=False,
-                    errors=(CompilationError(line=1, message="KQL query appears incomplete"),),
+                    diagnostics=(
+                        CompilationDiagnostic(line=1, message="KQL query appears incomplete"),
+                    ),
                 )
             return CompilationResult(success=True)
 
@@ -234,12 +243,14 @@ class SentinelCompilerAdapter(RuleCompilerPort):
                     return CompilationResult(success=True)
                 return CompilationResult(
                     success=False,
-                    errors=(CompilationError(line=1, message=data.get("error", "Syntax error")),),
+                    diagnostics=(
+                        CompilationDiagnostic(line=1, message=data.get("error", "Syntax error")),
+                    ),
                 )
         except urllib.error.HTTPError as exc:
             return CompilationResult(
                 success=False,
-                errors=(CompilationError(line=1, message=f"API error: {exc}"),),
+                diagnostics=(CompilationDiagnostic(line=1, message=f"API error: {exc}"),),
             )
 
     def verify_rule(self, rule: RuleEnvelope) -> CompilationResult:
@@ -251,7 +262,7 @@ class SentinelCompilerAdapter(RuleCompilerPort):
 
 ## 7. Step 6: Implement the Deployer (`deployer.py`)
 
-The deployer implements [`RuleDeployerPort`](file:///usr/local/google/home/joelopes/Projects/graft/src/graft/core/ports/deployer.py):
+The deployer implements [`RuleDeployerPort`](../../src/graft/core/ports/deployer.py):
 
 ```python
 from __future__ import annotations
@@ -293,7 +304,7 @@ class SentinelDeployerAdapter(RuleDeployerPort):
         pass
 
     def delete_rule(self, rule_id: str) -> None:
-        """Deletes an alert rule."""
+        """Retires or deletes an alert rule."""
         # DELETE alertRules/{rule_id}
         pass
 
@@ -307,11 +318,12 @@ class SentinelDeployerAdapter(RuleDeployerPort):
 
 ## 8. Step 7: Assemble the Composite Adapter (`adapter.py`)
 
-The composite adapter implements [`EngineAdapter`](file:///usr/local/google/home/joelopes/Projects/graft/src/graft/core/ports/engine.py):
+The composite adapter implements [`EngineAdapter`](../../src/graft/core/ports/engine.py):
 
 ```python
 from __future__ import annotations
 
+from graft.core.models.rule import RuleEnvelope
 from graft.core.ports.compiler import RuleCompilerPort
 from graft.core.ports.deployer import RuleDeployerPort
 from graft.core.ports.engine import EngineAdapter
@@ -387,7 +399,7 @@ uv run pytest tests/engines/sentinel
 
 Before submitting an engine PR:
 - [ ] Manifest `engine.yaml` is valid according to `src/graft/core/schemas/engine_manifest.schema.json`.
-- [ ] Logic schema `schemas/rule_logic.schema.json` validates example rules.
+- [ ] Rule schema `schemas/rule.schema.json` validates example rules.
 - [ ] All HTTP interactions use `urllib.request` (zero third-party dependencies).
 - [ ] Adapter passes `isinstance(adapter, EngineAdapter)` protocol checks.
 - [ ] Engine tests achieve 100% pass rate in `uv run pytest tests/engines/<engine>`.

@@ -31,9 +31,9 @@ graft/
 
 ## 2. Pluggable Discovery & Capabilities-Driven CLI Routing
 
-Engines are discovered dynamically at runtime by [`EngineRegistry`](file:///usr/local/google/home/joelopes/Projects/graft/src/graft/core/engine_registry.py), which parses and validates each engine's `engine.yaml` against [`src/graft/core/schemas/engine_manifest.schema.json`](file:///usr/local/google/home/joelopes/Projects/graft/src/graft/core/schemas/engine_manifest.schema.json).
+Engines are discovered dynamically at runtime by [`EngineRegistry`](../../src/graft/core/engine_registry.py), which parses and validates each engine's `engine.yaml` against [`src/graft/core/schemas/engine_manifest.schema.json`](../../src/graft/core/schemas/engine_manifest.schema.json).
 
-Based on the capabilities declared in `engine.yaml`, [`EngineCommandController`](file:///usr/local/google/home/joelopes/Projects/graft/src/graft/cli/engine_controller.py) automatically provisions subcommands:
+Based on the capabilities declared in `engine.yaml`, [`EngineCommandController`](../../src/graft/cli/engine_controller.py) automatically provisions subcommands:
 
 ```bash
 graft <engine> [subcommands...]

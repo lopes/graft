@@ -62,8 +62,8 @@ flowchart TD
 
 1. **Driving Adapters (`src/graft/cli/`):**
    - Implemented using standard library `argparse`.
-   - The CLI dispatcher initializes [`EngineRegistry`](file:///usr/local/google/home/joelopes/Projects/graft/src/graft/core/engine_registry.py), inspects all discovered engine manifests, and registers CLI subcommands dynamically.
-   - Dispatches user requests to [`EngineCommandController`](file:///usr/local/google/home/joelopes/Projects/graft/src/graft/cli/engine_controller.py).
+   - The CLI dispatcher initializes [`EngineRegistry`](../../src/graft/core/engine_registry.py), inspects all discovered engine manifests, and registers CLI subcommands dynamically.
+   - Dispatches user requests to [`EngineCommandController`](../../src/graft/cli/engine_controller.py).
 2. **Driving Core (`src/graft/core/`):**
    - 100% engine-agnostic domain models (`RuleEnvelope`, `ManagedState`, `TestVector`, `CompilationResult`, `ReconciliationDiff`).
    - Declares the abstract port contracts using Python's `typing.Protocol` with `@runtime_checkable`.
@@ -83,7 +83,7 @@ To maintain strict architectural boundaries, responsibilities are cleanly divide
 | Capability / Concern | Handled by Driving Core | Handled by Driven Adapter |
 | :--- | :--- | :--- |
 | **Rule Representation** | Provides universal 5-block `RuleEnvelope` model and base JSON schemas. | Maps envelope fields (`metadata`, `logic`, `deployment`) to engine-native payload formats. |
-| **Detection Logic Schema** | Loads and validates envelope structure (`metadata`, `runbook`, `tests`). | Provides `schemas/rule_logic.schema.json` to define and validate engine-native query syntax (e.g., YARA-L, KQL, SPL). |
+| **Detection Rule Schema** | Loads and validates base envelope structure (`metadata`, `runbook`, `tests`). | Provides `schemas/rule.schema.json` (extending `base_rule.schema.json`) to validate engine-specific deployment and logic constraints. |
 | **Reconciliation Logic** | Computes diffs, evaluates Scoped vs. Full Catalog scopes, and determines required mutations. | Executes atomic remote API calls (`create_rule`, `update_rule`, `set_rule_state`, `set_ruleset_deployment`). |
 | **Authentication & HTTP** | Manages environment variable resolution and `.env` loading. | Establishes authenticated sessions (STS/WIF, OAuth2, API tokens) and issues HTTP requests via `urllib.request`. |
 | **Syntax Verification** | Orchestrates file discovery and aggregates compiler results. | Invokes the vendor's syntax validation API (e.g., Chronicle `:verifyRuleText` or Azure API syntax check). |
@@ -97,7 +97,7 @@ To maintain strict architectural boundaries, responsibilities are cleanly divide
 Graft uses Python's `typing.Protocol` with structural subtyping (duck typing). Adapters do not need to inherit from concrete base classes; they simply implement the methods defined in `src/graft/core/ports/`.
 
 ### 1. Composite Adapter Protocol: `EngineAdapter`
-Defined in [`src/graft/core/ports/engine.py`](file:///usr/local/google/home/joelopes/Projects/graft/src/graft/core/ports/engine.py):
+Defined in [`src/graft/core/ports/engine.py`](../../src/graft/core/ports/engine.py):
 
 ```python
 from typing import Protocol, runtime_checkable
@@ -129,7 +129,7 @@ The composite adapter acts as a capabilities factory and status resolver. Depend
 ---
 
 ### 2. Rule Compiler Port: `RuleCompilerPort`
-Defined in [`src/graft/core/ports/compiler.py`](file:///usr/local/google/home/joelopes/Projects/graft/src/graft/core/ports/compiler.py):
+Defined in [`src/graft/core/ports/compiler.py`](../../src/graft/core/ports/compiler.py):
 
 ```python
 from typing import Protocol
@@ -147,19 +147,19 @@ class RuleCompilerPort(Protocol):
         ...
 ```
 
-The returned [`CompilationResult`](file:///usr/local/google/home/joelopes/Projects/graft/src/graft/core/models/compiler.py) is an engine-agnostic dataclass:
+The returned [`CompilationResult`](../../src/graft/core/models/compiler.py) is an engine-agnostic dataclass:
 ```python
 @dataclass(frozen=True)
 class CompilationResult:
     success: bool
-    errors: tuple[CompilationError, ...] = ()
-    warnings: tuple[str, ...] = ()
+    diagnostics: tuple[CompilationDiagnostic, ...] = ()
+    raw_Error: str | None = None
 ```
 
 ---
 
 ### 3. Rule Deployer Port: `RuleDeployerPort`
-Defined in [`src/graft/core/ports/deployer.py`](file:///usr/local/google/home/joelopes/Projects/graft/src/graft/core/ports/deployer.py):
+Defined in [`src/graft/core/ports/deployer.py`](../../src/graft/core/ports/deployer.py):
 
 ```python
 from typing import Protocol
@@ -191,7 +191,7 @@ class RuleDeployerPort(Protocol):
 ---
 
 ### 4. Managed Content Port: `ManagedEnginePort`
-Defined in [`src/graft/core/ports/managed.py`](file:///usr/local/google/home/joelopes/Projects/graft/src/graft/core/ports/managed.py):
+Defined in [`src/graft/core/ports/managed.py`](../../src/graft/core/ports/managed.py):
 
 ```python
 from typing import Protocol
@@ -234,7 +234,7 @@ class ManagedEnginePort(Protocol):
 ---
 
 ### 5. Replay Harness Port: `ReplayHarnessPort`
-Defined in [`src/graft/core/ports/replay.py`](file:///usr/local/google/home/joelopes/Projects/graft/src/graft/core/ports/replay.py):
+Defined in [`src/graft/core/ports/replay.py`](../../src/graft/core/ports/replay.py):
 
 ```python
 from typing import Protocol
@@ -265,7 +265,7 @@ In modern SIEM architectures, detection content falls into two fundamentally dis
 | **Representation** | Individual 5-block envelope YAML files under `rulesets/<engine>/custom/<rule>.yaml`. | Single consolidated manifest under `rulesets/<engine>/managed.yaml`. |
 | **Logic Visibility** | Full query logic (`events`, `match`, `condition`) is authored and visible. | Proprietary vendor logic is black-boxed; operators configure operational parameters. |
 | **Operator Control** | Complete CRUD control over queries, test vectors, and runbooks. | Toggles precision (`PRECISE` vs `BROAD`), activation, alert generation, and customer exclusion filters. |
-| **Engine Port** | Handled via [`RuleDeployerPort`](file:///usr/local/google/home/joelopes/Projects/graft/src/graft/core/ports/deployer.py). | Handled via [`ManagedEnginePort`](file:///usr/local/google/home/joelopes/Projects/graft/src/graft/core/ports/managed.py). |
+| **Engine Port** | Handled via [`RuleDeployerPort`](../../src/graft/core/ports/deployer.py). | Handled via [`ManagedEnginePort`](../../src/graft/core/ports/managed.py). |
 
 ### 2. Strict Optionality via `capabilities`
 
@@ -288,7 +288,7 @@ capabilities:
 
 ## 5. Capabilities-Driven CLI Provisioning
 
-When Graft boots up, [`EngineRegistry`](file:///usr/local/google/home/joelopes/Projects/graft/src/graft/core/engine_registry.py) reads each engine's `engine.yaml`. The CLI controller inspects the declared capabilities and dynamically registers only the subcommands and arguments that the adapter actually supports:
+When Graft boots up, [`EngineRegistry`](../../src/graft/core/engine_registry.py) reads each engine's `engine.yaml`. The CLI controller inspects the declared capabilities and dynamically registers only the subcommands and arguments that the adapter actually supports:
 
 ```mermaid
 flowchart TD
@@ -342,10 +342,11 @@ flowchart TD
 Graft dynamically discovers engines without requiring hardcoded imports in Core:
 
 1. **Manifest Discovery:** At startup, `EngineRegistry._discover()` scans all subdirectories under `src/graft/engines/` for `engine.yaml`.
-2. **Manifest Validation:** Every manifest is validated against [`src/graft/core/schemas/engine_manifest.schema.json`](file:///usr/local/google/home/joelopes/Projects/graft/src/graft/core/schemas/engine_manifest.schema.json).
-3. **Logic Schema Discovery:** In 5-block rule envelopes, the `logic:` block contains engine-specific syntax. When `graft lint` validates a rule for an engine, [`SchemaValidator`](file:///usr/local/google/home/joelopes/Projects/graft/src/graft/core/validation/schema_validator.py) checks for an engine-co-located schema at:
+2. **Manifest Validation:** Every manifest is validated against [`src/graft/core/schemas/engine_manifest.schema.json`](../../src/graft/core/schemas/engine_manifest.schema.json).
+3. **Rule Schema Discovery:** When `graft lint` validates a rule or manifest for an engine, [`SchemaValidator`](../../src/graft/core/validation/schema_validator.py) checks for co-located schemas at:
    ```text
-   src/graft/engines/<engine>/schemas/rule_logic.schema.json
+   src/graft/engines/<engine>/schemas/rule.schema.json
+   src/graft/engines/<engine>/schemas/managed.schema.json
    ```
-   If present, Core validates the `logic:` block against this schema, enabling full structural linting of engine-specific query fields without leaking vendor logic into Core.
-4. **Adapter Instantiation:** When an engine command is executed, Core dynamically imports the `adapter_class` declared in the manifest (e.g., `graft.engines.sentinel.adapter:SentinelAdapter`), instantiates it with the target environment (`env="production"`), and verifies that it implements [`EngineAdapter`](file:///usr/local/google/home/joelopes/Projects/graft/src/graft/core/ports/engine.py).
+   If present, Core validates the rule envelope and managed manifest against these schemas without leaking vendor specifics into Core.
+4. **Adapter Instantiation:** When an engine command is executed, Core dynamically imports the `adapter_class` declared in the manifest (e.g., `graft.engines.sentinel.adapter:SentinelAdapter`), instantiates it with the target environment (`env="production"`), and verifies that it implements [`EngineAdapter`](../../src/graft/core/ports/engine.py).

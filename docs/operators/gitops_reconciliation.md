@@ -51,24 +51,28 @@ Custom detection rules are authored in 5-block envelope YAML files under `rulese
 
 ## 3. Vendor-Managed Content Manifest (`rulesets/<engine>/managed.yaml`)
 
-Vendor-managed content state (Google Cloud Curated Rule Sets) is tracked in a single declarative manifest:
+Vendor-managed content state (Google Cloud Curated Rule Sets) is tracked in a single declarative manifest conforming to `src/graft/engines/secops/schemas/managed.schema.json`:
 
 ```yaml
-version: "1"
-engine: "secops"
-rulesets:
-  - id: "ur_cloud_iam_privilege_escalation"
-    name: "Cloud IAM Privilege Escalation"
-    category: "Cloud Threats"
-    deployment: "PRECISE"
-    enabled: true
-    alerting: true
-    exclusions:
-      - id: "ex_backup_service_account"
-        name: "Exclude Scheduled Backup SA"
-        description: "Prevents alerts from authorized overnight backup automation"
-        filter: "principal.user.userid != 'backup-operator@corp-prod.iam.gserviceaccount.com'"
-        enabled: true
+categories:
+  - name: "Cloud Threats"
+    id: "dd01e72c-a66c-c11c-9a59-55b02f1b43b1"
+    rulesets:
+      - id: "ur_cloud_iam_privilege_escalation"
+        name: "Cloud IAM Privilege Escalation"
+        deployments:
+          - type: PRECISE
+            enabled: true
+            alerting: true
+          - type: BROAD
+            enabled: false
+            alerting: false
+
+exclusions:
+  - id: "ex-backup-service-account"
+    description: "Prevents alerts from authorized overnight backup automation"
+    ruleset_id: "ur_cloud_iam_privilege_escalation"
+    expression: 'principal.user.userid = "backup-operator@corp-prod.iam.gserviceaccount.com"'
 ```
 
 ---
@@ -114,17 +118,19 @@ graft secops diff --target managed --env production
 
 #### Example Drift Output:
 ```text
-=== Evaluating Managed Content Drift (Google SecOps) ===
-[*] Managed Ruleset deployment changes:
-  [~] Cloud IAM Privilege Escalation (ur_cloud_iam_privilege_escalation)
-      PRECISE: alerting False -> True
-[+] Curated Exclusions to create:
-  [+] Exclude Scheduled Backup SA (ruleset: ur_cloud_iam_privilege_escalation)
+=== Google SecOps Managed Content Diff ===
+~ Deployments to update (1):
+  [~] Cloud IAM Privilege Escalation [ur_cloud_iam_privilege_escalation] (PRECISE): alerting False -> True
++ Exclusions to create (1):
+  [+] ex-backup-service-account -> ur_cloud_iam_privilege_escalation
 
-=== Evaluating Custom Rules Drift (Google SecOps) ===
-[+] Custom rule to create: gcp_storage_iam_public_access_granted
-[~] Custom rule to update: workspace_nrd_possible_phishing (ID: b1d72370-5fa3-4cb8-a579-22a468d6f101)
-[?] Untracked custom rule on tenant: legacy_console_rule (ID: ru_89a74bc1-...)
+=== Google SecOps Custom Rules Diff ===
++ Custom rules to create (1):
+  [+] gcp_storage_iam_public_access_granted (id=d8a19c42-7f10-4b22-9e55-0192837465ab)
+~ Custom rules to update (1):
+  [~] workspace_nrd_possible_phishing (id=b1d72370-5fa3-4cb8-a579-22a468d6f101)
+? Untracked custom rules in tenant (1):
+  [?] legacy_console_rule (id=89a74bc1-1111-2222-3333-444455556666)
 ```
 
 ### 2. Unified State Synchronization (`graft secops apply`)

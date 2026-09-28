@@ -335,7 +335,7 @@ To avoid credential ambiguity across multiple platforms and engines, Graft enfor
 
 ## 7. Google Curated Rule Sets & Managed Manifest (`rulesets/secops/managed.yaml`)
 
-Google SecOps provides Curated Rule Sets—vendor-managed detection packages maintained by Google Cloud Threat Intelligence (GCTI). Graft manages the entire curated content lifecycle declaratively through a single consolidated manifest: [`rulesets/secops/managed.yaml`](file:///usr/local/google/home/joelopes/Projects/graft/rulesets/secops/managed.yaml).
+Google SecOps provides Curated Rule Sets—vendor-managed detection packages maintained by Google Cloud Threat Intelligence (GCTI). Graft manages the entire curated content lifecycle declaratively through a single consolidated manifest: [`rulesets/secops/managed.yaml`](../../rulesets/secops/managed.yaml).
 
 ```mermaid
 flowchart TD
@@ -364,7 +364,7 @@ Google SecOps organizes curated detections in a 3-tier hierarchy:
 
 ### Managed Manifest Format
 
-The manifest [`rulesets/secops/managed.yaml`](file:///usr/local/google/home/joelopes/Projects/graft/rulesets/secops/managed.yaml) adheres to [`src/graft/engines/secops/schemas/managed.schema.json`](file:///usr/local/google/home/joelopes/Projects/graft/src/graft/engines/secops/schemas/managed.schema.json):
+The manifest [`rulesets/secops/managed.yaml`](../../rulesets/secops/managed.yaml) adheres to [`src/graft/engines/secops/schemas/managed.schema.json`](../../src/graft/engines/secops/schemas/managed.schema.json):
 
 ```yaml
 categories:
@@ -450,7 +450,7 @@ Exclusion queries evaluate against Unified Data Model (UDM) fields. Unlike YARA-
 Follow this step-by-step operational runbook:
 
 #### Step 1: Identify the Target RuleSet
-1. Open [`rulesets/secops/managed.yaml`](file:///usr/local/google/home/joelopes/Projects/graft/rulesets/secops/managed.yaml).
+1. Open [`rulesets/secops/managed.yaml`](../../rulesets/secops/managed.yaml).
 2. Locate the ruleset where false positives occur (e.g. search for `"Malware Signals - Suspicious Execution"`).
 3. Copy its `id` UUID (e.g. `1c4ab1f6-d801-d6a9-1177-3ec3dd5bcbe9`).
 
@@ -484,12 +484,13 @@ uv run graft secops diff --target=managed
 
 Expected output:
 ```text
-[+] Exclusion to create: exclude-maintenance-runner-suspicious-exec
++ Exclusions to create (1):
+  [+] exclude-maintenance-runner-suspicious-exec -> 1c4ab1f6-d801-d6a9-1177-3ec3dd5bcbe9
 ```
 
 #### Step 5: Merge via PR & Deploy
 Open a Pull Request. Once reviewed and merged into `main`:
-- The GitHub Actions deploy workflow executes `graft secops apply --target=all --env=production`.
+- The GitHub Actions deploy workflow executes `graft secops apply --env production --all`.
 - Graft creates the refinement in SecOps, sets its target curated ruleset, and activates it.
 - Within minutes, incoming events matching the expression will be excluded from alert generation.
 
@@ -508,7 +509,7 @@ When an exclusion is no longer needed:
 
 In Google SecOps, detection rules are versioned resources. Recreating a rule by deleting and re-creating it (`POST rules`) generates a new server-assigned rule ID, resets detection history, breaks SOAR playbooks tied to the original rule identifier, and creates gaps in monitoring coverage.
 
-Graft implements an in-place **Custom Rule Reconciliation Engine** ([`CustomRuleReconciler`](file:///usr/local/google/home/joelopes/Projects/graft/src/graft/core/reconciler.py#L309)) and adapter ([`SecOpsDeployerAdapter`](file:///usr/local/google/home/joelopes/Projects/graft/src/graft/engines/secops/deployer.py#L7)) that updates rule text and deployment states in-place, preserving rule continuity, audit history, and detection timelines.
+Graft implements an in-place **Custom Rule Reconciliation Engine** ([`CustomRuleReconciler`](../../src/graft/core/reconciler.py#L309)) and adapter ([`SecOpsDeployerAdapter`](../../src/graft/engines/secops/deployer.py#L7)) that updates rule text and deployment states in-place, preserving rule continuity, audit history, and detection timelines.
 
 ```mermaid
 sequenceDiagram
@@ -546,11 +547,11 @@ sequenceDiagram
 The custom rule reconciliation pipeline executes five discrete stages:
 
 #### 1. Inventory & Deployment Aggregation
-- **Rule Retrieval:** Fetches full rule text and metadata for all tenant rules via `GET /v1alpha/projects/{project}/locations/{location}/instances/{instance}/rules?view=FULL`.
-- **Deployment Binding:** Aggregates live deployment states via `GET /v1alpha/projects/.../rules/-/deployments` to establish the exact `(enabled: bool, alerting: bool)` status for every rule without issuing N sequential requests.
+- **Rule Retrieval:** Fetches full rule text and metadata for all tenant rules via `GET /v1/projects/{project}/locations/{location}/instances/{instance}/rules?view=FULL`.
+- **Deployment Binding:** Aggregates live deployment states via `GET /v1/projects/.../rules/-/deployments` to establish the exact `(enabled: bool, alerting: bool)` status for every rule without issuing N sequential requests.
 
 #### 2. Three-Tier Content Normalization & Matching
-To prevent spurious diffs caused by whitespace differences, platform line endings, or synthesized metadata headers, [`secops_rule_content_matches`](file:///usr/local/google/home/joelopes/Projects/graft/src/graft/engines/secops/adapter.py#L33) evaluates equivalence across three tiers:
+To prevent spurious diffs caused by whitespace differences, platform line endings, or synthesized metadata headers, [`secops_rule_content_matches`](../../src/graft/engines/secops/adapter.py#L33) evaluates equivalence across three tiers:
 
 - **Tier 1 (Raw Logic Equivalence):** Compares the normalized rule logic text directly (`\r\n` converted to `\n` and stripped).
 - **Tier 2 (Synthesized YARA-L Equivalence):** Compares the remote rule against the locally synthesized YARA-L rule (incorporating standard metadata fields: `meta: id = ...`, `description = ...`).
@@ -565,8 +566,8 @@ If either content *or* deployment state differs, the rule is scheduled for updat
 
 #### 4. Atomic In-Place Revision Update
 When an update is required:
-1. **Rule Text Update:** Issues `PATCH /v1alpha/projects/.../rules/{rule_id}?update_mask=text` containing the synthesized YARA-L rule. Google SecOps compiles the new logic, creates a new revision identifier (`ru_<uuid>`), and preserves the primary rule identifier.
-2. **Deployment State Update:** Issues `PATCH /v1alpha/projects/.../rules/{rule_id}/deployment?update_mask=enabled,alerting` to enforce desired alert routing.
+1. **Rule Text Update:** Issues `PATCH /v1/projects/.../rules/{rule_id}?update_mask=text` containing the synthesized YARA-L rule. Google SecOps compiles the new logic, creates a new revision identifier (`ru_<uuid>`), and preserves the primary rule identifier.
+2. **Deployment State Update:** Issues `PATCH /v1/projects/.../rules/{rule_id}/deployment?update_mask=enabled,alerting` to enforce desired alert routing.
 
 #### 5. Zero-Cost No-Op Guarantee
 If the remote rule's logic and deployment state already match the Git definition:
@@ -582,9 +583,9 @@ When an operator, security analyst, or external integration modifies a detection
 
 1. **Drift Detection:** Running `graft secops diff --all` (or scheduled drift monitoring) scans the full catalog, detects the discrepancy, and exits with code `2`:
    ```text
-   === Custom Rules Diff ===
-   Rules to update:
-     ~ workspace_nrd_possible_phishing
+   === Google SecOps Custom Rules Diff ===
+   ~ Custom rules to update (1):
+     [~] workspace_nrd_possible_phishing (id=b1d72370-5fa3-4cb8-a579-22a468d6f101)
    ```
    *(Note: Running `graft secops diff` without `--all` operates in Mode B, scoping reconciliation only to locally modified detection files).*
 

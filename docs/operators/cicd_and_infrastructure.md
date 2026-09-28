@@ -83,7 +83,7 @@ Runs on standard `ubuntu-latest` without requiring cloud credentials:
 
 ### 2. Cloud Gates (`secops-cloud-gates`)
 Requires WIF credentials and runs only on trusted internal branches:
-- **Gate 6 (Compiler Dry-Run):** `uv run graft secops verify rulesets/secops/custom/ --env production` invokes Chronicle's `:verifyRuleText` endpoint to ensure YARA-L logic compiles cleanly against the live tenant schema without saving or deploying anything.
+- **Gate 6 (Compiler Dry-Run):** `uv run graft secops verify --env staging` invokes Chronicle's `:verifyRuleText` endpoint to ensure YARA-L logic compiles cleanly against the live tenant schema without saving or deploying anything.
 - **Gate 7 (Synthetic Replay):** `uv run graft secops test` runs synthetic test fixtures against staging infrastructure (or non-alerting quarantine).
 - **Gate 8 (Scoped Reconciliation Diff):** `uv run graft secops diff --env production` computes a Scoped diff of rules modified in the branch and posts the plan directly to the PR discussion.
 
@@ -93,7 +93,7 @@ Requires WIF credentials and runs only on trusted internal branches:
 
 When a pull request is merged into `main`, the deployment workflow executes authoritative forward synchronization:
 
-1. **Full History Checkout:** Checks out with `fetch-depth: 0` so that `src/graft/core/metadata/git.py` can extract accurate Git blame (author, commit SHA, timestamp) to inject into deployed rule metadata.
+1. **Full History Checkout:** Checks out with `fetch-depth: 0` so that `src/graft/core/blame.py` can extract accurate Git blame (author, commit SHA, timestamp) to inject into generated catalog metadata.
 2. **Offline Sanity Check:** Executes `uv run graft lint` to guarantee repository integrity before touching remote APIs.
 3. **WIF Authentication:** Authenticates via GitHub OIDC and assumes the production deployer service account.
 4. **Full Catalog Reconciliation:**
@@ -103,8 +103,8 @@ When a pull request is merged into `main`, the deployment workflow executes auth
    Enforces full convergence across both custom detection rules and vendor-managed curated content, automatically healing any out-of-band console drift.
 5. **Governance Artifact Generation:**
    ```bash
-   mkdir -p exports
-   uv run graft export matrix --format navigator --out exports/attack_navigator_layer.json
+   mkdir -p exports layers
+   uv run graft export matrix --format navigator --out layers/attack_navigator_layer.json
    uv run graft export catalog --format markdown --out exports/ruleset_catalog.md
    uv run graft export catalog --format csv --out exports/ruleset_catalog.csv
    ```

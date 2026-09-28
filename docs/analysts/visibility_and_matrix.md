@@ -95,11 +95,11 @@ Ideal for automated documentation generation and repository wiki tracking:
 graft export catalog --format=markdown --out docs/RULE_CATALOG.md
 ```
 
-| Rule Name | Engine | Type | Status | MITRE ATT&CK | Author | Last Updated | Reviews |
-| --- | --- | --- | --- | --- | --- | --- | --- |
-| `gcp_iam_service_account_key_create` | secops | custom | enabled | TA0003:T1098; TA0003:T1098.001; TA0004:T1078.004 | Cloud Security Operations | 2026-09-17 | 3 |
-| `gcp_storage_iam_public_access_granted` | secops | custom | enabled | TA0004:T1078.004; TA0112:T1685 | Cloud Security Operations | 2026-09-17 | 2 |
-| `workspace_nrd_possible_phishing` | secops | custom | enabled | TA0001:T1566.002 | Joe Lopes <lopes.id> | 2026-09-17 | 4 |
+| Rule Name | Engine | Status | MITRE ATT&CK | Author | Created | Last Updated | Reviews | Contributors | Runbook |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `gcp_iam_service_account_key_create` | secops | enabled | TA0003:T1098, TA0003:T1098.001, TA0004:T1078.004 | Cloud Security Operations | 2026-09-17 | 2026-09-22 | 3 | 1 | yes |
+| `gcp_storage_iam_public_access_granted` | secops | enabled | TA0004:T1078.004, TA0112:T1685 | Cloud Security Operations | 2026-09-17 | 2026-09-22 | 2 | 1 | yes |
+| `workspace_nrd_possible_phishing` | secops | enabled | TA0001:T1566.002 | Joe Lopes <lopes.id> | 2026-09-17 | 2026-09-22 | 4 | 1 | yes |
 
 ### CSV Catalog (`--format=csv`)
 Generate spreadsheet-ready exports for security audits and reporting pipelines:

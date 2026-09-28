@@ -60,7 +60,7 @@ flowchart LR
 | Test Layer | Directory Location | Execution Speed | Description |
 | :--- | :--- | :--- | :--- |
 | **Unit Tests** | `tests/unit/` | <1 second total | 100% mock-isolated. Never makes real network or disk calls outside temporary test directories. |
-| **Engine Tests** | `src/graft/engines/<engine>/tests/` | Sub-second | In-tree mock-transport contract tests verifying API payload encoding and protocol conformance. |
+| **Engine Tests** | `tests/engines/<engine>/` | Sub-second | Mock-transport contract tests verifying API payload encoding and protocol conformance. |
 | **Integration Tests** | `tests/integration/` | Variable | Live API tests targeting dedicated staging tenants, strictly gated behind `@pytest.mark.integration` and `--run-integration`. |
 
 ### Graceful Degradation for Replay Tests

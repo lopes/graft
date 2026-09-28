@@ -101,7 +101,7 @@ Rule uniqueness is enforced automatically during:
 
 ## 3. Reference Rule Example (Google Workspace)
 
-Below is an authentic reference rule implemented in [`rulesets/secops/custom/workspace_nrd_possible_phishing.yaml`](file:///usr/local/google/home/joelopes/Projects/graft/rulesets/secops/custom/workspace_nrd_possible_phishing.yaml):
+Below is an authentic reference rule implemented in [`rulesets/secops/custom/workspace_nrd_possible_phishing.yaml`](../../rulesets/secops/custom/workspace_nrd_possible_phishing.yaml):
 
 ```yaml
 metadata:

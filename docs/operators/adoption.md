@@ -92,13 +92,13 @@ When pulling managed content:
 1. Graft queries the Chronicle Curated Rule Sets API (`curatedRuleSets`, `curatedRuleSetDeployments`, and `ruleExclusions`).
 2. It resolves category UUIDs to display names (e.g., `Cloud Threats`, `Linux Threats`).
 3. It captures deployment precision (`PRECISE` or `BROAD`), enabled/alerting toggles, and all active UDM exclusion filters (`findingsRefinements`).
-4. It serializes this unified posture into [`rulesets/secops/managed.yaml`](file:///usr/local/google/home/joelopes/Projects/graft/rulesets/secops/managed.yaml), conforming to [`src/graft/engines/secops/schemas/managed.schema.json`](file:///usr/local/google/home/joelopes/Projects/graft/src/graft/engines/secops/schemas/managed.schema.json).
+4. It serializes this unified posture into [`rulesets/secops/managed.yaml`](../../rulesets/secops/managed.yaml), conforming to [`src/graft/engines/secops/schemas/managed.schema.json`](../../src/graft/engines/secops/schemas/managed.schema.json).
 
 ### 3. How Custom Rules Are Ingested
 
 When pulling custom rules:
 1. Graft invokes `SecOpsDeployerAdapter.list_rules()` to fetch rule inventory (`GET rules?view=FULL`) and deployment states (`GET rules/-/deployments`).
-2. The deconstruction compiler ([`deconstruct_yaral_rule`](file:///usr/local/google/home/joelopes/Projects/graft/src/graft/engines/secops/compiler.py#L53)):
+2. The deconstruction compiler ([`deconstruct_yaral_rule`](../../src/graft/engines/secops/compiler.py#L53)):
    - Sanitizes rule display names into valid snake_case identifiers matching `^[a-z0-9_]+$`.
    - Normalizes server identifiers (`ru_<uuid>`) into valid RFC 4122 UUIDs for `metadata.id`.
    - Extracts embedded metadata (`description`, `author`) from the rule's `meta:` block.

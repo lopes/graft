@@ -20,7 +20,7 @@ sequenceDiagram
     participant API as Chronicle SIEM API
 
     Dev->>Graft: graft secops test [rule]
-    Graft->>API: POST /rules (Quarantined: enabled=False, alerting=False)
+    Graft->>API: POST /rules (Quarantined: enabled=True, alerting=False)
     API-->>Graft: Return temporary rule_id
     Note over Graft,API: Rule is quarantined: zero live alerts or SOC contamination
 
@@ -47,7 +47,7 @@ To prevent synthetic testing from contaminating production alert queues or skewi
 1. **Explicit Quarantine Configuration:**
    - Temporary rule name: `graft_test_<test_id>_<uuid>`.
    - `alerting = False`: Rule matches never trigger notification pipelines, webhooks, or SOC incident creation.
-   - `enabled = False`: Rule never runs continuously against live streaming event queues.
+   - `enabled = True`: Rule is active only for the duration of the isolated evaluation window and deleted immediately afterward.
 2. **Evaluation via `:run` Endpoint:**
    - Ad-hoc evaluation runs strictly over the bounding timestamp window defined by the synthetic test events.
 3. **Guaranteed `finally` Cleanup:**
@@ -55,30 +55,21 @@ To prevent synthetic testing from contaminating production alert queues or skewi
 
 ---
 
-## 3. Environment Topologies: Staging vs. Single-Tenant Lab
+## 3. Environment Topologies: Staging vs. Single-Tenant Guard
 
-### Multi-Tenant Enterprise Topology (Recommended)
+### Multi-Tenant Enterprise Topology (Required for Replay Testing)
 
 Staging and Production point to two physically separate Google SecOps customer instances:
 
-- `GRAFT_SECOPS_STAGING_*`: Used for replay testing and pre-merge compiler verification.
+- `GRAFT_SECOPS_STAGING_*`: Used for synthetic replay testing and pre-merge compiler verification.
 - `GRAFT_SECOPS_PROD_*`: Production operational environment.
 
-### Single-Tenant Lab Mode
+### Single-Tenant Production Guard
 
-In personal research labs or sandbox environments where maintaining two separate SIEM instances is cost-prohibitive, Graft allows staging and production to share a single physical instance coordinates:
+Because synthetic replay testing injects UDM test events and creates temporary rules, `SecOpsReplayEngine` enforces a strict production tenant guard. If `GRAFT_SECOPS_STAGING_*` is omitted or resolves to the same `(project_id, location, instance_id)` coordinates as Production, Graft refuses to inject synthetic events into Production:
 
-```bash
-export GRAFT_SECOPS_PROJECT="my-lab-project"
-export GRAFT_SECOPS_LOCATION="us"
-export GRAFT_SECOPS_INSTANCE_ID="11111111-2222-3333-4444-555555555555"
-```
-
-When Graft detects that staging and production resolve to the same instance path, it emits an advisory notice and safely conducts tests using the quarantined non-alerting harness:
-
-```text
-[WARNING] Single-tenant mode: Replay tests running in shared instance 'projects/my-lab-project/locations/us/instances/...'. Rules will be executed in non-alerting quarantine mode.
-```
+- Without `--require-staging` (default): Emits `[WARNING]` and exits `0` (graceful degradation).
+- With `--require-staging`: Emits `[ERROR] Replay tests require a dedicated staging tenant and cannot run against production coordinates` and exits `1`.
 
 ---
 
