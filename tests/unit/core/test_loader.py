@@ -7,8 +7,14 @@ from graft.core.loader import (
     dump_rule_to_yaml,
     load_rule_from_str,
     load_rule_from_yaml,
+    rule_to_dict,
 )
-from graft.core.models.rule import RuleEnvelope
+from graft.core.models.rule import (
+    BaseDeploymentConfig,
+    RuleEnvelope,
+    RuleMetadata,
+    Runbook,
+)
 
 
 @pytest.fixture
@@ -17,8 +23,7 @@ def valid_yaml_content() -> str:
   id: "c4e9b8f2-89b1-4f81-9b16-928d54128f73"
   name: "powershell_encoded_launch"
   description: "Detects execution of PowerShell commands using base64 encoded arguments."
-  priority: "high"
-  authors:
+  owners:
     - "Security Engineering"
   mitre:
     execution:
@@ -71,7 +76,7 @@ def test_load_rule_from_str_success(valid_yaml_content: str) -> None:
     assert isinstance(envelope, RuleEnvelope)
     assert envelope.metadata.id == "c4e9b8f2-89b1-4f81-9b16-928d54128f73"
     assert envelope.metadata.name == "powershell_encoded_launch"
-    assert envelope.metadata.priority == "high"
+    assert envelope.metadata.owners == ("Security Engineering",)
     assert envelope.metadata.mitre == {"execution": ("T1059.001",)}
     assert envelope.deployment.enabled is True
     assert envelope.deployment.alerting is True
@@ -121,9 +126,15 @@ def test_load_rule_mitre_validation_failure() -> None:
   id: "c4e9b8f2-89b1-4f81-9b16-928d54128f73"
   name: "rule_test"
   description: "Test rule description"
+  owners:
+    - "Security Engineering"
   mitre:
     initial-access:
       - "T1059.001"
+  tags:
+    - "test"
+  references:
+    - "Internal reference"
 logic: |
   events:
     $e.metadata.event_type = "USER_LOGIN"
@@ -143,7 +154,9 @@ tests:
     expect: 0
     events:
       - timestamp: "2026-09-17T12:00:00Z"
-        payload: {}
+        payload:
+          metadata:
+            event_type: "USER_LOGIN"
 """
     with pytest.raises(RuleLoadError, match="MITRE validation failed"):
         load_rule_from_str(invalid_mitre_yaml)
@@ -168,8 +181,10 @@ def test_dump_rule_and_roundtrip(valid_yaml_content: str, tmp_path: Path) -> Non
     assert reloaded.metadata.id == original.metadata.id
     assert reloaded.metadata.name == original.metadata.name
     assert reloaded.metadata.description == original.metadata.description
-    assert reloaded.metadata.priority == original.metadata.priority
+    assert reloaded.metadata.owners == original.metadata.owners
     assert reloaded.metadata.mitre == original.metadata.mitre
+    assert reloaded.metadata.tags == original.metadata.tags
+    assert reloaded.metadata.references == original.metadata.references
     assert reloaded.deployment.enabled == original.deployment.enabled
     assert reloaded.deployment.alerting == original.deployment.alerting
     assert reloaded.deployment.run_frequency == original.deployment.run_frequency
@@ -177,6 +192,44 @@ def test_dump_rule_and_roundtrip(valid_yaml_content: str, tmp_path: Path) -> Non
     assert reloaded.logic.strip() == original.logic.strip()
     assert len(reloaded.tests) == len(original.tests)
     assert reloaded.tests[0].id == original.tests[0].id
+
+
+def test_rule_to_dict_always_emits_all_metadata_keys_even_when_empty(tmp_path: Path) -> None:
+    unpopulated_rule = RuleEnvelope(
+        metadata=RuleMetadata(
+            id="c4e9b8f2-89b1-4f81-9b16-928d54128f73",
+            name="pulled_unpopulated_rule",
+            description="Imported rule awaiting operator enrichment",
+            owners=(),
+            mitre={},
+            tags=(),
+            references=(),
+        ),
+        logic='events:\n  $e.metadata.event_type = "USER_LOGIN"\ncondition:\n  $e',
+        deployment=BaseDeploymentConfig(enabled=False, alerting=False, run_frequency="live"),
+        runbook=Runbook(context="c", triage="t", response="r"),
+        tests=(),
+    )
+    doc = rule_to_dict(unpopulated_rule)
+    assert set(doc["metadata"].keys()) == {
+        "id",
+        "name",
+        "description",
+        "owners",
+        "mitre",
+        "tags",
+        "references",
+    }
+    assert doc["metadata"]["owners"] == []
+    assert doc["metadata"]["mitre"] == {}
+    assert doc["metadata"]["tags"] == []
+    assert doc["metadata"]["references"] == []
+
+    # Dumping and attempting to load without enriching must fail schema validation
+    dumped_path = tmp_path / "unpopulated.yaml"
+    dump_rule_to_yaml(unpopulated_rule, dumped_path)
+    with pytest.raises(RuleLoadError, match="Schema validation failed"):
+        load_rule_from_yaml(dumped_path)
 
 
 def test_load_rule_from_yaml_resolves_engine_schema_from_rulesets_dir(tmp_path: Path) -> None:
@@ -188,6 +241,15 @@ def test_load_rule_from_yaml_resolves_engine_schema_from_rulesets_dir(tmp_path: 
   id: "c4e9b8f2-89b1-4f81-9b16-928d54128f73"
   name: "bad_frequency_rule"
   description: "Detects bad frequency"
+  owners:
+    - "SecOps"
+  mitre:
+    execution:
+      - "T1059.001"
+  tags:
+    - "secops"
+  references:
+    - "Internal"
 logic: |
   events:
     $e.metadata.event_type = "USER_LOGIN"

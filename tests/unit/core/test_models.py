@@ -24,12 +24,13 @@ def test_rule_metadata_immutability() -> None:
         id="c4e9b8f2-89b1-4f81-9b16-928d54128f73",
         name="powershell_encoded_launch",
         description="Detects suspicious execution patterns",
-        priority="high",
-        authors=("Detection Team",),
+        owners=("Detection Team",),
         mitre={"execution": ("T1059.001",)},
         tags=("windows", "powershell"),
         references=("https://attack.mitre.org/techniques/T1059/001/",),
     )
+    assert not hasattr(meta, "priority")
+    assert not hasattr(meta, "authors")
     with pytest.raises(FrozenInstanceError):
         meta.name = "modified_name"  # type: ignore[misc]
 
@@ -39,18 +40,19 @@ def test_rule_metadata_equality_and_defaults() -> None:
         id="c4e9b8f2-89b1-4f81-9b16-928d54128f73",
         name="rule_test",
         description="Desc",
-        authors=("Author",),
+        owners=("Owner",),
     )
     meta2 = RuleMetadata(
         id="c4e9b8f2-89b1-4f81-9b16-928d54128f73",
         name="rule_test",
         description="Desc",
-        authors=("Author",),
+        owners=("Owner",),
     )
     assert meta1 == meta2
-    assert meta1.priority is None
+    assert meta1.owners == ("Owner",)
     assert meta1.mitre == {}
     assert meta1.tags == ()
+    assert meta1.references == ()
 
 
 def test_rule_envelope_structure() -> None:
@@ -58,10 +60,10 @@ def test_rule_envelope_structure() -> None:
         id="c4e9b8f2-89b1-4f81-9b16-928d54128f73",
         name="powershell_encoded",
         description="Detects suspicious PowerShell command lines",
-        priority="high",
-        authors=("SecOps",),
+        owners=("SecOps",),
         mitre={"execution": ("T1059.001",)},
         tags=("powershell",),
+        references=("Internal Threat Research",),
     )
     deployment = BaseDeploymentConfig(enabled=True, alerting=True, run_frequency="live")
     runbook = Runbook(
@@ -89,7 +91,7 @@ def test_rule_envelope_structure() -> None:
     )
 
     assert envelope.metadata.id == "c4e9b8f2-89b1-4f81-9b16-928d54128f73"
-    assert envelope.metadata.priority == "high"
+    assert envelope.metadata.owners == ("SecOps",)
     assert envelope.deployment.enabled is True
     assert envelope.deployment.run_frequency == "live"
     assert envelope.runbook.triage.startswith("1. Decode")

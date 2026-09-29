@@ -55,10 +55,7 @@ def load_rule_from_str(
         id=str(metadata_raw["id"]),
         name=str(metadata_raw["name"]),
         description=str(metadata_raw["description"]),
-        priority=str(metadata_raw["priority"])
-        if metadata_raw.get("priority") is not None
-        else None,
-        authors=tuple(str(a) for a in metadata_raw.get("authors", ())),
+        owners=tuple(str(o) for o in metadata_raw.get("owners", ())),
         mitre=mitre_dict,
         tags=tuple(str(t) for t in metadata_raw.get("tags", ())),
         references=tuple(str(r) for r in metadata_raw.get("references", ())),
@@ -151,17 +148,11 @@ def rule_to_dict(rule: RuleEnvelope) -> dict[str, Any]:
         "id": rule.metadata.id,
         "name": rule.metadata.name,
         "description": rule.metadata.description,
+        "owners": list(rule.metadata.owners),
+        "mitre": {k: list(v) for k, v in rule.metadata.mitre.items()},
+        "tags": list(rule.metadata.tags),
+        "references": list(rule.metadata.references),
     }
-    if rule.metadata.priority is not None:
-        metadata_dict["priority"] = rule.metadata.priority
-    if rule.metadata.authors:
-        metadata_dict["authors"] = list(rule.metadata.authors)
-    if rule.metadata.mitre:
-        metadata_dict["mitre"] = {k: list(v) for k, v in rule.metadata.mitre.items()}
-    if rule.metadata.tags:
-        metadata_dict["tags"] = list(rule.metadata.tags)
-    if rule.metadata.references:
-        metadata_dict["references"] = list(rule.metadata.references)
 
     doc: dict[str, Any] = {
         "metadata": metadata_dict,

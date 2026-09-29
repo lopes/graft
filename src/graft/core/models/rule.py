@@ -6,8 +6,7 @@ class RuleMetadata:
     id: str
     name: str
     description: str
-    priority: str | None = None
-    authors: tuple[str, ...] = ()
+    owners: tuple[str, ...] = ()
     mitre: dict[str, tuple[str, ...]] = field(default_factory=dict)
     tags: tuple[str, ...] = ()
     references: tuple[str, ...] = ()

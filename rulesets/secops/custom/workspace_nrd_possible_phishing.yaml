@@ -2,7 +2,7 @@ metadata:
   id: "b1d72370-5fa3-4cb8-a579-22a468d6f101"
   name: "workspace_nrd_possible_phishing"
   description: "Google Workspace email opened from a newly registered domain."
-  authors:
+  owners:
     - "Joe Lopes <lopes.id>"
   mitre:
     initial-access:

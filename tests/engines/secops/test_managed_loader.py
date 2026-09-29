@@ -99,3 +99,24 @@ def test_dump_managed_manifest_and_roundtrip(tmp_path: Path) -> None:
 
     loaded_state = load_managed_manifest_from_yaml(out_file)
     assert loaded_state == original_state
+
+
+def test_managed_loader_exclusion_requires_description_on_dump_and_load(tmp_path: Path) -> None:
+    state_with_empty_desc = ManagedState(
+        rulesets=(),
+        exclusions=(
+            ManagedExclusion(
+                id="ex-empty-desc",
+                rule_id="ru_1",
+                ruleset_id=None,
+                expression='$e.principal.user.userid != "svc"',
+                description="",
+            ),
+        ),
+    )
+    out_file = tmp_path / "managed_invalid.yaml"
+    dumped_str = dump_managed_manifest_to_yaml(state_with_empty_desc, path=out_file)
+    assert "description: ''" in dumped_str or 'description: ""' in dumped_str
+
+    with pytest.raises(ManagedManifestLoadError, match="Schema validation failed"):
+        load_managed_manifest_from_yaml(out_file)

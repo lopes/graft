@@ -173,9 +173,8 @@ def dump_managed_manifest_to_yaml(state: ManagedState, path: Path | str | None =
                 "rule_id": ex.rule_id,
                 "ruleset_id": ex.ruleset_id,
                 "expression": ex.expression,
+                "description": ex.description,
             }
-            if ex.description:
-                item["description"] = ex.description
             exclusions_dict.append(item)
         doc["exclusions"] = exclusions_dict
     else:

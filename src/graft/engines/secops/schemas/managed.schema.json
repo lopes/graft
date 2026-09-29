@@ -3,6 +3,9 @@
   "$id": "secops_managed.schema.json",
   "title": "Google SecOps Curated RuleSets Manifest Schema",
   "type": "object",
+  "required": [
+    "exclusions"
+  ],
   "oneOf": [
     {
       "required": [
@@ -163,7 +166,10 @@
         "type": "object",
         "required": [
           "id",
-          "expression"
+          "rule_id",
+          "ruleset_id",
+          "expression",
+          "description"
         ],
         "properties": {
           "id": {
@@ -186,11 +192,14 @@
           },
           "expression": {
             "type": "string",
-            "minLength": 1
+            "minLength": 1,
+            "pattern": "\\S"
           },
           "description": {
             "type": "string",
-            "maxLength": 256
+            "minLength": 1,
+            "maxLength": 256,
+            "pattern": "\\S"
           }
         },
         "additionalProperties": false

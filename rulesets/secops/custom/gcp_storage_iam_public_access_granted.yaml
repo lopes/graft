@@ -2,7 +2,7 @@ metadata:
   id: "f84a1e93-61bc-4382-90ab-38f12a819003"
   name: "gcp_storage_iam_public_access_granted"
   description: "Google Cloud Storage bucket IAM policy modified to grant public access."
-  authors:
+  owners:
     - "Cloud Security Operations"
   mitre:
     initial-access:
