@@ -558,6 +558,7 @@ class EngineCommandController:
                         f"Applied custom rules: {len(diff.rules_to_create)} created, "
                         f"{len(diff.rules_to_update)} updated.\n"
                     )
+                    sys.stdout.flush()
 
         if run_managed:
             managed_port = adapter.get_managed()
@@ -576,6 +577,7 @@ class EngineCommandController:
                             sys.stdout.write(
                                 f"Applied managed state to {self.manifest.display_name} tenant.\n"
                             )
+                            sys.stdout.flush()
 
         if json_output:
             sys.stdout.write(json.dumps(payload, indent=2) + "\n")

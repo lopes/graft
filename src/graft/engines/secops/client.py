@@ -120,7 +120,7 @@ class SecOpsClient:
                     return cast(dict[str, object], json.loads(raw.decode("utf-8")))
             except urllib.error.HTTPError as err:
                 status_code = err.code
-                if status_code in (429, 503) and attempts < self._max_retries:
+                if status_code in (429, 502, 503, 504) and attempts < self._max_retries:
                     attempts += 1
                     sleep_time = self._base_delay_seconds * (2 ** (attempts - 1))
                     logger.warning(
@@ -160,8 +160,23 @@ class SecOpsClient:
                     path=path,
                 ) from err
             except (urllib.error.URLError, TimeoutError, OSError) as err:
-                status_code = 504 if isinstance(err, TimeoutError) else 0
                 error_msg = getattr(err, "reason", str(err))
+                if attempts < self._max_retries:
+                    attempts += 1
+                    sleep_time = self._base_delay_seconds * (2 ** (attempts - 1))
+                    logger.warning(
+                        "SecOps API transport error on %s %s (%s); "
+                        "retrying in %.1fs (attempt %d/%d)",
+                        http_method,
+                        path,
+                        error_msg,
+                        sleep_time,
+                        attempts,
+                        self._max_retries,
+                    )
+                    time.sleep(sleep_time)
+                    continue
+                status_code = 504 if isinstance(err, TimeoutError) else 0
                 raise SecOpsApiError(
                     message=f"Network transport error: {error_msg}",
                     status_code=status_code,

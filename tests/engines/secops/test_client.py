@@ -198,18 +198,137 @@ def test_client_retry_on_429_then_success(
     )
 
 
+def test_client_retry_on_502_and_504_then_success(
+    secops_config: SecOpsConfig,
+    auth_resolver: SecOpsAuthResolver,
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    calls = 0
+
+    class MockSuccessResponse:
+        def __init__(self) -> None:
+            self.status = 200
+
+        def read(self) -> bytes:
+            return b'{"status": "ok"}'
+
+        def __enter__(self) -> "MockSuccessResponse":
+            return self
+
+        def __exit__(self, *args: object) -> None:
+            pass
+
+    def mock_urlopen(req: urllib.request.Request, **kwargs: Any) -> Any:
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            raise urllib.error.HTTPError(
+                url=req.full_url,
+                code=502,
+                msg="Bad Gateway",
+                hdrs=None,  # type: ignore[arg-type]
+                fp=io.BytesIO(b""),
+            )
+        if calls == 2:
+            raise urllib.error.HTTPError(
+                url=req.full_url,
+                code=504,
+                msg="Gateway Timeout",
+                hdrs=None,  # type: ignore[arg-type]
+                fp=io.BytesIO(b""),
+            )
+        return MockSuccessResponse()
+
+    sleep_calls: list[float] = []
+    monkeypatch.setattr(urllib.request, "urlopen", mock_urlopen)
+    monkeypatch.setattr("time.sleep", lambda s: sleep_calls.append(s))
+
+    client = SecOpsClient(config=secops_config, auth_resolver=auth_resolver, max_retries=2)
+    with caplog.at_level(logging.WARNING, logger="graft.secops.client"):
+        result = client.request("GET", "findingsRefinements")
+
+    assert result == {"status": "ok"}
+    assert calls == 3
+    assert sleep_calls == [1.0, 2.0]
+    assert any(
+        "SecOps API returned HTTP 502 on GET findingsRefinements; retrying in 1.0s (attempt 1/2)"
+        in r.message
+        for r in caplog.records
+    )
+    assert any(
+        "SecOps API returned HTTP 504 on GET findingsRefinements; retrying in 2.0s (attempt 2/2)"
+        in r.message
+        for r in caplog.records
+    )
+
+
+def test_client_retry_on_timeout_then_success(
+    secops_config: SecOpsConfig,
+    auth_resolver: SecOpsAuthResolver,
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    calls = 0
+
+    class MockSuccessResponse:
+        def __init__(self) -> None:
+            self.status = 200
+
+        def read(self) -> bytes:
+            return b'{"findingsRefinements": []}'
+
+        def __enter__(self) -> "MockSuccessResponse":
+            return self
+
+        def __exit__(self, *args: object) -> None:
+            pass
+
+    def mock_urlopen(req: urllib.request.Request, **kwargs: Any) -> Any:
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            raise TimeoutError("The read operation timed out")
+        return MockSuccessResponse()
+
+    sleep_calls: list[float] = []
+    monkeypatch.setattr(urllib.request, "urlopen", mock_urlopen)
+    monkeypatch.setattr("time.sleep", lambda s: sleep_calls.append(s))
+
+    client = SecOpsClient(config=secops_config, auth_resolver=auth_resolver, max_retries=2)
+    with caplog.at_level(logging.WARNING, logger="graft.secops.client"):
+        result = client.request("GET", "findingsRefinements")
+
+    assert result == {"findingsRefinements": []}
+    assert calls == 2
+    assert sleep_calls == [1.0]
+    assert any(
+        "SecOps API transport error on GET findingsRefinements "
+        "(The read operation timed out); retrying in 1.0s (attempt 1/2)" in r.message
+        for r in caplog.records
+    )
+
+
 def test_client_network_urlerror_wrapped_in_secops_api_error(
     secops_config: SecOpsConfig, auth_resolver: SecOpsAuthResolver, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    calls = 0
+
     def mock_urlopen(req: urllib.request.Request, **kwargs: Any) -> Any:
+        nonlocal calls
+        calls += 1
         raise urllib.error.URLError("Temporary failure in name resolution")
 
+    sleep_calls: list[float] = []
     monkeypatch.setattr(urllib.request, "urlopen", mock_urlopen)
+    monkeypatch.setattr("time.sleep", lambda s: sleep_calls.append(s))
 
-    client = SecOpsClient(config=secops_config, auth_resolver=auth_resolver)
+    client = SecOpsClient(config=secops_config, auth_resolver=auth_resolver, max_retries=2)
     with pytest.raises(SecOpsApiError) as exc_info:
         client.request("GET", "rules")
 
+    assert calls == 3
+    assert sleep_calls == [1.0, 2.0]
     assert str(exc_info.value) == (
         "SecOps API Error 0 (UNAVAILABLE) on GET rules: "
         "Network transport error: Temporary failure in name resolution"
@@ -222,15 +341,23 @@ def test_client_network_urlerror_wrapped_in_secops_api_error(
 def test_client_timeout_error_wrapped_in_secops_api_error(
     secops_config: SecOpsConfig, auth_resolver: SecOpsAuthResolver, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    calls = 0
+
     def mock_urlopen(req: urllib.request.Request, **kwargs: Any) -> Any:
+        nonlocal calls
+        calls += 1
         raise TimeoutError("The read operation timed out")
 
+    sleep_calls: list[float] = []
     monkeypatch.setattr(urllib.request, "urlopen", mock_urlopen)
+    monkeypatch.setattr("time.sleep", lambda s: sleep_calls.append(s))
 
-    client = SecOpsClient(config=secops_config, auth_resolver=auth_resolver)
+    client = SecOpsClient(config=secops_config, auth_resolver=auth_resolver, max_retries=2)
     with pytest.raises(SecOpsApiError) as exc_info:
         client.request("GET", "rules")
 
+    assert calls == 3
+    assert sleep_calls == [1.0, 2.0]
     assert str(exc_info.value) == (
         "SecOps API Error 504 (UNAVAILABLE) on GET rules: "
         "Network transport error: The read operation timed out"
