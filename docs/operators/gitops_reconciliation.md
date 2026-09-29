@@ -192,6 +192,19 @@ A common operational concern in GitOps pipelines is handling partial deployment 
 - `Rule B` encounters an unexpected API rejection (e.g., malformed syntax or schema error) and aborts the execution.
 - `Rule C` is not reached.
 
+```text
+2026-09-29T10:15:30Z [INFO] Updating custom rule 'Rule A' (ru_11111111-1111-1111-1111-111111111111)
+2026-09-29T10:15:31Z [INFO] Updating custom rule 'Rule B' (ru_22222222-2222-2222-2222-222222222222)
+2026-09-29T10:15:31Z [ERROR] Failed updating custom rule 'Rule B' (ru_22222222-2222-2222-2222-222222222222): SecOps API Error 400 (INVALID_ARGUMENT) on PATCH rules/ru_22222222-2222-2222-2222-222222222222: parsing: error with token: "="
+2026-09-29T10:15:31Z [ERROR] Custom rules reconciliation aborted: 1/3 applied ['Rule A'], 1 failed ['Rule B'], 1 pending ['Rule C']
+```
+
+Every failure log stream surfaces four diagnostic elements so operators can remediate without inspecting raw HTTP traces:
+- **When:** ISO-8601 UTC timestamp (`YYYY-MM-DDTHH:MM:SSZ`) correlating with CI and SIEM audit logs.
+- **What:** The specific rule or exclusion identifier (`Rule B`) and attempted operation (`updating custom rule`).
+- **Where:** The HTTP status code (`400`), vendor error status (`INVALID_ARGUMENT`), HTTP method, and endpoint path (`PATCH rules/...`). If a two-stage mutation fails on the second step (`PATCH .../deployment`) after the rule or exclusion definition was already written, Graft also emits a `[WARNING]` indicating that the definition was updated on the tenant before the deployment state call failed.
+- **Progress:** The abort summary stating what already mutated on the tenant (`1/3 applied ['Rule A']`), what broke (`1 failed ['Rule B']`), and what remains unapplied (`1 pending ['Rule C']`).
+
 ```mermaid
 flowchart TD
     subgraph Attempt1["Deployment Attempt 1 (Failure on Rule B)"]

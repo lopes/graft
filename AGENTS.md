@@ -37,6 +37,10 @@
   - **Epoch 1 (Discovery & Reverse Sync):** When bootstrapping an existing SIEM tenant, the SIEM is the temporary initial Source of Truth. Run `graft <engine> pull` to extract live custom rules and managed curated configurations into local YAML artifacts.
   - **Epoch 2 (Baseline Enrichment & Validation):** Operators document runbooks, map MITRE ATT&CK techniques, add test vectors, validate via `graft lint`, and commit the baseline to Git.
   - **Epoch 3 (Steady-State GitOps):** Git is declared the authoritative Source of Truth. `graft <engine> diff/apply` synchronizes changes forward. Mode B (default) evaluates scoped branch changes; Mode A (`--all`) enforces full catalog convergence, healing out-of-band console drift.
+- **Logging & Operational Diagnostics Contract:**
+  - Root CLI logging uses ISO-8601 UTC timestamps (`%(asctime)s [%(levelname)s] %(message)s` with `datefmt="%Y-%m-%dT%H:%M:%SZ"` and `logging.Formatter.converter = time.gmtime`).
+  - Core reconcilers (`graft.reconciler`) own `INFO` CRUD lifecycle logs, `ERROR` failure context (`Failed <action> '<name>': <error>`), and partial-progress batch abort summaries (`X/Y applied [...], 1 failed [...], Z pending [...]`).
+  - Driven adapters (`graft.<engine>.*`) must not emit duplicate `INFO` CRUD logs; they emit `DEBUG` sub-step traces, `WARNING` logs on transient HTTP retry backoffs (`429`/`503`) or two-stage partial mutations, and format API exceptions with HTTP status code, vendor status, method, and endpoint path.
 
 ---
 

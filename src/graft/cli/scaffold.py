@@ -150,8 +150,12 @@ class {class_prefix}CompilerAdapter(RuleCompilerPort):
 
     deployer_py = engine_dir / "deployer.py"
     deployer_py.write_text(
-        f"""from graft.core.models.rule import RuleEnvelope
+        f"""import logging
+
+from graft.core.models.rule import RuleEnvelope
 from graft.core.ports.deployer import RuleDeployerPort
+
+logger = logging.getLogger("graft.{name}.deployer")
 
 
 class {class_prefix}DeployerAdapter(RuleDeployerPort):
@@ -159,16 +163,22 @@ class {class_prefix}DeployerAdapter(RuleDeployerPort):
         return ()
 
     def create_rule(self, rule: RuleEnvelope) -> str:
+        logger.debug("Creating rule '%s' (%s)", rule.metadata.name, rule.metadata.id)
         return rule.metadata.id
 
     def update_rule(self, rule: RuleEnvelope) -> None:
-        pass
+        logger.debug("Updating rule '%s' (%s)", rule.metadata.name, rule.metadata.id)
 
     def delete_rule(self, rule_id: str) -> None:
-        pass
+        logger.debug("Deleting rule '%s'", rule_id)
 
     def set_rule_state(self, rule_id: str, enabled: bool, alerting: bool) -> None:
-        pass
+        logger.debug(
+            "Setting rule '%s' state (enabled=%s, alerting=%s)",
+            rule_id,
+            enabled,
+            alerting,
+        )
 """,
         encoding="utf-8",
     )

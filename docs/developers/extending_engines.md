@@ -258,12 +258,13 @@ class SentinelCompilerAdapter(RuleCompilerPort):
 
 ## 7. Step 6: Implement the Deployer (`deployer.py`)
 
-The deployer implements [`RuleDeployerPort`](../../src/graft/core/ports/deployer.py):
+The deployer implements [`RuleDeployerPort`](../../src/graft/core/ports/deployer.py). Use `logging.getLogger("graft.<engine>.deployer")` to emit `DEBUG` sub-step traces (`graft --verbose`), `WARNING` logs on transient HTTP retries (`429`/`503`) or partial two-stage mutations, and raise exceptions that include the HTTP status code, vendor status, method, and endpoint path (see [Logging & Operational Diagnostics Contract](framework.md#7-logging--operational-diagnostics-contract)). Do not log duplicate `INFO` messages for rule CRUD—Core's reconciler already logs `INFO` and `ERROR` context around every port call:
 
 ```python
 from __future__ import annotations
 
 import json
+import logging
 import urllib.error
 import urllib.request
 from typing import Any
@@ -271,6 +272,8 @@ from typing import Any
 from graft.core.models.rule import BaseDeploymentConfig, RuleEnvelope, RuleMetadata
 from graft.core.ports.deployer import RuleDeployerPort
 from graft.engines.sentinel.config import SentinelConfig
+
+logger = logging.getLogger("graft.sentinel.deployer")
 
 
 class SentinelDeployerAdapter(RuleDeployerPort):
@@ -287,16 +290,22 @@ class SentinelDeployerAdapter(RuleDeployerPort):
         return ()
 
     def create_rule(self, rule: RuleEnvelope) -> str:
+        logger.debug("Creating rule '%s' (%s)", rule.metadata.name, rule.metadata.id)
         return rule.metadata.id
 
     def update_rule(self, rule: RuleEnvelope) -> None:
-        pass
+        logger.debug("Updating rule '%s' (%s)", rule.metadata.name, rule.metadata.id)
 
     def delete_rule(self, rule_id: str) -> None:
-        pass
+        logger.debug("Deleting rule '%s'", rule_id)
 
     def set_rule_state(self, rule_id: str, enabled: bool, alerting: bool) -> None:
-        pass
+        logger.debug(
+            "Setting rule '%s' state (enabled=%s, alerting=%s)",
+            rule_id,
+            enabled,
+            alerting,
+        )
 ```
 
 ---
@@ -383,6 +392,7 @@ Before submitting an engine PR:
 - [ ] Manifest `engine.yaml` is valid according to `src/graft/core/schemas/engine_manifest.schema.json`.
 - [ ] Rule schema `schemas/rule.schema.json` validates example rules.
 - [ ] All HTTP interactions use `urllib.request` (zero third-party dependencies).
+- [ ] Module loggers use `graft.<engine>.<module>`, emit `WARNING` on transient retries (`429`/`503`) or two-stage partial mutations, and format API exceptions with HTTP status code, vendor status, method, and endpoint path.
 - [ ] Adapter passes `isinstance(adapter, EngineAdapter)` protocol checks.
 - [ ] Engine tests achieve 100% pass rate in `uv run pytest tests/engines/<engine>`.
 - [ ] Code passes strict static quality gates: `uv run ruff check .`, `uv run ruff format --check .`, and `uv run mypy --strict src tests`.

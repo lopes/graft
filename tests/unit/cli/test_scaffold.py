@@ -57,9 +57,12 @@ def test_scaffold_engine_creates_structure_and_files(tmp_path: Path) -> None:
     # 6. .env.example updated with engine section
     assert "# ENGINE: SENTINEL" in env_example.read_text(encoding="utf-8")
 
-    # 7. Generated adapter implements resolve_deployment_status
+    # 7. Generated adapter implements resolve_deployment_status and deployer wires logging
     adapter_code = (engine_dir / "adapter.py").read_text(encoding="utf-8")
     assert "def resolve_deployment_status(" in adapter_code
+    deployer_code = (engine_dir / "deployer.py").read_text(encoding="utf-8")
+    assert 'logging.getLogger("graft.sentinel.deployer")' in deployer_code
+    assert "logger.debug(" in deployer_code
     test_adapter_code = (tests_engine_dir / "test_adapter.py").read_text(encoding="utf-8")
     assert "resolve_deployment_status" in test_adapter_code
 

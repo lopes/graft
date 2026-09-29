@@ -89,6 +89,7 @@ To maintain strict architectural boundaries, responsibilities are cleanly divide
 | **Syntax Verification** | Orchestrates file discovery and aggregates compiler results. | Invokes the vendor's syntax validation API (e.g., Chronicle `:verifyRuleText` or Azure API syntax check). |
 | **Synthetic Replay** | Parses `tests:` block fixtures and evaluates expected match counts. | Transports synthetic events to staging infrastructure or non-alerting quarantine and executes detection evaluation. |
 | **Vendor Managed Content** | Validates `managed.yaml` schema and computes exclusion/ruleset diffs. | Interacts with vendor curated rules APIs (e.g., Chronicle CuratedRuleSets or Sentinel Analytics Templates). |
+| **Logging & Diagnostics** | Configures UTC ISO-8601 formatting (`graft.cli`), logs rule/exclusion CRUD lifecycle (`INFO`), logs failure context (`ERROR`), and emits partial-progress abort summaries (`graft.reconciler`). | Logs HTTP retry backoffs (`WARNING`), multi-step partial mutation warnings (`WARNING`), and low-level API sub-steps (`DEBUG`) under `graft.<engine>.*`; raises exceptions containing HTTP status, vendor status code, method, and endpoint path. |
 
 ---
 
@@ -335,3 +336,27 @@ Graft dynamically discovers engines without requiring hardcoded imports in Core:
    ```
    If present, Core validates the rule envelope and managed manifest against these schemas without leaking vendor specifics into Core.
 4. **Adapter Instantiation:** When an engine command is executed, Core dynamically imports the `adapter_class` declared in the manifest (e.g., `graft.engines.sentinel.adapter:SentinelAdapter`), instantiates it with the target environment (`env="production"`), and verifies that it implements [`EngineAdapter`](../../src/graft/core/ports/engine.py).
+
+---
+
+## 7. Logging & Operational Diagnostics Contract
+
+When a GitOps deployment or verification workflow fails in CI or an operator terminal, logs must immediately answer four operational questions without requiring raw HTTP packet inspection:
+
+1. **When:** Every log record carries an ISO-8601 UTC timestamp (`YYYY-MM-DDTHH:MM:SSZ`) configured on the root logger (`logging.Formatter.converter = time.gmtime`) so terminal and CI output correlates directly with SIEM audit logs.
+2. **What:** Core reconcilers ([`src/graft/core/reconciler.py`](../../src/graft/core/reconciler.py)) log the exact rule or exclusion identifier (`name`, `id`) and the attempted mutation (`creating custom rule`, `updating custom rule`, `creating exclusion`, etc.) at `ERROR` level before re-raising.
+3. **Where:** Driven adapters format API exceptions with the HTTP status code, canonical vendor status string (e.g., `INVALID_ARGUMENT`, `PERMISSION_DENIED`), HTTP method, and endpoint path:
+   ```text
+   <Engine> API Error <status_code> (<vendor_status>) on <METHOD> <path>: <message>
+   ```
+4. **Progress:** When reconciliation aborts mid-batch, `graft.reconciler` emits an `ERROR` summary listing how many mutations succeeded (`applied [...]`), which item failed (`failed [...]`), and which items were not yet reached (`pending [...]`).
+
+### Adapter Logging Rules
+
+Driven adapters must follow four rules to integrate cleanly with Core's diagnostic pipeline:
+
+- **Namespace:** Initialize module loggers under `logging.getLogger("graft.<engine>.<module>")` (e.g., `graft.secops.client`, `graft.secops.deployer`, `graft.secops.managed`).
+- **No Duplicate `INFO` CRUD Logs:** Do not log high-level `INFO` messages for rule/exclusion CRUD inside `RuleDeployerPort` or `ManagedEnginePort` methods—`CustomRuleReconciler` and `GitOpsReconciler` already log `INFO` before invoking each port method. Use `logger.debug(...)` inside adapters for sub-step tracing (activated via `graft --verbose`).
+- **Transient Retry Warnings (`WARNING`):** When an HTTP client backs off on transient rate limits or service unavailability (`HTTP 429` or `HTTP 503`), emit a `WARNING` log with the status code, HTTP method, endpoint path, backoff delay, and attempt counter.
+- **Two-Stage Mutation Warnings (`WARNING`):** Many SIEM APIs split rule or exclusion provisioning across two separate HTTP calls (e.g., `POST /rules` followed by `PATCH /rules/{id}/deployment`). If step 1 succeeds on the tenant and step 2 fails, log a `WARNING` stating that the definition was created or updated on the tenant before the deployment state call failed, then re-raise the exception so Core can log the batch abort summary.
+

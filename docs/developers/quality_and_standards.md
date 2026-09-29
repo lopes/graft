@@ -92,6 +92,16 @@ uv run pytest
 > [!CAUTION]
 > The `T20` linter rule strictly bans `print()` calls in production source code (`src/graft/`). Use `sys.stdout.write()`, `sys.stderr.write()`, or standard library `logging`.
 
+### Logging & Operational Diagnostics Standards
+
+Operational logs are a first-class engineering contract across CLI, Core, and Driven Adapters:
+- **UTC Timestamps (`When`):** Root logging formats every line as `%(asctime)s [%(levelname)s] %(message)s` with `datefmt="%Y-%m-%dT%H:%M:%SZ"` and `logging.Formatter.converter = time.gmtime`.
+- **Log Level Taxonomy:**
+  - `DEBUG`: Low-level adapter sub-steps (e.g., step 1 rule creation vs. step 2 deployment toggle), enabled via `graft --verbose`.
+  - `INFO`: High-level rule/exclusion CRUD lifecycle actions emitted by Core reconcilers (`graft.reconciler`) and CLI controllers (`graft.cli`). Adapters must not emit duplicate `INFO` CRUD logs.
+  - `WARNING`: Transient HTTP retry backoffs (`429`/`503`), two-stage partial mutation divergence (when step 1 succeeds on the tenant before step 2 fails), and graceful degradation (e.g., skipped staging replay when credentials are absent).
+  - `ERROR`: Rule/exclusion failure context (`What`), adapter API error details (`Where`: HTTP status, vendor status code, HTTP method, and endpoint path), and partial-progress batch abort summaries (`Progress`: `X/Y applied [...], 1 failed [...], Z pending [...]`).
+
 ---
 
 ## 5. Code Commenting Directives (High Signal-to-Noise)
