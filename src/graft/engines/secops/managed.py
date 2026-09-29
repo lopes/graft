@@ -391,13 +391,22 @@ class SecOpsManagedAdapter(ManagedEnginePort):
             dep_body["detectionExclusionApplication"] = app
 
         logger.info("Configuring findings refinement deployment for '%s'", created_id)
-        self._client.request(
-            "PATCH",
-            f"findingsRefinements/{created_id}/deployment",
-            body=dep_body,
-            params={"updateMask": "enabled,archived,detectionExclusionApplication"},
-            api_version="v1alpha",
-        )
+        try:
+            self._client.request(
+                "PATCH",
+                f"findingsRefinements/{created_id}/deployment",
+                body=dep_body,
+                params={"updateMask": "enabled,archived,detectionExclusionApplication"},
+                api_version="v1alpha",
+            )
+        except Exception:
+            logger.warning(
+                "Findings refinement '%s' was created on tenant (id=%s), "
+                "but configuring deployment failed",
+                exclusion.id,
+                created_id,
+            )
+            raise
         return created_id
 
     def update_exclusion(self, exclusion: ManagedExclusion) -> None:
@@ -437,13 +446,21 @@ class SecOpsManagedAdapter(ManagedEnginePort):
             dep_body["detectionExclusionApplication"] = app
 
         logger.info("Updating findings refinement deployment for '%s'", exclusion.id)
-        self._client.request(
-            "PATCH",
-            f"findingsRefinements/{exclusion.id}/deployment",
-            body=dep_body,
-            params={"updateMask": "enabled,archived,detectionExclusionApplication"},
-            api_version="v1alpha",
-        )
+        try:
+            self._client.request(
+                "PATCH",
+                f"findingsRefinements/{exclusion.id}/deployment",
+                body=dep_body,
+                params={"updateMask": "enabled,archived,detectionExclusionApplication"},
+                api_version="v1alpha",
+            )
+        except Exception:
+            logger.warning(
+                "Findings refinement '%s' definition was updated on tenant, "
+                "but configuring deployment failed",
+                exclusion.id,
+            )
+            raise
 
     def delete_exclusion(self, exclusion_id: str) -> None:
         logger.info(

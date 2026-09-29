@@ -1,4 +1,5 @@
 import json
+import logging
 import time
 import urllib.error
 import urllib.parse
@@ -9,6 +10,8 @@ from typing import Any, cast
 from graft.engines.secops.auth import SecOpsAuthResolver
 from graft.engines.secops.config import SecOpsConfig
 
+logger = logging.getLogger("graft.secops.client")
+
 
 class SecOpsApiError(RuntimeError):
     def __init__(
@@ -17,11 +20,18 @@ class SecOpsApiError(RuntimeError):
         status_code: int,
         status: str = "",
         details: list[dict[str, object]] | None = None,
+        method: str = "",
+        path: str = "",
     ) -> None:
-        super().__init__(f"SecOps API Error {status_code}: {message}")
+        status_part = f" ({status})" if status else ""
+        endpoint_target = f"{method} {path}".strip()
+        endpoint_part = f" on {endpoint_target}" if endpoint_target else ""
+        super().__init__(f"SecOps API Error {status_code}{status_part}{endpoint_part}: {message}")
         self.status_code = status_code
         self.status = status
         self.details = details or []
+        self.method = method
+        self.path = path
 
 
 class SecOpsClient:
@@ -78,6 +88,7 @@ class SecOpsClient:
         params: Mapping[str, str] | None = None,
         api_version: str | None = None,
     ) -> dict[str, object]:
+        http_method = method.upper()
         url = self._resolve_url(path, params, api_version=api_version)
         if not (url.startswith("https://") or url.startswith("http://")):
             raise ValueError(f"Invalid URL scheme: {url}")
@@ -96,7 +107,7 @@ class SecOpsClient:
             url=url,
             data=data,
             headers=headers,
-            method=method.upper(),
+            method=http_method,
         )
 
         attempts = 0
@@ -112,6 +123,15 @@ class SecOpsClient:
                 if status_code in (429, 503) and attempts < self._max_retries:
                     attempts += 1
                     sleep_time = self._base_delay_seconds * (2 ** (attempts - 1))
+                    logger.warning(
+                        "SecOps API returned HTTP %d on %s %s; retrying in %.1fs (attempt %d/%d)",
+                        status_code,
+                        http_method,
+                        path,
+                        sleep_time,
+                        attempts,
+                        self._max_retries,
+                    )
                     time.sleep(sleep_time)
                     continue
 
@@ -136,6 +156,8 @@ class SecOpsClient:
                     status_code=status_code,
                     status=error_status,
                     details=error_details,
+                    method=http_method,
+                    path=path,
                 ) from err
             except (urllib.error.URLError, TimeoutError, OSError) as err:
                 status_code = 504 if isinstance(err, TimeoutError) else 0
@@ -144,4 +166,6 @@ class SecOpsClient:
                     message=f"Network transport error: {error_msg}",
                     status_code=status_code,
                     status="UNAVAILABLE",
+                    method=http_method,
+                    path=path,
                 ) from err

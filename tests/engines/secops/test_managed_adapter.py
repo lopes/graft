@@ -569,3 +569,116 @@ def test_set_ruleset_deployment_unresolvable_category_with_spaces_falls_back_to_
         f"curatedRuleSetCategories/-/curatedRuleSets/{rs_uuid}/curatedRuleSetDeployments/precise"
     )
     assert call["path"] == expected_path
+
+
+def test_create_exclusion_logs_warning_when_deployment_step_fails(
+    mock_client: MockSecOpsClient,
+    adapter: SecOpsManagedAdapter,
+    caplog: pytest.LogCaptureFixture,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import logging
+
+    from graft.engines.secops.client import SecOpsApiError
+
+    orig_request = mock_client.request
+
+    def failing_on_dep(
+        method: str,
+        path: str,
+        body: Mapping[str, object] | None = None,
+        params: Mapping[str, str] | None = None,
+        api_version: str | None = None,
+    ) -> dict[str, object]:
+        if path.endswith("/deployment"):
+            raise SecOpsApiError(
+                "Invalid exclusion target",
+                400,
+                status="INVALID_ARGUMENT",
+                method=method,
+                path=path,
+            )
+        return orig_request(method, path, body=body, params=params, api_version=api_version)
+
+    mock_client.set_response(
+        "POST",
+        "findingsRefinements",
+        {
+            "name": f"{INSTANCE_BASE}/findingsRefinements/fr_created_123",
+            "displayName": "Ignore test IP",
+            "query": 'principal.ip != "10.0.0.1"',
+        },
+    )
+    monkeypatch.setattr(mock_client, "request", failing_on_dep)
+
+    exclusion = ManagedExclusion(
+        id="ex-new",
+        rule_id="ru_iam",
+        ruleset_id="rs-cloud-threats",
+        expression='principal.ip != "10.0.0.1"',
+        description="Ignore test IP",
+    )
+    with (
+        caplog.at_level(logging.WARNING, logger="graft.secops.managed"),
+        pytest.raises(SecOpsApiError),
+    ):
+        adapter.create_exclusion(exclusion)
+
+    warnings = [r.message for r in caplog.records if r.levelname == "WARNING"]
+    assert any(
+        "Findings refinement 'ex-new' was created on tenant (id=fr_created_123), "
+        "but configuring deployment failed" in msg
+        for msg in warnings
+    )
+
+
+def test_update_exclusion_logs_warning_when_deployment_step_fails(
+    mock_client: MockSecOpsClient,
+    adapter: SecOpsManagedAdapter,
+    caplog: pytest.LogCaptureFixture,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import logging
+
+    from graft.engines.secops.client import SecOpsApiError
+
+    orig_request = mock_client.request
+
+    def failing_on_dep(
+        method: str,
+        path: str,
+        body: Mapping[str, object] | None = None,
+        params: Mapping[str, str] | None = None,
+        api_version: str | None = None,
+    ) -> dict[str, object]:
+        if path.endswith("/deployment"):
+            raise SecOpsApiError(
+                "Invalid exclusion target",
+                400,
+                status="INVALID_ARGUMENT",
+                method=method,
+                path=path,
+            )
+        return orig_request(method, path, body=body, params=params, api_version=api_version)
+
+    monkeypatch.setattr(mock_client, "request", failing_on_dep)
+
+    exclusion = ManagedExclusion(
+        id="ex-existing",
+        rule_id=None,
+        ruleset_id="rs-cloud-threats",
+        expression='principal.ip != "10.0.0.2"',
+        description="Updated IP",
+    )
+    with (
+        caplog.at_level(logging.WARNING, logger="graft.secops.managed"),
+        pytest.raises(SecOpsApiError),
+    ):
+        adapter.update_exclusion(exclusion)
+
+    warnings = [r.message for r in caplog.records if r.levelname == "WARNING"]
+    assert any(
+        "Findings refinement 'ex-existing' definition was updated on tenant, "
+        "but configuring deployment failed" in msg
+        for msg in warnings
+    )

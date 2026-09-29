@@ -1,5 +1,6 @@
 import io
 import json
+import logging
 import urllib.error
 import urllib.request
 from typing import Any
@@ -137,12 +138,20 @@ def test_client_http_error_parsing(
         client.request("POST", ":verifyRuleText", body={"ruleText": "invalid"})
 
     assert exc_info.value.status_code == 400
-    assert "Invalid rule syntax at line 5" in str(exc_info.value)
     assert exc_info.value.status == "INVALID_ARGUMENT"
+    assert exc_info.value.method == "POST"
+    assert exc_info.value.path == ":verifyRuleText"
+    assert str(exc_info.value) == (
+        "SecOps API Error 400 (INVALID_ARGUMENT) on POST :verifyRuleText: "
+        "Invalid rule syntax at line 5"
+    )
 
 
 def test_client_retry_on_429_then_success(
-    secops_config: SecOpsConfig, auth_resolver: SecOpsAuthResolver, monkeypatch: pytest.MonkeyPatch
+    secops_config: SecOpsConfig,
+    auth_resolver: SecOpsAuthResolver,
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
 ) -> None:
     calls = 0
 
@@ -177,11 +186,16 @@ def test_client_retry_on_429_then_success(
     monkeypatch.setattr("time.sleep", lambda s: sleep_calls.append(s))
 
     client = SecOpsClient(config=secops_config, auth_resolver=auth_resolver, max_retries=2)
-    result = client.request("GET", "rules")
+    with caplog.at_level(logging.WARNING, logger="graft.secops.client"):
+        result = client.request("GET", "rules")
 
     assert result == {"status": "ok"}
     assert calls == 2
     assert len(sleep_calls) == 1
+    assert any(
+        "SecOps API returned HTTP 429 on GET rules; retrying in 1.0s (attempt 1/2)" in r.message
+        for r in caplog.records
+    )
 
 
 def test_client_network_urlerror_wrapped_in_secops_api_error(
@@ -196,8 +210,13 @@ def test_client_network_urlerror_wrapped_in_secops_api_error(
     with pytest.raises(SecOpsApiError) as exc_info:
         client.request("GET", "rules")
 
-    assert "Temporary failure in name resolution" in str(exc_info.value)
+    assert str(exc_info.value) == (
+        "SecOps API Error 0 (UNAVAILABLE) on GET rules: "
+        "Network transport error: Temporary failure in name resolution"
+    )
     assert exc_info.value.status_code == 0
+    assert exc_info.value.method == "GET"
+    assert exc_info.value.path == "rules"
 
 
 def test_client_timeout_error_wrapped_in_secops_api_error(
@@ -212,5 +231,33 @@ def test_client_timeout_error_wrapped_in_secops_api_error(
     with pytest.raises(SecOpsApiError) as exc_info:
         client.request("GET", "rules")
 
-    assert "timed out" in str(exc_info.value)
+    assert str(exc_info.value) == (
+        "SecOps API Error 504 (UNAVAILABLE) on GET rules: "
+        "Network transport error: The read operation timed out"
+    )
     assert exc_info.value.status_code == 504
+    assert exc_info.value.method == "GET"
+    assert exc_info.value.path == "rules"
+
+
+def test_secops_api_error_formatting_variants() -> None:
+    err_minimal = SecOpsApiError("Not found", 404)
+    assert str(err_minimal) == "SecOps API Error 404: Not found"
+
+    err_status_only = SecOpsApiError("Forbidden", 403, status="PERMISSION_DENIED")
+    assert str(err_status_only) == "SecOps API Error 403 (PERMISSION_DENIED): Forbidden"
+
+    err_endpoint_only = SecOpsApiError("Bad gateway", 502, method="POST", path="rules")
+    assert str(err_endpoint_only) == "SecOps API Error 502 on POST rules: Bad gateway"
+
+    err_full = SecOpsApiError(
+        "Invalid query",
+        400,
+        status="INVALID_ARGUMENT",
+        method="POST",
+        path="findingsRefinements",
+    )
+    assert (
+        str(err_full)
+        == "SecOps API Error 400 (INVALID_ARGUMENT) on POST findingsRefinements: Invalid query"
+    )

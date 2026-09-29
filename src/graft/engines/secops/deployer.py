@@ -1,7 +1,11 @@
+import logging
+
 from graft.core.models.rule import BaseDeploymentConfig, RuleEnvelope, RuleMetadata, Runbook
 from graft.core.ports.deployer import RuleDeployerPort
 from graft.engines.secops.client import SecOpsApiError, SecOpsClient
 from graft.engines.secops.compiler import extract_meta_id, synthesize_yaral_rule
+
+logger = logging.getLogger("graft.secops.deployer")
 
 
 class SecOpsDeployerAdapter(RuleDeployerPort):
@@ -109,6 +113,7 @@ class SecOpsDeployerAdapter(RuleDeployerPort):
 
     def create_rule(self, rule: RuleEnvelope) -> str:
         rule_text, _ = synthesize_yaral_rule(rule)
+        logger.debug("POST rules for '%s' (meta.id=%s)", rule.metadata.name, rule.metadata.id)
         response = self._client.request(
             "POST",
             "rules",
@@ -121,37 +126,72 @@ class SecOpsDeployerAdapter(RuleDeployerPort):
         self._remote_ids_by_meta_id[rule.metadata.id] = secops_id
         self._remote_ids_by_meta_id[secops_id] = secops_id
 
-        self.set_rule_state(
-            rule_id=secops_id,
-            enabled=rule.deployment.enabled,
-            alerting=rule.deployment.alerting,
-        )
+        try:
+            self.set_rule_state(
+                rule_id=secops_id,
+                enabled=rule.deployment.enabled,
+                alerting=rule.deployment.alerting,
+            )
+        except Exception:
+            logger.warning(
+                "Rule '%s' was created on tenant (id=%s), but setting deployment state "
+                "[enabled=%s, alerting=%s] failed",
+                rule.metadata.name,
+                secops_id,
+                rule.deployment.enabled,
+                rule.deployment.alerting,
+            )
+            raise
         return secops_id
 
     def update_rule(self, rule: RuleEnvelope) -> None:
         rule_text, _ = synthesize_yaral_rule(rule)
         secops_id = self._resolve_remote_id(rule.metadata.id, rule.metadata.name)
+        logger.debug(
+            "PATCH rules/%s text for '%s' (meta.id=%s)",
+            secops_id,
+            rule.metadata.name,
+            rule.metadata.id,
+        )
         self._client.request(
             "PATCH",
             f"rules/{secops_id}",
             body={"text": rule_text},
             params={"update_mask": "text"},
         )
-        self.set_rule_state(
-            rule_id=secops_id,
-            enabled=rule.deployment.enabled,
-            alerting=rule.deployment.alerting,
-        )
+        try:
+            self.set_rule_state(
+                rule_id=secops_id,
+                enabled=rule.deployment.enabled,
+                alerting=rule.deployment.alerting,
+            )
+        except Exception:
+            logger.warning(
+                "Rule '%s' logic was updated on tenant (id=%s), but setting deployment state "
+                "[enabled=%s, alerting=%s] failed",
+                rule.metadata.name,
+                secops_id,
+                rule.deployment.enabled,
+                rule.deployment.alerting,
+            )
+            raise
         self._remote_ids_by_name[rule.metadata.name] = secops_id
         self._remote_ids_by_meta_id[rule.metadata.id] = secops_id
         self._remote_ids_by_meta_id[secops_id] = secops_id
 
     def delete_rule(self, rule_id: str) -> None:
         target_id = self._resolve_remote_id(rule_id)
+        logger.debug("DELETE rules/%s", target_id)
         self._client.request("DELETE", f"rules/{target_id}")
 
     def set_rule_state(self, rule_id: str, enabled: bool, alerting: bool) -> None:
         target_id = self._resolve_remote_id(rule_id)
+        logger.debug(
+            "PATCH rules/%s/deployment [enabled=%s, alerting=%s]",
+            target_id,
+            enabled,
+            alerting,
+        )
         self._client.request(
             "PATCH",
             f"rules/{target_id}/deployment",

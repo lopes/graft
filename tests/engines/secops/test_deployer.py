@@ -303,3 +303,70 @@ def test_list_rules_with_pagination_fetches_all_pages(mock_client: MagicMock) ->
     assert rules[1].metadata.name == "rule_two"
     assert rules[1].deployment.enabled is False
     assert mock_client.request.call_count == 4
+
+
+def test_create_rule_logs_warning_when_deployment_step_fails(
+    mock_client: MagicMock, sample_rule: RuleEnvelope, caplog: pytest.LogCaptureFixture
+) -> None:
+    import logging
+
+    from graft.engines.secops.client import SecOpsApiError
+
+    mock_client.request.side_effect = [
+        {"name": "projects/p/locations/l/instances/i/rules/ru_created_999"},
+        SecOpsApiError(
+            "Permission denied on deployment",
+            403,
+            status="PERMISSION_DENIED",
+            method="PATCH",
+            path="rules/ru_created_999/deployment",
+        ),
+    ]
+
+    deployer = SecOpsDeployerAdapter(client=mock_client)
+    with (
+        caplog.at_level(logging.DEBUG, logger="graft.secops.deployer"),
+        pytest.raises(SecOpsApiError),
+    ):
+        deployer.create_rule(sample_rule)
+
+    warnings = [r.message for r in caplog.records if r.levelname == "WARNING"]
+    assert any(
+        "Rule 'test_rule' was created on tenant (id=ru_created_999), but setting deployment state"
+        in msg
+        for msg in warnings
+    )
+
+
+def test_update_rule_logs_warning_when_deployment_step_fails(
+    mock_client: MagicMock, sample_rule: RuleEnvelope, caplog: pytest.LogCaptureFixture
+) -> None:
+    import logging
+
+    from graft.engines.secops.client import SecOpsApiError
+
+    rule_id = sample_rule.metadata.id
+    mock_client.request.side_effect = [
+        {"name": f"projects/p/locations/l/instances/i/rules/{rule_id}"},
+        SecOpsApiError(
+            "Invalid deployment state",
+            400,
+            status="INVALID_ARGUMENT",
+            method="PATCH",
+            path=f"rules/{rule_id}/deployment",
+        ),
+    ]
+
+    deployer = SecOpsDeployerAdapter(client=mock_client)
+    with (
+        caplog.at_level(logging.DEBUG, logger="graft.secops.deployer"),
+        pytest.raises(SecOpsApiError),
+    ):
+        deployer.update_rule(sample_rule)
+
+    warnings = [r.message for r in caplog.records if r.levelname == "WARNING"]
+    assert any(
+        f"Rule 'test_rule' logic was updated on tenant (id={rule_id}), but setting deployment state"
+        in msg
+        for msg in warnings
+    )
