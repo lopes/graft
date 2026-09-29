@@ -48,7 +48,7 @@ metadata:
   id: "b1d72370-5fa3-4cb8-a579-22a468d6f101"
   name: "gcp_iam_service_account_key_create"
   description: "Long-lived user-managed GCP service account keys created."
-  authors:
+  owners:
     - "Detection Engineering <detection@company.com>"
   mitre:
     persistence:
@@ -326,15 +326,15 @@ Every catalog export (`table`, `csv`, `json`, `markdown`) normalizes to 14 objec
 | `description` | Summary of threat behavior detected | Rule YAML `metadata.description` |
 | `mitre_attack` | Semicolon-delimited `TAxxxx:Tyyyy.zzz` pairs | Rule YAML `metadata.mitre` |
 | `tags` | Semicolon-delimited operational tags | Rule YAML `metadata.tags` |
-| `author` | Creation author name from Git blame | Git commit history |
+| `owners` | Accountable rule owners (`;` in CSV, `, ` in Markdown, list in JSON) | Rule YAML `metadata.owners` |
 | `created_at` | Initial commit timestamp (ISO 8601) | Git commit history |
 | `last_modified_at` | Most recent commit timestamp (ISO 8601) | Git commit history |
 | `review_count` | Total number of revision commits | Git revision count |
-| `contributor_count` | Number of distinct Git authors | Git blame log |
+| `contributor_count` | Number of distinct Git authors | Git commit history |
 | `has_runbook` | Whether triage and response runbook is documented | Rule YAML `runbook` block |
 
 > [!NOTE]
-> **Why `severity`, `alerting`, and `maturity` Are Omitted:**
-> - `severity` does not exist in standard envelopes (it is an engine-specific outcome, not an agnostic rule property).
+> **Why `priority`, `severity`, `alerting`, and `maturity` Are Omitted:**
+> - **`priority` and `severity`** do not belong at detection authoring time: **Priority** belongs at **Triage time** (where queue ordering depends on live asset criticality and identity context), and **Severity** belongs at **Response time** (where incident impact is determined after triage).
 > - Raw deployment fields (`alerting`, `enabled`, `run_frequency`) vary broadly by engine; Graft abstracts them into an engine-evaluated tri-state `status` (`enabled`, `silent`, `disabled`).
-> - Static `maturity` labels rots into administrative toil and false security. Objective VCS lifecycle and review metrics provide verifiable indicators without synthetic score inflation.
+> - Static `maturity` labels rot into administrative toil and false security. Objective VCS lifecycle and review metrics provide verifiable indicators without synthetic score inflation.

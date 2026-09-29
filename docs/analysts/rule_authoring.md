@@ -9,7 +9,7 @@ Graft standardizes all custom detection engineering around a declarative **5-Blo
 ```mermaid
 flowchart TD
     ROOT["Rule Envelope (.yaml)"]
-    ROOT --> B1["<b>1. metadata</b><br/>ID, Name, Authors, MITRE, Tags, References"]
+    ROOT --> B1["<b>1. metadata</b><br/>ID, Name, Owners, MITRE, Tags, References"]
     ROOT --> B2["<b>2. logic</b><br/>Engine-Native Query String (e.g. YARA-L 2.0)"]
     ROOT --> B3["<b>3. deployment</b><br/>Enabled, Alerting, Run Frequency (live/hourly/daily)"]
     ROOT --> B4["<b>4. runbook</b><br/>Context, Triage Checklist, Incident Response Steps"]
@@ -17,15 +17,29 @@ flowchart TD
 ```
 
 ### Block 1: `metadata`
-Core identification and threat taxonomy mapping.
+Core identification, operational ownership, and threat taxonomy mapping. All 7 fields are **required** by the base schema to enforce catalog consistency:
 
 - `id` *(UUID string, required)*: Globally unique identifier (v4 UUID format).
 - `name` *(string, required)*: Unique snake_case rule identifier (`^[a-z0-9_]+$`, max 64 chars).
-- `description` *(string, required)*: Plain-text explanation of the detection objective (max 128 chars).
-- `authors` *(list of strings, optional)*: Rule authors and engineering teams.
-- `mitre` *(mapping of tactic to techniques, optional)*: MITRE ATT&CK Enterprise taxonomy mapping. Must use MITRE's normalized tactic names (lowercase with spaces replaced by dashes, e.g., `initial-access`, `privilege-escalation`, `execution` — see [MITRE Enterprise Tactics](https://attack.mitre.org/tactics/enterprise/)) and real technique IDs (`T1566.002`, `T1098.001`). Validated against the pre-indexed matrix during linting.
-- `tags` *(list of strings, optional)*: Categorical labels (e.g., `google_workspace`, `gcp`, `phishing`).
-- `references` *(list of strings, optional)*: Canonical URLs to threat research, documentation, or blog posts.
+- `description` *(string, required)*: Plain-text explanation of the detection objective (non-blank, max 128 chars).
+- `owners` *(list of strings, required, min 1 unique item)*: Teams or individuals operationally accountable for maintaining and tuning the rule (e.g., `Cloud Security Operations`, `Detection Engineering <detection@company.com>`).
+- `mitre` *(mapping of tactic to techniques, required, min 1 tactic with min 1 unique technique)*: MITRE ATT&CK Enterprise taxonomy mapping. Must use MITRE's normalized tactic names (lowercase with spaces replaced by dashes, e.g., `initial-access`, `privilege-escalation`, `execution` — see [MITRE Enterprise Tactics](https://attack.mitre.org/tactics/enterprise/)) and real technique IDs (`T1566.002`, `T1098.001`). Validated against the pre-indexed matrix during linting.
+- `tags` *(list of strings, required, min 1 unique item)*: Lowercase snake_case categorical labels (`^[a-z0-9_]+$`, e.g., `google_workspace`, `gcp`, `phishing`).
+- `references` *(list of strings, required, min 1 unique item)*: Non-blank strings citing threat research URLs, internal design docs, or external/community author attribution.
+
+#### Ownership (`metadata.owners`) vs. Authorship (`git log` & `metadata.references`)
+In day-to-day SOC and detection engineering operations, the primary question when a rule misfires, needs tuning, or requires review is **"Who is responsible for maintaining this rule today?"**—not who originally wrote the first draft years ago. For that reason, Graft uses `metadata.owners` to track operational accountability and separates it from historical authorship:
+
+- **Internal Authorship & Contributors:** Since all rules live in Git, the initial author and every subsequent contributor are permanently recorded in version control. Run `git log --follow -p <rule.yaml>` to inspect the original commit and revision history, or `git shortlog -sn -- <rule.yaml>` to list all contributors.
+- **External & Community Attribution:** Because `metadata.references` accepts arbitrary non-blank strings (not just URLs), use `references` to credit external threat researchers, blog posts, or upstream community rules (e.g., `"Adapted from Sigma rule by Florian Roth"`, `"https://lopes.id/log/high-fidelity-nrd-detections/"`).
+
+> [!IMPORTANT]
+> **Why `priority` and `severity` Are Intentionally Omitted at Detection Time:**
+> Hardcoding `priority: high` or `severity: critical` inside static rule YAML files is a widespread industry habit, but **detection authoring time is the wrong lifecycle stage to assign them**:
+> - **Priority belongs at Triage time:** Priority dictates *which alert the SOC investigates next* in the queue. That decision depends on runtime environmental context known only when the alert fires—such as target asset criticality, user privilege level, active threat intelligence, or correlated alerts—not a static guess made when the rule was written.
+> - **Severity belongs at Response time:** Severity measures the *verified business and operational impact* of a confirmed incident once triage concludes and incident response begins. The exact same detection logic firing on an isolated sandbox VM versus a production domain controller will have completely different incident severities.
+>
+> If your target engine supports dynamic risk expressions inside the query itself (such as YARA-L's `outcome: $risk_score`), compute context-aware risk dynamically in `logic` rather than hardcoding static `priority` or `severity` labels in `metadata`.
 
 > [!NOTE]
 > **Why Static `status` / `maturity` Fields Are Intentionally Omitted:**
@@ -108,7 +122,7 @@ metadata:
   id: "b1d72370-5fa3-4cb8-a579-22a468d6f101"
   name: "workspace_nrd_possible_phishing"
   description: "User opened an email from a domain created within the last 7 days."
-  authors:
+  owners:
     - "Joe Lopes <lopes.id>"
     - "Detection Engineering"
   mitre:

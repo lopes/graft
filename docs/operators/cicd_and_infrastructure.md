@@ -93,7 +93,7 @@ Requires WIF credentials and runs only on trusted internal branches:
 
 When a pull request is merged into `main`, the deployment workflow executes authoritative forward synchronization:
 
-1. **Full History Checkout:** Checks out with `fetch-depth: 0` so that `src/graft/core/blame.py` can extract accurate Git blame (author, commit SHA, timestamp) to inject into generated catalog metadata.
+1. **Full History Checkout:** Checks out with `fetch-depth: 0` so that `src/graft/core/blame.py` can extract accurate Git lifecycle metrics (creation timestamp, last modified timestamp, commit count, and contributor count) to inject into generated catalog metadata.
 2. **Offline Sanity Check:** Executes `uv run graft lint` to guarantee repository integrity before touching remote APIs.
 3. **WIF Authentication:** Authenticates via GitHub OIDC and assumes the production deployer service account.
 4. **Full Catalog Reconciliation:**

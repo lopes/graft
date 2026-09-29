@@ -33,7 +33,7 @@ flowchart TD
 
     subgraph E2["Epoch 2: Baseline Enrichment & Cutover"]
         direction TB
-        ENRICH["<b>Operator Review & Enrichment</b><br/>• Document Incident Response Runbooks<br/>• Map MITRE ATT&CK Techniques<br/>• Add Synthetic UDM Test Vectors<br/>• Verify via <code>graft lint</code>"]
+        ENRICH["<b>Operator Review & Enrichment</b><br/>• Assign Accountable Owners, Tags & References<br/>• Document Incident Response Runbooks<br/>• Map MITRE ATT&CK Techniques<br/>• Add Synthetic UDM Test Vectors<br/>• Verify via <code>graft lint</code>"]
         COMMIT["<b>Baseline Cutover Commit</b><br/><code>git commit -m 'secops: import detection baseline'</code><br/><code>git push origin main</code>"]
         MAN --> ENRICH
         CUST --> ENRICH
@@ -98,24 +98,35 @@ When pulling managed content:
 
 When pulling custom rules:
 1. Graft invokes `SecOpsDeployerAdapter.list_rules()` to fetch rule inventory (`GET rules?view=FULL`) and deployment states (`GET rules/-/deployments`).
-2. The deconstruction compiler ([`deconstruct_yaral_rule`](../../src/graft/engines/secops/compiler.py#L53)):
+2. The deconstruction compiler ([`deconstruct_yaral_rule`](../../src/graft/engines/secops/compiler.py#L59)):
    - Sanitizes rule display names into valid snake_case identifiers matching `^[a-z0-9_]+$`.
    - Normalizes server identifiers (`ru_<uuid>`) into valid RFC 4122 UUIDs for `metadata.id`.
-   - Extracts embedded metadata (`description`, `author`) from the rule's `meta:` block.
+   - Extracts embedded `id` and `description` from the rule's `meta:` block.
+   - Leaves `owners: []`, `mitre: {}`, `tags: []`, and `references: []` empty—Graft never guesses operational ownership from legacy YARA-L `meta: author` strings.
    - Preserves clean YARA-L logic (`events:`, `match:`, `condition:`) in the envelope's `logic` block.
-3. Graft populates standard default runbook sections (`context`, `triage`, `response`) so that the resulting envelopes immediately pass strict schema validation.
+3. Graft populates default placeholder runbook sections (`context`, `triage`, `response`). Because Graft schemas strictly require non-empty `owners`, `mitre`, `tags`, and `references`, `graft lint` will intentionally flag freshly pulled rules until operators complete Epoch 2 enrichment.
 4. Each rule is saved to `rulesets/secops/custom/<rule_name>.yaml`. Existing files are protected against accidental overwrites unless `--force` is supplied.
 
 ---
 
 ## 4. Epoch 2: Baseline Enrichment & Cutover
 
-Imported rules reflect what was running in the SIEM console. However, bare SIEM rules often lack operational context, incident response procedures, MITRE ATT&CK taxonomy tags, and synthetic test vectors.
+Imported rules reflect what was running in the SIEM console. However, bare SIEM rules lack accountable ownership metadata, incident response procedures, MITRE ATT&CK taxonomy mappings, and synthetic test vectors.
 
 ### 1. Enrichment Checklist
 
-Before committing the baseline to version control, detection engineers review and enrich the envelopes:
+Before committing the baseline to version control, detection engineers review and enrich every pulled envelope so it passes `graft lint`:
 
+- **Ownership, Tags & References:** Assign accountable `owners`, categorical `tags`, and `references` (including any upstream/original author attribution):
+  ```yaml
+  owners:
+    - "Cloud Security Operations"
+  tags:
+    - "gcp"
+    - "iam"
+  references:
+    - "https://cloud.google.com/iam/docs/creating-managing-service-account-keys"
+  ```
 - **Runbooks:** Replace default placeholder triage and response playbooks with verified operational steps:
   ```yaml
   runbook:

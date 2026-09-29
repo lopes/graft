@@ -1,6 +1,6 @@
 # Visibility, Threat Matrix & Catalog Tooling
 
-Graft turns detection repositories into high-visibility threat coverage assets. Security leadership, SOC managers, and compliance auditors can assess coverage, review authorship, and export catalogs directly from the command line.
+Graft turns detection repositories into high-visibility threat coverage assets. Security leadership, SOC managers, and compliance auditors can assess coverage, verify operational ownership, and export catalogs directly from the command line.
 
 ---
 
@@ -65,21 +65,22 @@ Each technique in the exported layer is scoped strictly to its tactic shortname 
 
 ---
 
-## 2. Git Blame & Author Attribution
+## 2. Operational Ownership & Git Lifecycle Provenance
 
-Graft tracks the provenance of every detection rule without external Git libraries. Using Python's standard library `subprocess`, the attribution service extracts:
+Graft separates operational accountability (`metadata.owners` in the rule YAML) from historical revision provenance extracted from Git via Python's standard library `subprocess`:
 
-- **Creation Author & Timestamp:** Determined via `git log --diff-filter=A --follow --format=%an|%aI`.
-- **Last Modified Author & Timestamp:** Extracted via `git log -n 1 --format=%an|%aI`.
-- **Commit Revision Count:** Extracted via `git rev-list --count HEAD`.
-- **Contributor Breadth:** Count of distinct Git authors touching the file.
-- **Offline / Untracked Fallback:** Automatically falls back to `"Unknown"` and rule YAML metadata if files are uncommitted or executed in environments lacking Git history (e.g. Docker containers).
+- **Accountable Owners (`owners`):** Sourced directly from `metadata.owners` in the rule envelope to identify the teams or individuals responsible for maintaining the rule today.
+- **Creation Timestamp (`created_at`):** Determined via `git log --diff-filter=A --follow --format=%aI -n 1`.
+- **Last Modified Timestamp (`last_modified_at`):** Extracted via `git log -n 1 --format=%aI`.
+- **Commit Revision Count (`review_count`):** Extracted via `git rev-list --count HEAD`.
+- **Contributor Breadth (`contributor_count`):** Count of distinct Git author emails (`git log --format=%ae`) touching the file. To inspect individual commit authors, use `git log --follow <path>`, and credit external research authors in `metadata.references`.
+- **Offline / Untracked Fallback:** Automatically falls back to `"Unknown"` timestamps and `0` counts if files are uncommitted or executed in environments lacking Git history (e.g. container builds).
 
 ---
 
 ## 3. Rule Catalog Generation
 
-Export comprehensive detection catalogs enriched with deployment status, MITRE ATT&CK associations, and Git author attribution across multiple formats.
+Export comprehensive detection catalogs enriched with deployment status, MITRE ATT&CK associations, accountable rule owners, and Git lifecycle metrics across multiple formats.
 
 ### Terminal Table (`--format=table`, Default)
 Fast, on-screen inspection without piping to files:
@@ -95,11 +96,11 @@ Ideal for automated documentation generation and repository wiki tracking:
 graft export catalog --format=markdown --out docs/RULE_CATALOG.md
 ```
 
-| Rule Name | Engine | Status | MITRE ATT&CK | Author | Created | Last Updated | Reviews | Contributors | Runbook |
+| Rule Name | Engine | Status | MITRE ATT&CK | Owners | Created | Last Updated | Reviews | Contributors | Runbook |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | `gcp_iam_service_account_key_create` | secops | enabled | TA0003:T1098, TA0003:T1098.001, TA0004:T1078.004 | Cloud Security Operations | 2026-09-17 | 2026-09-22 | 3 | 1 | yes |
 | `gcp_storage_iam_public_access_granted` | secops | enabled | TA0004:T1078.004, TA0112:T1685 | Cloud Security Operations | 2026-09-17 | 2026-09-22 | 2 | 1 | yes |
-| `workspace_nrd_possible_phishing` | secops | enabled | TA0001:T1566.002 | Joe Lopes <lopes.id> | 2026-09-17 | 2026-09-22 | 4 | 1 | yes |
+| `workspace_nrd_possible_phishing` | secops | enabled | TA0001:T1566.002 | Joe Lopes <lopes.id>, Detection Engineering | 2026-09-17 | 2026-09-22 | 4 | 1 | yes |
 
 ### CSV Catalog (`--format=csv`)
 Generate spreadsheet-ready exports for security audits and reporting pipelines:
@@ -109,7 +110,7 @@ graft export catalog --format=csv --out exports/detection_catalog.csv
 ```
 
 CSV exports contain 14 normalized fields:
-`id, name, engine, rule_type, status, description, mitre_attack, tags, author, created_at, last_modified_at, review_count, contributor_count, has_runbook`.
+`id, name, engine, rule_type, status, description, mitre_attack, tags, owners, created_at, last_modified_at, review_count, contributor_count, has_runbook`.
 
 ### JSON Catalog (`--format=json`)
 Structured JSON for feeding security data lakes, BigQuery, or internal developer portals:
