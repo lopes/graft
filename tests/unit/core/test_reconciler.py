@@ -605,3 +605,99 @@ def test_custom_rule_diff_renamed_rule_matched_by_id_to_update() -> None:
     assert len(diff.rules_to_update) == 1
     assert diff.rules_to_update[0].metadata.name == "new_rule_name"
     assert len(diff.untracked_rules) == 0
+
+
+def test_custom_rule_apply_failure_logs_error_and_abort_summary(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    rule_create = _make_envelope("rule_a", rule_id="uuid-a")
+    rule_update_curr = _make_envelope("rule_b", rule_id="uuid-b", logic="old_b")
+    rule_update_des = _make_envelope("rule_b", rule_id="uuid-b", logic="new_b")
+    rule_update_curr_c = _make_envelope("rule_c", rule_id="uuid-c", logic="old_c")
+    rule_update_des_c = _make_envelope("rule_c", rule_id="uuid-c", logic="new_c")
+
+    class FailingUpdateDeployer(RecordingMockRuleDeployer):
+        def update_rule(self, rule: RuleEnvelope) -> None:
+            if rule.metadata.name == "rule_b":
+                raise RuntimeError("API 400 INVALID_ARGUMENT on PATCH rules/ru_b: bad syntax")
+            super().update_rule(rule)
+
+    deployer = FailingUpdateDeployer(initial_rules=(rule_update_curr, rule_update_curr_c))
+    reconciler = CustomRuleReconciler()
+
+    with (
+        caplog.at_level(logging.INFO, logger="graft.reconciler"),
+        pytest.raises(RuntimeError, match="bad syntax") as exc_info,
+    ):
+        reconciler.apply(
+            desired=(rule_create, rule_update_des, rule_update_des_c),
+            port=deployer,
+        )
+
+    assert getattr(exc_info.value, "_graft_logged", False) is True
+    error_msgs = [r.message for r in caplog.records if r.levelname == "ERROR"]
+    assert any(
+        "Failed updating custom rule 'rule_b': "
+        "API 400 INVALID_ARGUMENT on PATCH rules/ru_b: bad syntax" in msg
+        for msg in error_msgs
+    )
+    assert any(
+        "Custom rules reconciliation aborted: 1/3 applied ['rule_a'], "
+        "1 failed [rule_b], 1 pending ['rule_c']" in msg
+        for msg in error_msgs
+    )
+
+
+def test_managed_apply_failure_logs_error_and_abort_summary(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    current_rs = ManagedRuleSet(
+        id="rs-cloud-threats",
+        name="Cloud Threat Detections",
+        category="CLOUD",
+        deployments=(ManagedDeployment(type="PRECISE", enabled=False, alerting=False),),
+    )
+    desired_rs = ManagedRuleSet(
+        id="rs-cloud-threats",
+        name="Cloud Threat Detections",
+        category="CLOUD",
+        deployments=(ManagedDeployment(type="PRECISE", enabled=True, alerting=True),),
+    )
+    ex_create_1 = ManagedExclusion(id="ex-fail", rule_id=None, ruleset_id=None, expression="bad")
+    ex_create_2 = ManagedExclusion(id="ex-next", rule_id=None, ruleset_id=None, expression="ok")
+
+    class FailingExclusionManagedEngine(RecordingMockManagedEngine):
+        def create_exclusion(self, exclusion: ManagedExclusion) -> str:
+            if exclusion.id == "ex-fail":
+                raise RuntimeError(
+                    "API 400 INVALID_ARGUMENT on POST findingsRefinements: invalid query"
+                )
+            return super().create_exclusion(exclusion)
+
+    current = ManagedState(rulesets=(current_rs,), exclusions=())
+    desired = ManagedState(rulesets=(desired_rs,), exclusions=(ex_create_1, ex_create_2))
+    engine = FailingExclusionManagedEngine(initial_state=current)
+    reconciler = GitOpsReconciler()
+
+    with (
+        caplog.at_level(logging.INFO, logger="graft.reconciler"),
+        pytest.raises(RuntimeError, match="invalid query") as exc_info,
+    ):
+        reconciler.apply(desired=desired, port=engine)
+
+    assert getattr(exc_info.value, "_graft_logged", False) is True
+    info_msgs = [r.message for r in caplog.records if r.levelname == "INFO"]
+    assert any(
+        "Applied managed deployment change: rs-cloud-threats (PRECISE)" in msg for msg in info_msgs
+    )
+    error_msgs = [r.message for r in caplog.records if r.levelname == "ERROR"]
+    assert any(
+        "Failed creating exclusion 'ex-fail': "
+        "API 400 INVALID_ARGUMENT on POST findingsRefinements: invalid query" in msg
+        for msg in error_msgs
+    )
+    assert any(
+        "Managed state reconciliation aborted: 1/3 applied ['rs-cloud-threats (PRECISE)'], "
+        "1 failed [ex-fail], 1 pending ['ex-next']" in msg
+        for msg in error_msgs
+    )

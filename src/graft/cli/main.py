@@ -2,6 +2,7 @@ import argparse
 import json
 import logging
 import sys
+import time
 from collections.abc import Sequence
 from pathlib import Path
 
@@ -10,6 +11,8 @@ from graft.cli.commands_core import execute_export, execute_lint, execute_update
 from graft.cli.engines import discover_and_register_engines
 from graft.cli.scaffold import ScaffoldError, scaffold_engine, scaffold_rule
 from graft.core.env import load_env_file
+
+logger = logging.getLogger("graft.cli")
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -110,7 +113,12 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     # Configure logging
     log_level = logging.WARNING if args.quiet else (logging.DEBUG if args.verbose else logging.INFO)
-    logging.basicConfig(level=log_level, format="[%(levelname)s] %(message)s")
+    logging.Formatter.converter = time.gmtime
+    logging.basicConfig(
+        level=log_level,
+        format="%(asctime)s [%(levelname)s] %(message)s",
+        datefmt="%Y-%m-%dT%H:%M:%SZ",
+    )
 
     cmd = args.command
 
@@ -178,8 +186,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     except Exception as err:
         if args.json:
             sys.stdout.write(json.dumps({"success": False, "error": str(err)}) + "\n")
-        else:
-            sys.stderr.write(f"Unexpected error: {err}\n")
+        elif not getattr(err, "_graft_logged", False):
+            logger.error("%s", err)
         return 1
 
     return 0

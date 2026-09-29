@@ -241,31 +241,9 @@ class GitOpsReconciler:
             )
             return reconcile_diff
 
-        # Apply deployment toggles
-        for dep in reconcile_diff.deployment_diffs:
-            if dep.has_changes:
-                logger.info(
-                    "Applying managed deployment change: %s (%s) [enabled: %s, alerting: %s]",
-                    dep.ruleset_id,
-                    dep.deployment_type,
-                    dep.desired_enabled,
-                    dep.desired_alerting,
-                )
-                port.set_ruleset_deployment(
-                    ruleset_id=dep.ruleset_id,
-                    deployment_type=dep.deployment_type,
-                    enabled=dep.desired_enabled,
-                    alerting=dep.desired_alerting,
-                    category=dep.category_id or dep.category,
-                )
-
-        # Apply deletions
-        for excl in reconcile_diff.exclusions_to_delete:
-            logger.info("Deleting exclusion '%s' from tenant", excl.id)
-            port.delete_exclusion(excl.id)
-            logger.info("Deleted exclusion '%s' from tenant", excl.id)
-
-        # Apply updates
+        active_dep_diffs = [d for d in reconcile_diff.deployment_diffs if d.has_changes]
+        active_excl_deletes = list(reconcile_diff.exclusions_to_delete)
+        active_excl_updates: list[tuple[ExclusionDiff, ManagedExclusion]] = []
         for u_diff in reconcile_diff.exclusions_to_update:
             if u_diff.has_changes:
                 des_match = next(
@@ -278,15 +256,104 @@ class GitOpsReconciler:
                     None,
                 )
                 if des_match is not None:
-                    target_excl = dataclasses.replace(des_match, id=u_diff.id)
-                    logger.info("Updating exclusion '%s' in tenant", u_diff.id)
-                    port.update_exclusion(target_excl)
-                    logger.info("Updated exclusion '%s' in tenant", u_diff.id)
+                    active_excl_updates.append(
+                        (u_diff, dataclasses.replace(des_match, id=u_diff.id))
+                    )
+        active_excl_creates = list(reconcile_diff.exclusions_to_create)
+
+        planned_labels: list[str] = [
+            *(f"{d.ruleset_id} ({d.deployment_type})" for d in active_dep_diffs),
+            *(e.id for e in active_excl_deletes),
+            *(u_diff.id for u_diff, _ in active_excl_updates),
+            *(e.id for e in active_excl_creates),
+        ]
+        total_actions = len(planned_labels)
+        applied_labels: list[str] = []
+
+        def _log_managed_abort(failed_label: str, exc: Exception) -> None:
+            pending_labels = planned_labels[len(applied_labels) + 1 :]
+            logger.error(
+                "Managed state reconciliation aborted: %d/%d applied %s, "
+                "1 failed [%s], %d pending %s",
+                len(applied_labels),
+                total_actions,
+                applied_labels,
+                failed_label,
+                len(pending_labels),
+                pending_labels,
+            )
+            exc._graft_logged = True  # type: ignore[attr-defined]
+
+        # Apply deployment toggles
+        for dep in active_dep_diffs:
+            dep_label = f"{dep.ruleset_id} ({dep.deployment_type})"
+            logger.info(
+                "Applying managed deployment change: %s (%s) [enabled: %s, alerting: %s]",
+                dep.ruleset_id,
+                dep.deployment_type,
+                dep.desired_enabled,
+                dep.desired_alerting,
+            )
+            try:
+                port.set_ruleset_deployment(
+                    ruleset_id=dep.ruleset_id,
+                    deployment_type=dep.deployment_type,
+                    enabled=dep.desired_enabled,
+                    alerting=dep.desired_alerting,
+                    category=dep.category_id or dep.category,
+                )
+            except Exception as exc:
+                logger.error(
+                    "Failed applying managed deployment change '%s' (%s): %s",
+                    dep.ruleset_id,
+                    dep.deployment_type,
+                    exc,
+                )
+                _log_managed_abort(dep_label, exc)
+                raise
+            applied_labels.append(dep_label)
+            logger.info(
+                "Applied managed deployment change: %s (%s) [enabled: %s, alerting: %s]",
+                dep.ruleset_id,
+                dep.deployment_type,
+                dep.desired_enabled,
+                dep.desired_alerting,
+            )
+
+        # Apply deletions
+        for excl in active_excl_deletes:
+            logger.info("Deleting exclusion '%s' from tenant", excl.id)
+            try:
+                port.delete_exclusion(excl.id)
+            except Exception as exc:
+                logger.error("Failed deleting exclusion '%s': %s", excl.id, exc)
+                _log_managed_abort(excl.id, exc)
+                raise
+            applied_labels.append(excl.id)
+            logger.info("Deleted exclusion '%s' from tenant", excl.id)
+
+        # Apply updates
+        for u_diff, target_excl in active_excl_updates:
+            logger.info("Updating exclusion '%s' in tenant", u_diff.id)
+            try:
+                port.update_exclusion(target_excl)
+            except Exception as exc:
+                logger.error("Failed updating exclusion '%s': %s", u_diff.id, exc)
+                _log_managed_abort(u_diff.id, exc)
+                raise
+            applied_labels.append(u_diff.id)
+            logger.info("Updated exclusion '%s' in tenant", u_diff.id)
 
         # Apply creations
-        for excl in reconcile_diff.exclusions_to_create:
+        for excl in active_excl_creates:
             logger.info("Creating exclusion '%s' in tenant", excl.id)
-            res_id = port.create_exclusion(excl)
+            try:
+                res_id = port.create_exclusion(excl)
+            except Exception as exc:
+                logger.error("Failed creating exclusion '%s': %s", excl.id, exc)
+                _log_managed_abort(excl.id, exc)
+                raise
+            applied_labels.append(excl.id)
             logger.info("Created exclusion '%s' in tenant", res_id or excl.id)
 
         logger.info(
@@ -397,14 +464,47 @@ class CustomRuleReconciler:
             )
             return reconcile_diff
 
+        planned_names: list[str] = [
+            *(r.metadata.name for r in reconcile_diff.rules_to_create),
+            *(r.metadata.name for r in reconcile_diff.rules_to_update),
+        ]
+        total_actions = len(planned_names)
+        applied_names: list[str] = []
+
+        def _log_custom_abort(failed_name: str, exc: Exception) -> None:
+            pending_names = planned_names[len(applied_names) + 1 :]
+            logger.error(
+                "Custom rules reconciliation aborted: %d/%d applied %s, "
+                "1 failed [%s], %d pending %s",
+                len(applied_names),
+                total_actions,
+                applied_names,
+                failed_name,
+                len(pending_names),
+                pending_names,
+            )
+            exc._graft_logged = True  # type: ignore[attr-defined]
+
         for rule in reconcile_diff.rules_to_create:
             logger.info("Creating custom rule '%s' in tenant", rule.metadata.name)
-            port.create_rule(rule)
+            try:
+                port.create_rule(rule)
+            except Exception as exc:
+                logger.error("Failed creating custom rule '%s': %s", rule.metadata.name, exc)
+                _log_custom_abort(rule.metadata.name, exc)
+                raise
+            applied_names.append(rule.metadata.name)
             logger.info("Created custom rule '%s' in tenant", rule.metadata.name)
 
         for rule in reconcile_diff.rules_to_update:
             logger.info("Updating custom rule '%s' in tenant", rule.metadata.name)
-            port.update_rule(rule)
+            try:
+                port.update_rule(rule)
+            except Exception as exc:
+                logger.error("Failed updating custom rule '%s': %s", rule.metadata.name, exc)
+                _log_custom_abort(rule.metadata.name, exc)
+                raise
+            applied_names.append(rule.metadata.name)
             logger.info("Updated custom rule '%s' in tenant", rule.metadata.name)
 
         logger.info(

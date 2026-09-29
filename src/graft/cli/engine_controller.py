@@ -53,7 +53,9 @@ class EngineCommandController:
                     rules.append(rule)
                 except Exception as exc:
                     logger.error("Failed loading custom rule %s: %s", rule_path, exc)
-                    raise RuntimeError(f"Failed loading custom rule '{rule_path}': {exc}") from exc
+                    err = RuntimeError(f"Failed loading custom rule '{rule_path}': {exc}")
+                    err._graft_logged = True  # type: ignore[attr-defined]
+                    raise err from exc
         return tuple(rules)
 
     def execute(self, args: argparse.Namespace, json_output: bool = False) -> int:
@@ -532,12 +534,19 @@ class EngineCommandController:
                 )
 
                 custom_reconciler = CustomRuleReconciler()
-                diff = custom_reconciler.apply(
-                    desired=desired,
-                    port=deployer,
-                    content_comparator=content_comparator,
-                    scoped=not all_rules,
-                )
+                try:
+                    diff = custom_reconciler.apply(
+                        desired=desired,
+                        port=deployer,
+                        content_comparator=content_comparator,
+                        scoped=not all_rules,
+                    )
+                except Exception:
+                    if run_managed:
+                        logger.warning(
+                            "Skipping managed state reconciliation due to custom rules failure"
+                        )
+                    raise
                 payload["custom"] = {
                     "applied": True,
                     "has_changes": diff.has_changes,

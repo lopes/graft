@@ -419,3 +419,84 @@ def test_main_update_mitre_json_output(capsys: pytest.CaptureFixture[str]) -> No
     data = json.loads(captured.out)
     assert data["success"] is True
     assert data["version"] == "19.2"
+
+
+def test_main_configures_utc_iso8601_log_formatter() -> None:
+    import logging
+    import time
+
+    with patch("graft.cli.main.logging.basicConfig") as mock_basic_config:
+        exit_code = main(["lint", "rulesets/secops/custom/gcp_iam_service_account_key_create.yaml"])
+    assert exit_code == 0
+    assert logging.Formatter.converter is time.gmtime
+    mock_basic_config.assert_called_once_with(
+        level=logging.INFO,
+        format="%(asctime)s [%(levelname)s] %(message)s",
+        datefmt="%Y-%m-%dT%H:%M:%SZ",
+    )
+
+
+def test_main_apply_failure_logs_rule_context_and_skips_managed(
+    caplog: pytest.LogCaptureFixture,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    import logging
+
+    from graft.engines.secops.client import SecOpsApiError
+
+    with (
+        patch("graft.engines.secops.adapter.SecOpsClient"),
+        patch("graft.engines.secops.adapter.SecOpsDeployerAdapter") as mock_deployer_cls,
+        patch("graft.engines.secops.adapter.SecOpsManagedAdapter") as mock_managed_cls,
+    ):
+        mock_deployer = MagicMock()
+        mock_deployer.list_rules.return_value = ()
+        mock_deployer.create_rule.side_effect = SecOpsApiError(
+            "Invalid syntax",
+            400,
+            status="INVALID_ARGUMENT",
+            method="POST",
+            path="rules",
+        )
+        mock_deployer_cls.return_value = mock_deployer
+
+        mock_managed = MagicMock()
+        mock_managed_cls.return_value = mock_managed
+
+        with caplog.at_level(logging.INFO):
+            exit_code = main(["secops", "apply", "--all", "--env", "staging"])
+
+    assert exit_code == 1
+    captured = capsys.readouterr()
+    assert "Unexpected error:" not in captured.err
+    messages = [r.message for r in caplog.records]
+    assert any(
+        "Failed creating custom rule" in m
+        and "SecOps API Error 400 (INVALID_ARGUMENT) on POST rules: Invalid syntax" in m
+        for m in messages
+    )
+    assert any("Custom rules reconciliation aborted:" in m for m in messages)
+    assert any(
+        "Skipping managed state reconciliation due to custom rules failure" in m for m in messages
+    )
+
+
+def test_main_uncaught_exception_logged_via_logger_error(
+    caplog: pytest.LogCaptureFixture,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    import logging
+
+    with (
+        patch(
+            "graft.cli.main.execute_lint",
+            side_effect=RuntimeError("unhandled failure during command"),
+        ),
+        caplog.at_level(logging.ERROR, logger="graft.cli"),
+    ):
+        exit_code = main(["lint"])
+
+    assert exit_code == 1
+    captured = capsys.readouterr()
+    assert "Unexpected error:" not in captured.err
+    assert any("unhandled failure during command" in r.message for r in caplog.records)
