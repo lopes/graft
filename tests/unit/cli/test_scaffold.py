@@ -79,6 +79,8 @@ def test_scaffold_engine_already_exists(tmp_path: Path) -> None:
 
 
 def test_scaffold_rule_success(tmp_path: Path) -> None:
+    from graft.engines.secops.compiler import synthesize_yaral_rule
+
     rule_path = scaffold_rule("secops", "suspicious_powershell_execution", project_root=tmp_path)
 
     assert rule_path.exists()
@@ -88,8 +90,15 @@ def test_scaffold_rule_success(tmp_path: Path) -> None:
     envelope = load_rule_from_yaml(rule_path, schema_name="secops_custom")
     assert envelope.metadata.name == "suspicious_powershell_execution"
     assert envelope.metadata.id is not None
+    assert len(envelope.metadata.owners) >= 1
+    assert len(envelope.metadata.references) >= 1
+    assert not envelope.logic.strip().startswith("rule ")
     assert envelope.deployment.enabled is False
     assert len(envelope.tests) >= 1
+
+    # Synthesizing YARA-L must produce exactly one rule block (not double-wrapped)
+    synth_text, _ = synthesize_yaral_rule(envelope)
+    assert synth_text.count("rule suspicious_powershell_execution {") == 1
 
 
 def test_scaffold_rule_invalid_name(tmp_path: Path) -> None:

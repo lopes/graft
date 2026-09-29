@@ -142,9 +142,34 @@ def test_secops_pull_custom_rules(
     assert rule1.is_file()
     assert rule2.is_file()
 
+    # Raw pulled rules intentionally leave owners, mitre, tags, and references empty
+    # (no guessing from YARA-L meta.author) and must fail schema validation until enriched
+    import yaml
+
+    from graft.core.loader import RuleLoadError
+
+    raw1 = yaml.safe_load(rule1.read_text(encoding="utf-8"))
+    assert raw1["metadata"]["owners"] == []
+    assert raw1["metadata"]["mitre"] == {}
+    assert raw1["metadata"]["tags"] == []
+    assert raw1["metadata"]["references"] == []
+
+    with pytest.raises(RuleLoadError, match="Schema validation failed"):
+        load_rule_from_yaml(rule1)
+
+    # Once the operator enriches the required metadata fields in Epoch 2, it loads cleanly
+    for rp in (rule1, rule2):
+        doc = yaml.safe_load(rp.read_text(encoding="utf-8"))
+        doc["metadata"]["owners"] = ["Detection Team"]
+        doc["metadata"]["mitre"] = {"initial-access": ["T1566.002"]}
+        doc["metadata"]["tags"] = ["secops"]
+        doc["metadata"]["references"] = ["Imported from Chronicle tenant"]
+        rp.write_text(yaml.safe_dump(doc, sort_keys=False, indent=2), encoding="utf-8")
+
     env1 = load_rule_from_yaml(rule1)
     assert env1.metadata.name == "workspace_nrd_phishing"
     assert env1.metadata.id == "b1d72370-5fa3-4cb8-a579-22a468d6f101"
+    assert env1.metadata.owners == ("Detection Team",)
     assert env1.deployment.enabled is True
     assert env1.deployment.alerting is True
     assert "events:" in env1.logic

@@ -65,10 +65,10 @@ def test_build_catalog_entry_from_rule() -> None:
             id="00000000-0000-0000-0000-000000000001",
             name="workspace_nrd_phishing",
             description="NRD Phishing Test",
-            priority="high",
-            authors=("Joe Lopes",),
+            owners=("Joe Lopes", "Detection Engineering"),
             mitre={"initial-access": ("T1566.002",)},
             tags=("workspace", "phishing"),
+            references=("https://lopes.id",),
         ),
         logic="events: $e condition: $e",
         deployment=BaseDeploymentConfig(enabled=True, alerting=True, run_frequency="live"),
@@ -83,7 +83,8 @@ def test_build_catalog_entry_from_rule() -> None:
     assert entry.status == "enabled"
     assert entry.mitre_attack == ("TA0001:T1566.002",)
     assert entry.tags == ("workspace", "phishing")
-    assert entry.author == "Joe Lopes"
+    assert entry.owners == ("Joe Lopes", "Detection Engineering")
+    assert not hasattr(entry, "author")
     assert entry.created_at == "Unknown"
     assert entry.last_modified_at == "Unknown"
     assert entry.review_count == 0
@@ -100,7 +101,7 @@ def test_build_catalog_entry_with_git(tmp_path: Path) -> None:
             id="00000000-0000-0000-0000-000000000002",
             name="rule_with_git",
             description="Rule with git description",
-            authors=(),
+            owners=("Cloud Security Operations",),
             mitre={},
             tags=(),
         ),
@@ -112,9 +113,7 @@ def test_build_catalog_entry_with_git(tmp_path: Path) -> None:
 
     mock_git = RuleGitMetadata(
         path=rule_file,
-        author="Alice Author",
         created_at="2026-02-01",
-        last_modified_by="Bob Committer",
         last_modified_at="2026-09-20",
         commit_count=7,
         contributor_count=3,
@@ -123,7 +122,7 @@ def test_build_catalog_entry_with_git(tmp_path: Path) -> None:
     with patch("graft.core.catalog.extract_git_metadata", return_value=mock_git):
         entry = build_catalog_entry_from_rule(rule=rule, engine="secops", path=rule_file)
 
-    assert entry.author == "Alice Author"
+    assert entry.owners == ("Cloud Security Operations",)
     assert entry.created_at == "2026-02-01"
     assert entry.last_modified_at == "2026-09-20"
     assert entry.review_count == 7
@@ -141,7 +140,7 @@ def test_render_catalog_table() -> None:
         description="A test rule",
         mitre_attack=("TA0001:T1566.002",),
         tags=("workspace",),
-        author="Joe Lopes",
+        owners=("Joe Lopes",),
         created_at="2026-01-01",
         last_modified_at="2026-09-22",
         review_count=4,
@@ -173,7 +172,7 @@ def test_export_catalog_markdown() -> None:
         description="A test rule",
         mitre_attack=("TA0001:T1566.002",),
         tags=("workspace",),
-        author="Joe Lopes",
+        owners=("Joe Lopes", "SecOps Team"),
         created_at="2026-01-01",
         last_modified_at="2026-09-22",
         review_count=4,
@@ -182,8 +181,8 @@ def test_export_catalog_markdown() -> None:
     )
 
     md = export_catalog_markdown([entry])
-    assert "| Rule Name | Engine | Status | MITRE ATT&CK |" in md
-    assert "| `test_rule` | secops | enabled | TA0001:T1566.002 |" in md
+    assert "| Rule Name | Engine | Status | MITRE ATT&CK | Owners |" in md
+    assert "| `test_rule` | secops | enabled | TA0001:T1566.002 | Joe Lopes, SecOps Team |" in md
     assert "| Reviews | Contributors | Runbook |" in md
     assert "| 4 | 2 | yes |" in md
 
@@ -198,7 +197,7 @@ def test_export_catalog_csv() -> None:
         description="A test rule",
         mitre_attack=("TA0001:T1566.002",),
         tags=("workspace", "phishing"),
-        author="Joe Lopes",
+        owners=("Joe Lopes", "SecOps Team"),
         created_at="2026-01-01",
         last_modified_at="2026-09-22",
         review_count=4,
@@ -215,6 +214,8 @@ def test_export_catalog_csv() -> None:
     assert rows[0]["status"] == "enabled"
     assert rows[0]["mitre_attack"] == "TA0001:T1566.002"
     assert rows[0]["tags"] == "workspace;phishing"
+    assert rows[0]["owners"] == "Joe Lopes;SecOps Team"
+    assert "author" not in rows[0]
     assert rows[0]["created_at"] == "2026-01-01"
     assert rows[0]["last_modified_at"] == "2026-09-22"
     assert rows[0]["review_count"] == "4"
@@ -234,7 +235,7 @@ def test_export_catalog_json() -> None:
         description="A test rule",
         mitre_attack=("TA0001:T1566.002",),
         tags=("workspace",),
-        author="Joe Lopes",
+        owners=("Joe Lopes", "SecOps Team"),
         created_at="2026-01-01",
         last_modified_at="2026-09-22",
         review_count=4,
@@ -248,6 +249,8 @@ def test_export_catalog_json() -> None:
     assert payload[0]["engine"] == "secops"
     assert payload[0]["status"] == "enabled"
     assert payload[0]["mitre_attack"] == ["TA0001:T1566.002"]
+    assert payload[0]["owners"] == ["Joe Lopes", "SecOps Team"]
+    assert "author" not in payload[0]
     assert payload[0]["created_at"] == "2026-01-01"
     assert payload[0]["last_modified_at"] == "2026-09-22"
     assert payload[0]["review_count"] == 4

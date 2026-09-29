@@ -94,7 +94,7 @@ class SecOpsDeployerAdapter(RuleDeployerPort):
                 id=effective_id,
                 name=display_name,
                 description="",
-                authors=(),
+                owners=(),
                 mitre={},
             )
             deployment = BaseDeploymentConfig(enabled=dep_enabled, alerting=dep_alerting)

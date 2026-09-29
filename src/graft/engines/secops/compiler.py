@@ -69,14 +69,13 @@ def deconstruct_yaral_rule(
             id=rule_id,
             name=rule_name,
             description=f"Imported detection rule for {rule_name}"[:128],
-            authors=(),
+            owners=(),
             mitre={},
         )
         return metadata, rule_text.strip()
 
     rule_name = _sanitize_slug(rule_match.group(1))
     meta_dict: dict[str, str] = {}
-    authors: list[str] = []
 
     meta_start = re.search(r"^\s*meta:\s*$", rule_text, re.MULTILINE)
     body_start_pos = 0
@@ -103,8 +102,6 @@ def deconstruct_yaral_rule(
                 k = kv.group(1).lower()
                 val = kv.group(2).strip().strip('"').strip("'")
                 meta_dict[k] = val
-                if k in ("author", "authors"):
-                    authors.append(val)
     else:
         first_sec = _SECTION_HEADER_REGEX.search(rule_text, pos=rule_match.end())
         body_start_pos = first_sec.start() if first_sec else rule_match.end()
@@ -125,7 +122,7 @@ def deconstruct_yaral_rule(
         id=meta_id,
         name=rule_name,
         description=desc,
-        authors=tuple(authors),
+        owners=(),
         mitre={},
     )
     return metadata, logic_body

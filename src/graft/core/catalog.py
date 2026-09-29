@@ -23,7 +23,7 @@ class CatalogEntry:
     description: str
     mitre_attack: tuple[str, ...]
     tags: tuple[str, ...]
-    author: str
+    owners: tuple[str, ...]
     created_at: str
     last_modified_at: str
     review_count: int
@@ -68,7 +68,6 @@ def build_catalog_entry_from_rule(
     adapter: EngineAdapter | None = None,
     status: str | None = None,
 ) -> CatalogEntry:
-    author = rule.metadata.authors[0] if rule.metadata.authors else "Unknown"
     created_at = "Unknown"
     last_modified_at = "Unknown"
     review_count = 0
@@ -78,8 +77,6 @@ def build_catalog_entry_from_rule(
         p = Path(path)
         if p.is_file():
             git_meta = extract_git_metadata(p)
-            if git_meta.author != "Unknown":
-                author = git_meta.author
             created_at = git_meta.created_at
             last_modified_at = git_meta.last_modified_at
             review_count = git_meta.commit_count
@@ -100,7 +97,7 @@ def build_catalog_entry_from_rule(
         description=rule.metadata.description,
         mitre_attack=mitre_attack,
         tags=rule.metadata.tags,
-        author=author,
+        owners=rule.metadata.owners,
         created_at=created_at,
         last_modified_at=last_modified_at,
         review_count=review_count,
@@ -159,7 +156,7 @@ def export_catalog_markdown(entries: Sequence[CatalogEntry]) -> str:
         "Engine",
         "Status",
         "MITRE ATT&CK",
-        "Author",
+        "Owners",
         "Created",
         "Last Updated",
         "Reviews",
@@ -173,12 +170,13 @@ def export_catalog_markdown(entries: Sequence[CatalogEntry]) -> str:
 
     for e in entries:
         mitre_str = ", ".join(e.mitre_attack) if e.mitre_attack else "-"
+        owners_str = ", ".join(e.owners) if e.owners else "-"
         row = [
             f"`{e.name}`",
             e.engine,
             e.status,
             mitre_str,
-            e.author,
+            owners_str,
             e.created_at if e.created_at != "Unknown" else "-",
             e.last_modified_at if e.last_modified_at != "Unknown" else "-",
             str(e.review_count),
@@ -200,7 +198,7 @@ def export_catalog_csv(entries: Sequence[CatalogEntry]) -> str:
         "description",
         "mitre_attack",
         "tags",
-        "author",
+        "owners",
         "created_at",
         "last_modified_at",
         "review_count",
@@ -216,6 +214,7 @@ def export_catalog_csv(entries: Sequence[CatalogEntry]) -> str:
         row = asdict(e)
         row["mitre_attack"] = ";".join(e.mitre_attack)
         row["tags"] = ";".join(e.tags)
+        row["owners"] = ";".join(e.owners)
         writer.writerow(row)
 
     return output.getvalue()
@@ -227,5 +226,6 @@ def export_catalog_json(entries: Sequence[CatalogEntry]) -> list[dict[str, Any]]
         d = asdict(e)
         d["mitre_attack"] = list(e.mitre_attack)
         d["tags"] = list(e.tags)
+        d["owners"] = list(e.owners)
         payload.append(d)
     return payload

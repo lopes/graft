@@ -7,9 +7,7 @@ from pathlib import Path
 @dataclass(frozen=True)
 class RuleGitMetadata:
     path: Path
-    author: str
     created_at: str
-    last_modified_by: str
     last_modified_at: str
     commit_count: int
     contributor_count: int
@@ -19,10 +17,7 @@ def extract_git_metadata(path: Path | str, cwd: Path | None = None) -> RuleGitMe
     file_path = Path(path)
     git_bin = shutil.which("git") or "git"
 
-    # 1. Author and created_at (first commit introducing the file)
-    author = "Unknown"
     created_at = "Unknown"
-    last_modified_by = "Unknown"
     last_modified_at = "Unknown"
     commit_count = 0
     contributor_count = 0
@@ -34,7 +29,7 @@ def extract_git_metadata(path: Path | str, cwd: Path | None = None) -> RuleGitMe
                 "log",
                 "--diff-filter=A",
                 "--follow",
-                "--format=%an|%aI",
+                "--format=%aI",
                 "-n",
                 "1",
                 "--",
@@ -47,13 +42,12 @@ def extract_git_metadata(path: Path | str, cwd: Path | None = None) -> RuleGitMe
         )
         out_creation = creation_proc.stdout.strip()
         if not out_creation:
-            # Fallback if diff-filter=A misses it
             fallback_proc = subprocess.run(  # noqa: S603
                 [
                     git_bin,
                     "log",
                     "--reverse",
-                    "--format=%an|%aI",
+                    "--format=%aI",
                     "--",
                     str(file_path),
                 ],
@@ -66,17 +60,16 @@ def extract_git_metadata(path: Path | str, cwd: Path | None = None) -> RuleGitMe
             if lines:
                 out_creation = lines[0]
 
-        if "|" in out_creation:
-            author, created_at = out_creation.split("|", 1)
+        if out_creation:
+            created_at = out_creation
 
-        # 2. Last modified author and timestamp
         last_proc = subprocess.run(  # noqa: S603
             [
                 git_bin,
                 "log",
                 "-n",
                 "1",
-                "--format=%an|%aI",
+                "--format=%aI",
                 "--",
                 str(file_path),
             ],
@@ -86,10 +79,9 @@ def extract_git_metadata(path: Path | str, cwd: Path | None = None) -> RuleGitMe
             check=False,
         )
         out_last = last_proc.stdout.strip()
-        if "|" in out_last:
-            last_modified_by, last_modified_at = out_last.split("|", 1)
+        if out_last:
+            last_modified_at = out_last
 
-        # 3. Commit count
         count_proc = subprocess.run(  # noqa: S603
             [
                 git_bin,
@@ -108,7 +100,6 @@ def extract_git_metadata(path: Path | str, cwd: Path | None = None) -> RuleGitMe
         if count_str.isdigit():
             commit_count = int(count_str)
 
-        # 4. Contributor count (unique author emails)
         authors_proc = subprocess.run(  # noqa: S603
             [
                 git_bin,
@@ -130,9 +121,7 @@ def extract_git_metadata(path: Path | str, cwd: Path | None = None) -> RuleGitMe
 
     return RuleGitMetadata(
         path=file_path,
-        author=author,
         created_at=created_at,
-        last_modified_by=last_modified_by,
         last_modified_at=last_modified_at,
         commit_count=commit_count,
         contributor_count=contributor_count,

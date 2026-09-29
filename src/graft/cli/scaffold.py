@@ -202,7 +202,8 @@ class {class_prefix}DeployerAdapter(RuleDeployerPort):
           "type": "object",
           "required": [
             "enabled",
-            "alerting"
+            "alerting",
+            "run_frequency"
           ],
           "properties": {{
             "enabled": {{
@@ -330,13 +331,10 @@ def scaffold_rule(
     rule_uuid = str(uuid.uuid4())
 
     default_logic = (
-        f"""rule {rule_name} {{
-  meta:
-  events:
-    $e.metadata.event_type = "USER_LOGIN"
-  condition:
-    $e
-}}"""
+        """events:
+  $e.metadata.event_type = "USER_LOGIN"
+condition:
+  $e"""
         if engine == "secops"
         else f'events | where rule_name == "{rule_name}" and event_type == "USER_LOGIN"'
     )
@@ -346,13 +344,12 @@ def scaffold_rule(
             "id": rule_uuid,
             "name": rule_name,
             "description": f"Detection rule for {rule_name.replace('_', ' ')}",
-            "priority": "medium",
-            "authors": ["Detection Engineering <detection@company.com>"],
+            "owners": ["Detection Engineering <detection@company.com>"],
             "mitre": {
                 "execution": ["T1059.001"],
             },
             "tags": [engine, "custom"],
-            "references": [],
+            "references": ["https://attack.mitre.org/techniques/T1059/001/"],
         },
         "logic": default_logic,
         "deployment": {

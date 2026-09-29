@@ -18,7 +18,7 @@ def sample_rule() -> RuleEnvelope:
         id="ru_11111111-2222-3333-4444-555555555555",
         name="test_rule",
         description="Test rule description",
-        authors=("Detection Engineer",),
+        owners=("Detection Engineer",),
         mitre={"execution": ("T1059.001",)},
     )
     logic = 'events:\n  $e.metadata.event_type = "PROCESS_LAUNCH"\ncondition:\n  $e'

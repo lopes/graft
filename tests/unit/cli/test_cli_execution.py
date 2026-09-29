@@ -52,20 +52,26 @@ def test_main_lint_duplicate_id_across_engines_fails(
     rule1.parent.mkdir(parents=True)
     rule2.parent.mkdir(parents=True)
 
+    meta_extra = (
+        '  owners: ["SOC"]\n'
+        '  mitre:\n    execution: ["T1059"]\n'
+        '  tags: ["test"]\n'
+        '  references: ["ref"]\n'
+    )
     tests_block = (
         'tests:\n  - id: "t1"\n    description: "desc"\n    expect: 1\n    events:\n'
         '      - timestamp: "2026-09-18T00:00:00Z"\n        payload:\n          k: "v"\n'
     )
     content1 = (
         'metadata:\n  id: "11111111-2222-3333-4444-555555555555"\n  name: "rule_one"\n'
-        '  description: "Desc"\n'
+        f'  description: "Desc"\n{meta_extra}'
         'logic: "events:\\n  $e\\ncondition:\\n  $e"\n'
         'deployment:\n  enabled: true\n  alerting: true\n  run_frequency: "live"\n'
         f'runbook:\n  context: "c"\n  triage: "t"\n  response: "r"\n{tests_block}'
     )
     content2 = (
         'metadata:\n  id: "11111111-2222-3333-4444-555555555555"\n  name: "rule_two"\n'
-        '  description: "Desc"\n'
+        f'  description: "Desc"\n{meta_extra}'
         'logic: "events:\\n  $e\\ncondition:\\n  $e"\n'
         'deployment:\n  enabled: true\n  alerting: true\n  run_frequency: "live"\n'
         f'runbook:\n  context: "c"\n  triage: "t"\n  response: "r"\n{tests_block}'
@@ -86,20 +92,26 @@ def test_main_lint_duplicate_name_in_same_engine_fails(
     rule2 = tmp_path / "rules" / "secops" / "custom" / "r2.yaml"
     rule1.parent.mkdir(parents=True)
 
+    meta_extra = (
+        '  owners: ["SOC"]\n'
+        '  mitre:\n    execution: ["T1059"]\n'
+        '  tags: ["test"]\n'
+        '  references: ["ref"]\n'
+    )
     tests_block = (
         'tests:\n  - id: "t1"\n    description: "desc"\n    expect: 1\n    events:\n'
         '      - timestamp: "2026-09-18T00:00:00Z"\n        payload:\n          k: "v"\n'
     )
     content1 = (
         'metadata:\n  id: "11111111-1111-1111-1111-111111111111"\n  name: "shared_name"\n'
-        '  description: "Desc"\n'
+        f'  description: "Desc"\n{meta_extra}'
         'logic: "events:\\n  $e\\ncondition:\\n  $e"\n'
         'deployment:\n  enabled: true\n  alerting: true\n  run_frequency: "live"\n'
         f'runbook:\n  context: "c"\n  triage: "t"\n  response: "r"\n{tests_block}'
     )
     content2 = (
         'metadata:\n  id: "22222222-2222-2222-2222-222222222222"\n  name: "shared_name"\n'
-        '  description: "Desc"\n'
+        f'  description: "Desc"\n{meta_extra}'
         'logic: "events:\\n  $e\\ncondition:\\n  $e"\n'
         'deployment:\n  enabled: true\n  alerting: true\n  run_frequency: "live"\n'
         f'runbook:\n  context: "c"\n  triage: "t"\n  response: "r"\n{tests_block}'
@@ -121,20 +133,26 @@ def test_main_lint_same_name_across_different_engines_passes(
     rule1.parent.mkdir(parents=True)
     rule2.parent.mkdir(parents=True)
 
+    meta_extra = (
+        '  owners: ["SOC"]\n'
+        '  mitre:\n    execution: ["T1059"]\n'
+        '  tags: ["test"]\n'
+        '  references: ["ref"]\n'
+    )
     tests_block = (
         'tests:\n  - id: "t1"\n    description: "desc"\n    expect: 1\n    events:\n'
         '      - timestamp: "2026-09-18T00:00:00Z"\n        payload:\n          k: "v"\n'
     )
     content1 = (
         'metadata:\n  id: "11111111-1111-1111-1111-111111111111"\n  name: "shared_name"\n'
-        '  description: "Desc"\n'
+        f'  description: "Desc"\n{meta_extra}'
         'logic: "events:\\n  $e\\ncondition:\\n  $e"\n'
         'deployment:\n  enabled: true\n  alerting: true\n  run_frequency: "live"\n'
         f'runbook:\n  context: "c"\n  triage: "t"\n  response: "r"\n{tests_block}'
     )
     content2 = (
         'metadata:\n  id: "22222222-2222-2222-2222-222222222222"\n  name: "shared_name"\n'
-        '  description: "Desc"\n'
+        f'  description: "Desc"\n{meta_extra}'
         'logic: "events:\\n  $e\\ncondition:\\n  $e"\n'
         'deployment:\n  enabled: true\n  alerting: true\n  run_frequency: "live"\n'
         f'runbook:\n  context: "c"\n  triage: "t"\n  response: "r"\n{tests_block}'
@@ -376,8 +394,9 @@ def test_main_lint_ignores_archived_and_underscore_folders(tmp_path: Path) -> No
     valid_rule = custom_dir / "valid.yaml"
     valid_rule.write_text(
         'metadata:\n  id: "11111111-2222-3333-4444-555555555555"\n  name: "valid_rule"\n'
-        '  description: "Valid rule description"\n  priority: "medium"\n  authors: ["alice"]\n'
+        '  description: "Valid rule description"\n  owners: ["alice"]\n'
         '  mitre:\n    execution:\n      - "T1059"\n'
+        '  tags: ["test"]\n  references: ["Internal reference"]\n'
         'logic: |\n  events:\n    $e.metadata.event_type = "USER_LOGIN"\n  condition:\n    $e\n'
         'deployment:\n  run_frequency: "live"\n'
         "  enabled: true\n  alerting: true\n"

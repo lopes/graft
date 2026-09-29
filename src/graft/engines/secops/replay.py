@@ -63,7 +63,7 @@ class SecOpsReplayAdapter(ReplayHarnessPort):
                 id="",
                 name=quarantine_name,
                 description=f"Quarantined test rule for {rule.metadata.name}",
-                authors=rule.metadata.authors,
+                owners=rule.metadata.owners,
                 mitre=rule.metadata.mitre,
             ),
             logic=rule.logic,

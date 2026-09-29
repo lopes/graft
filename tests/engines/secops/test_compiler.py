@@ -23,7 +23,7 @@ def sample_rule() -> RuleEnvelope:
         id="a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d",
         name="test_network_beaconing",
         description="Detects beaconing to C2",
-        authors=("Detection Team",),
+        owners=("Detection Team",),
         mitre={"command-and-control": ("T1071.001",)},
     )
     logic = """events:
@@ -55,6 +55,7 @@ def test_synthesize_yaral_rule(sample_rule: RuleEnvelope) -> None:
     assert 'description = "Detects beaconing to C2"' in rule_text
     # Strict check: only id, description in meta:
     assert "author" not in rule_text
+    assert "owner" not in rule_text
     assert "severity" not in rule_text
     assert "  events:" in rule_text
     assert '    $e.metadata.event_type = "NETWORK_CONNECTION"' in rule_text
@@ -226,7 +227,7 @@ def test_deconstruct_custom_yaral_rule_with_ru_prefix() -> None:
     assert metadata.id == "b1d72370-5fa3-4cb8-a579-22a468d6f101"
     assert metadata.name == "suspicious_login_rule"
     assert metadata.description == "Detects unusual login behavior"
-    assert "SecOps Team" in metadata.authors
+    assert metadata.owners == ()
     assert "events:" in logic
     assert "condition:" in logic
     assert "meta:" not in logic

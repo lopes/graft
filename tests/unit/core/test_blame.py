@@ -13,11 +13,11 @@ def test_extract_git_metadata_success(tmp_path: Path) -> None:
         cmd_str = " ".join(cmd)
         if "--diff-filter=A" in cmd_str:
             return subprocess.CompletedProcess(
-                args=cmd, returncode=0, stdout="Alice Creator|2026-01-15T10:00:00Z\n", stderr=""
+                args=cmd, returncode=0, stdout="2026-01-15T10:00:00Z\n", stderr=""
             )
         if "-n 1" in cmd_str:
             return subprocess.CompletedProcess(
-                args=cmd, returncode=0, stdout="Bob Modifier|2026-09-17T12:00:00Z\n", stderr=""
+                args=cmd, returncode=0, stdout="2026-09-17T12:00:00Z\n", stderr=""
             )
         if "rev-list --count" in cmd_str:
             return subprocess.CompletedProcess(args=cmd, returncode=0, stdout="5\n", stderr="")
@@ -30,9 +30,9 @@ def test_extract_git_metadata_success(tmp_path: Path) -> None:
     with patch("subprocess.run", side_effect=fake_subprocess_run):
         meta = extract_git_metadata(rule_file)
 
-    assert meta.author == "Alice Creator"
+    assert not hasattr(meta, "author")
+    assert not hasattr(meta, "last_modified_by")
     assert meta.created_at == "2026-01-15T10:00:00Z"
-    assert meta.last_modified_by == "Bob Modifier"
     assert meta.last_modified_at == "2026-09-17T12:00:00Z"
     assert meta.commit_count == 5
     assert meta.contributor_count == 2
@@ -48,9 +48,7 @@ def test_extract_git_metadata_uncommitted_fallback(tmp_path: Path) -> None:
     ):
         meta = extract_git_metadata(uncommitted)
 
-    assert meta.author == "Unknown"
     assert meta.created_at == "Unknown"
-    assert meta.last_modified_by == "Unknown"
     assert meta.last_modified_at == "Unknown"
     assert meta.commit_count == 0
     assert meta.contributor_count == 0
@@ -66,14 +64,14 @@ def test_extract_git_metadata_git_error_fallback(tmp_path: Path) -> None:
     ):
         meta = extract_git_metadata(rule_file)
 
-    assert meta.author == "Unknown"
     assert meta.created_at == "Unknown"
+    assert meta.last_modified_at == "Unknown"
     assert meta.commit_count == 0
 
 
 def test_extract_git_metadata_real_repo_on_committed_file() -> None:
     # Test on an actual tracked repository file
     meta = extract_git_metadata("README.md")
-    assert meta.author != "Unknown"
     assert meta.created_at != "Unknown"
+    assert meta.last_modified_at != "Unknown"
     assert meta.commit_count >= 1
