@@ -12,6 +12,7 @@ from graft.core.catalog import (
     export_catalog_json,
     export_catalog_markdown,
     render_catalog_table,
+    resolve_rule_deployment_status,
 )
 from graft.core.engine_registry import EngineRegistry
 from graft.core.loader import RuleLoadError, load_rule_from_yaml
@@ -20,10 +21,14 @@ from graft.core.matrix import (
     export_navigator_layer,
     render_matrix_table,
 )
+from graft.core.models.managed import ManagedState
 from graft.core.models.rule import RuleEnvelope
+from graft.core.ports.engine import EngineAdapter
 from graft.core.validation import RuleUniquenessValidator
 from graft.core.validation.mitre_validator import update_mitre_taxonomy
 from graft.core.validation.schema_validator import SchemaValidator
+
+_MANIFEST_FILENAMES = ("index.yaml", "index.yml", "managed.yaml", "managed.yml")
 
 
 def _infer_engine_from_path(file_path: Path) -> str:
@@ -40,6 +45,18 @@ def _infer_engine_from_path(file_path: Path) -> str:
     if engines:
         return engines[0].name
     return "custom"
+
+
+def _resolve_index_manifest_path(rule_path: Path, engine: str, rules_dir: str) -> Path:
+    for candidate_name in ("index.yaml", "index.yml"):
+        sibling = rule_path.parent / candidate_name
+        if sibling.is_file():
+            return sibling
+    for candidate_name in ("index.yaml", "index.yml"):
+        candidate = Path(rules_dir) / engine / "managed" / candidate_name
+        if candidate.is_file():
+            return candidate
+    return rule_path.parent / "index.yaml"
 
 
 def execute_lint(
@@ -95,13 +112,16 @@ def execute_lint(
     has_errors = False
     uniqueness_validator = RuleUniquenessValidator()
     schema_validator = SchemaValidator()
+    registry = EngineRegistry()
+    adapters: dict[str, EngineAdapter | None] = {}
+    managed_states: dict[tuple[str, Path], ManagedState | None] = {}
 
     target_set = {f.resolve() for f in target_files if f.exists()}
     root_rules = Path(rules_dir)
     if root_rules.is_dir():
         for other_path in sorted(root_rules.rglob("*.yaml")):
             if (
-                other_path.name in ("managed.yaml", "managed.yml")
+                other_path.name in _MANIFEST_FILENAMES
                 or any(part.startswith("_") for part in other_path.parts)
                 or other_path.resolve() in target_set
             ):
@@ -114,10 +134,11 @@ def execute_lint(
                 continue
 
     for file_path in target_files:
-        is_managed = file_path.name in ("managed.yaml", "managed.yml")
+        is_manifest = file_path.name in _MANIFEST_FILENAMES
+        is_managed_rule = not is_manifest and "managed" in file_path.parts
         file_result: dict[str, Any] = {
             "path": str(file_path),
-            "type": "managed" if is_managed else "custom",
+            "type": "managed" if (is_manifest or is_managed_rule) else "custom",
             "valid": False,
             "errors": [],
         }
@@ -125,7 +146,7 @@ def execute_lint(
         try:
             engine = _infer_engine_from_path(file_path)
 
-            if is_managed:
+            if is_manifest:
                 raw_text = file_path.read_text(encoding="utf-8")
                 manifest_data: Any = yaml.safe_load(raw_text)
                 if not isinstance(manifest_data, dict):
@@ -149,6 +170,7 @@ def execute_lint(
                     raise ValueError(f"Managed manifest validation failed: {err_details}")
             else:
                 rule = load_rule_from_yaml(file_path)
+                file_result["type"] = rule.rule_type
                 uniqueness_violations = uniqueness_validator.add_and_validate(
                     rule, engine=engine, path=file_path
                 )
@@ -163,6 +185,32 @@ def execute_lint(
                     if fail_fast:
                         break
                     continue
+
+                if rule.is_managed and rule.managed is not None:
+                    index_path = _resolve_index_manifest_path(file_path, engine, rules_dir)
+                    if not index_path.is_file():
+                        raise ValueError(
+                            f"Managed index manifest not found at '{index_path}' "
+                            f"to validate managed.id '{rule.managed.id}'"
+                        )
+                    if engine not in adapters:
+                        try:
+                            adapters[engine] = registry.load_adapter(engine)
+                        except Exception:
+                            adapters[engine] = None
+                    adapter = adapters[engine]
+                    if adapter is not None:
+                        cache_key = (engine, index_path.resolve())
+                        if cache_key not in managed_states:
+                            managed_states[cache_key] = adapter.load_managed_manifest(index_path)
+                        state = managed_states[cache_key]
+                        if state is not None and not adapter.has_managed_rule_id(
+                            rule.managed.id, state
+                        ):
+                            raise ValueError(
+                                f"Managed rule ID '{rule.managed.id}' in '{rule.metadata.name}' "
+                                f"not found in '{index_path}'"
+                            )
 
             file_result["valid"] = True
             if not json_output:
@@ -244,7 +292,7 @@ def _load_all_rules(rules_dir: Path | str = "rulesets") -> list[tuple[RuleEnvelo
         return loaded
 
     for yaml_path in sorted(root.rglob("*.yaml")):
-        if yaml_path.name in ("managed.yaml", "managed.yml") or any(
+        if yaml_path.name in _MANIFEST_FILENAMES or any(
             part.startswith("_") for part in yaml_path.parts
         ):
             continue
@@ -255,6 +303,36 @@ def _load_all_rules(rules_dir: Path | str = "rulesets") -> list[tuple[RuleEnvelo
         except (RuleLoadError, ValueError, OSError):
             continue
     return loaded
+
+
+def _load_engine_adapters_and_states(
+    engines: set[str],
+    rules_dir: str,
+) -> tuple[dict[str, EngineAdapter | None], dict[str, ManagedState | None]]:
+    registry = EngineRegistry()
+    adapters: dict[str, EngineAdapter | None] = {}
+    managed_states: dict[str, ManagedState | None] = {}
+    for eng in engines:
+        try:
+            adapter = registry.load_adapter(eng)
+        except Exception:
+            adapter = None
+        adapters[eng] = adapter
+        state: ManagedState | None = None
+        if adapter is not None:
+            for candidate in (
+                Path(rules_dir) / eng / "managed" / "index.yaml",
+                Path(rules_dir) / eng / "managed" / "index.yml",
+                Path(rules_dir) / eng / "managed.yaml",
+            ):
+                if candidate.is_file():
+                    try:
+                        state = adapter.load_managed_manifest(candidate)
+                    except Exception:
+                        state = None
+                    break
+        managed_states[eng] = state
+    return adapters, managed_states
 
 
 def execute_export(
@@ -270,11 +348,28 @@ def execute_export(
     if engine is not None:
         loaded = [r for r in loaded if r[1] == engine]
 
+    engines_set = {r[1] for r in loaded}
+    adapters, managed_states = _load_engine_adapters_and_states(engines_set, rules_dir)
+
     output_str = ""
 
     if target in ("matrix", "navigator"):
         fmt = format_type or ("json" if json_output else "navigator")
-        report = calculate_mitre_coverage(loaded)
+        enriched_loaded = [
+            (
+                rule,
+                r_engine,
+                rule_path,
+                resolve_rule_deployment_status(
+                    rule,
+                    engine=r_engine,
+                    adapter=adapters.get(r_engine),
+                    managed_state=managed_states.get(r_engine),
+                ),
+            )
+            for rule, r_engine, rule_path in loaded
+        ]
+        report = calculate_mitre_coverage(enriched_loaded)
 
         if fmt == "table":
             output_str = render_matrix_table(report)
@@ -287,18 +382,14 @@ def execute_export(
 
     elif target in ("catalog", "metadata"):
         fmt = format_type or ("json" if json_output else "table")
-        registry = EngineRegistry()
-        adapters: dict[str, Any] = {}
         entries: list[CatalogEntry] = []
-        for r in loaded:
-            rule, engine, rule_path = r
-            if engine not in adapters:
-                try:
-                    adapters[engine] = registry.load_adapter(engine)
-                except Exception:
-                    adapters[engine] = None
+        for rule, r_engine, rule_path in loaded:
             entry = build_catalog_entry_from_rule(
-                rule, engine=engine, path=rule_path, adapter=adapters[engine]
+                rule,
+                engine=r_engine,
+                path=rule_path,
+                adapter=adapters.get(r_engine),
+                managed_state=managed_states.get(r_engine),
             )
             entries.append(entry)
 

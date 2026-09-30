@@ -276,7 +276,7 @@ def test_main_secops_managed_diff_returns_0_when_in_sync() -> None:
     ):
         from graft.engines.secops.managed_loader import load_managed_manifest_from_yaml
 
-        live_state = load_managed_manifest_from_yaml("rulesets/secops/managed.yaml")
+        live_state = load_managed_manifest_from_yaml("rulesets/secops/managed/index.yaml")
         mock_adapter = MagicMock()
         mock_adapter.fetch_managed_state.return_value = live_state
         mock_adapter_cls.return_value = mock_adapter
@@ -351,7 +351,7 @@ def test_main_secops_diff_all_targets_drift() -> None:
 
         mock_managed = MagicMock()
         mock_managed.fetch_managed_state.return_value = load_managed_manifest_from_yaml(
-            "rulesets/secops/managed.yaml"
+            "rulesets/secops/managed/index.yaml"
         )
         mock_managed_cls.return_value = mock_managed
 
@@ -381,6 +381,203 @@ def test_main_new_rule_json_output(tmp_path: Path, capsys: pytest.CaptureFixture
     data = json.loads(captured.out)
     assert data["success"] is True
     assert data["path"] == str(custom_target)
+
+
+def test_main_secops_new_managed_rule(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    base_managed_content = Path("src/graft/core/schemas/base_managed.schema.json").read_text(
+        encoding="utf-8"
+    )
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "src" / "graft" / "core" / "schemas").mkdir(parents=True)
+    (tmp_path / "src" / "graft" / "core" / "schemas" / "base_managed.schema.json").write_text(
+        base_managed_content, encoding="utf-8"
+    )
+    exit_code = main(
+        [
+            "secops",
+            "new",
+            "gcti_active_breach_host_indicators",
+            "--managed",
+            "f5533b66-9327-9880-93e6-75a738ac2345",
+        ]
+    )
+    assert exit_code == 0
+    rule_file = (
+        tmp_path / "rulesets" / "secops" / "managed" / "gcti_active_breach_host_indicators.yaml"
+    )
+    assert rule_file.exists()
+
+
+def test_main_lint_registered_managed_rule_validates_against_index_yaml(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    managed_dir = tmp_path / "rulesets" / "secops" / "managed"
+    managed_dir.mkdir(parents=True)
+
+    index_file = managed_dir / "index.yaml"
+    index_file.write_text(
+        """rulesets:
+  - id: "f5533b66-9327-9880-93e6-75a738ac2345"
+    name: "Active Breach Priority Host Indicators"
+    category: "Applied Threat Intelligence"
+    deployments:
+      - type: "PRECISE"
+        enabled: true
+        alerting: false
+      - type: "BROAD"
+        enabled: true
+        alerting: false
+exclusions: []
+""",
+        encoding="utf-8",
+    )
+
+    rule_file = managed_dir / "gcti_host_indicators.yaml"
+    rule_file.write_text(
+        """metadata:
+  id: "11111111-2222-3333-4444-555555555555"
+  name: "gcti_host_indicators"
+  description: "Registers GCTI Active Breach Host Indicators ruleset."
+  owners: ["SOC"]
+  mitre:
+    command-and-control: ["T1071.001"]
+  tags: ["secops", "managed"]
+  references: ["https://docs.cloud.google.com/chronicle/docs/detection/curated-detections"]
+managed:
+  id: "f5533b66-9327-9880-93e6-75a738ac2345"
+runbook:
+  context: "Context"
+  triage: "Triage"
+  response: "Response"
+tests: []
+""",
+        encoding="utf-8",
+    )
+
+    exit_code = main(["lint", "--rules-dir", str(tmp_path / "rulesets")])
+    assert exit_code == 0
+    captured = capsys.readouterr()
+    assert "2 passed, 0 failed" in captured.out
+
+
+def test_main_lint_registered_managed_rule_unknown_id_in_index_fails(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    managed_dir = tmp_path / "rulesets" / "secops" / "managed"
+    managed_dir.mkdir(parents=True)
+
+    index_file = managed_dir / "index.yaml"
+    index_file.write_text(
+        """rulesets:
+  - id: "f5533b66-9327-9880-93e6-75a738ac2345"
+    name: "Active Breach Priority Host Indicators"
+    category: "Applied Threat Intelligence"
+    deployments:
+      - type: "PRECISE"
+        enabled: true
+        alerting: false
+exclusions: []
+""",
+        encoding="utf-8",
+    )
+
+    rule_file = managed_dir / "gcti_unknown.yaml"
+    rule_file.write_text(
+        """metadata:
+  id: "11111111-2222-3333-4444-555555555555"
+  name: "gcti_unknown"
+  description: "References nonexistent managed ruleset ID."
+  owners: ["SOC"]
+  mitre:
+    command-and-control: ["T1071.001"]
+  tags: ["secops", "managed"]
+  references: ["https://docs.cloud.google.com/chronicle/docs/detection/curated-detections"]
+managed:
+  id: "nonexistent-ruleset-id-999"
+runbook:
+  context: "Context"
+  triage: "Triage"
+  response: "Response"
+tests: []
+""",
+        encoding="utf-8",
+    )
+
+    exit_code = main(["lint", "--rules-dir", str(tmp_path / "rulesets")])
+    assert exit_code == 1
+    captured = capsys.readouterr()
+    assert "nonexistent-ruleset-id-999" in captured.err
+    assert "not found in" in captured.err
+
+
+def test_main_lint_duplicate_managed_id_in_same_engine_fails(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    managed_dir = tmp_path / "rulesets" / "secops" / "managed"
+    managed_dir.mkdir(parents=True)
+
+    index_file = managed_dir / "index.yaml"
+    index_file.write_text(
+        """rulesets:
+  - id: "f5533b66-9327-9880-93e6-75a738ac2345"
+    name: "Active Breach Priority Host Indicators"
+    category: "Applied Threat Intelligence"
+    deployments:
+      - type: "PRECISE"
+        enabled: true
+        alerting: false
+exclusions: []
+""",
+        encoding="utf-8",
+    )
+
+    rule1 = managed_dir / "r1.yaml"
+    rule2 = managed_dir / "r2.yaml"
+    rule1.write_text(
+        """metadata:
+  id: "11111111-1111-1111-1111-111111111111"
+  name: "managed_rule_one"
+  description: "First rule linking to managed ID."
+  owners: ["SOC"]
+  mitre:
+    command-and-control: ["T1071.001"]
+  tags: ["secops", "managed"]
+  references: ["ref"]
+managed:
+  id: "f5533b66-9327-9880-93e6-75a738ac2345"
+runbook:
+  context: "c"
+  triage: "t"
+  response: "r"
+tests: []
+""",
+        encoding="utf-8",
+    )
+    rule2.write_text(
+        """metadata:
+  id: "22222222-2222-2222-2222-222222222222"
+  name: "managed_rule_two"
+  description: "Second rule linking to same managed ID."
+  owners: ["SOC"]
+  mitre:
+    command-and-control: ["T1071.001"]
+  tags: ["secops", "managed"]
+  references: ["ref"]
+managed:
+  id: "f5533b66-9327-9880-93e6-75a738ac2345"
+runbook:
+  context: "c"
+  triage: "t"
+  response: "r"
+tests: []
+""",
+        encoding="utf-8",
+    )
+
+    exit_code = main(["lint", "--rules-dir", str(tmp_path / "rulesets")])
+    assert exit_code == 1
+    captured = capsys.readouterr()
+    assert "Duplicate managed.id" in captured.err
 
 
 def test_main_lint_ignores_archived_and_underscore_folders(tmp_path: Path) -> None:

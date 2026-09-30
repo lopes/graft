@@ -28,6 +28,7 @@ class TechniqueTacticCoverage:
     statuses: list[str]
     has_runbook: bool
     links: list[dict[str, str]]
+    rule_types: list[str] = ()  # type: ignore[assignment]
 
 
 @dataclass(frozen=True)
@@ -50,21 +51,26 @@ def _load_mitre_taxonomy() -> dict[str, dict[str, Any]]:
 
 
 def calculate_mitre_coverage(
-    rules: Sequence[RuleEnvelope | tuple[RuleEnvelope, str, Path | str | None]],
+    rules: Sequence[
+        RuleEnvelope
+        | tuple[RuleEnvelope, str, Path | str | None]
+        | tuple[RuleEnvelope, str, Path | str | None, str]
+    ],
     matrix_data: dict[str, dict[str, Any]] | None = None,
 ) -> MatrixCoverageReport:
     techniques_db = matrix_data if matrix_data is not None else _load_mitre_taxonomy()
 
     # Normalize rules input
-    normalized: list[tuple[RuleEnvelope, str, str | None]] = []
+    normalized: list[tuple[RuleEnvelope, str, str | None, str | None]] = []
     for item in rules:
         if isinstance(item, tuple):
             rule_obj = item[0]
             engine_name = str(item[1]) if len(item) > 1 else "custom"
             path_val = str(item[2]) if len(item) > 2 and item[2] is not None else None
-            normalized.append((rule_obj, engine_name, path_val))
+            status_val = str(item[3]) if len(item) > 3 and item[3] is not None else None
+            normalized.append((rule_obj, engine_name, path_val, status_val))
         else:
-            normalized.append((item, "custom", None))
+            normalized.append((item, "custom", None, None))
 
     tech_rules_map: dict[str, set[str]] = {}
     tech_tactics_map: dict[str, set[str]] = {}
@@ -72,9 +78,11 @@ def calculate_mitre_coverage(
     # (technique_id, tactic_shortname) -> metadata collectors
     pair_map: dict[tuple[str, str], dict[str, Any]] = {}
 
-    for rule, engine, path in normalized:
+    for rule, engine, path, explicit_status in normalized:
         rule_name = rule.metadata.name
-        if not rule.deployment.enabled:
+        if explicit_status is not None:
+            status = explicit_status
+        elif not rule.deployment.enabled:
             status = "disabled"
         elif not rule.deployment.alerting:
             status = "silent"
@@ -96,6 +104,7 @@ def calculate_mitre_coverage(
                     pair_map[pair_key] = {
                         "rules": [],
                         "engines": set(),
+                        "rule_types": set(),
                         "statuses": set(),
                         "has_runbook": False,
                         "links": [],
@@ -103,6 +112,7 @@ def calculate_mitre_coverage(
                 if rule_name not in pair_map[pair_key]["rules"]:
                     pair_map[pair_key]["rules"].append(rule_name)
                 pair_map[pair_key]["engines"].add(engine)
+                pair_map[pair_key]["rule_types"].add(rule.rule_type)
                 pair_map[pair_key]["statuses"].add(status)
                 if has_runbook:
                     pair_map[pair_key]["has_runbook"] = True
@@ -147,6 +157,7 @@ def calculate_mitre_coverage(
                 statuses=sorted(details["statuses"]),
                 has_runbook=details["has_runbook"],
                 links=details["links"],
+                rule_types=sorted(details["rule_types"]),
             )
         )
 
@@ -180,8 +191,10 @@ def export_navigator_layer(
                 if t.rule_count > 1
                 else f"Rule: {t.rule_names[0]}"
             )
+            types_val = ", ".join(t.rule_types) if t.rule_types else "custom"
             metadata = [
                 {"name": "engine", "value": ", ".join(t.engines)},
+                {"name": "type", "value": types_val},
                 {"name": "rules", "value": ", ".join(t.rule_names)},
                 {"name": "status", "value": ", ".join(t.statuses)},
                 {"name": "runbook", "value": "yes" if t.has_runbook else "no"},

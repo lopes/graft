@@ -17,7 +17,7 @@ from graft.engines.secops.managed_loader import (
 
 
 def test_load_managed_manifest_from_reference_file() -> None:
-    path = Path("rulesets/secops/managed.yaml")
+    path = Path("rulesets/secops/managed/index.yaml")
     state = load_managed_manifest_from_yaml(path)
 
     assert len(state.rulesets) >= 1

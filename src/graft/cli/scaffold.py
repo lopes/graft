@@ -102,7 +102,11 @@ class {class_prefix}Adapter(EngineAdapter):
     def get_replay(self) -> ReplayHarnessPort | None:
         return None
 
-    def resolve_deployment_status(self, rule: RuleEnvelope) -> str:
+    def resolve_deployment_status(
+        self,
+        rule: RuleEnvelope,
+        managed_state: object = None,
+    ) -> str:
         if not rule.deployment.enabled:
             return "disabled"
         if not rule.deployment.alerting:
@@ -314,15 +318,20 @@ def scaffold_rule(
     rule_name: str,
     project_root: Path | None = None,
     out_path: Path | str | None = None,
+    managed: bool = False,
+    managed_id: str | None = None,
 ) -> Path:
     _validate_identifier(rule_name, "rule")
+    if rule_name == "index":
+        raise ScaffoldError("Invalid rule name 'index'. 'index' is reserved for managed/index.yaml")
     _validate_identifier(engine, "engine")
+    if managed_id is not None:
+        managed = True
     root = Path(project_root) if project_root else Path.cwd()
 
+    subdir = "managed" if managed else "custom"
     dest = (
-        Path(out_path)
-        if out_path
-        else (root / "rulesets" / engine / "custom" / f"{rule_name}.yaml")
+        Path(out_path) if out_path else (root / "rulesets" / engine / subdir / f"{rule_name}.yaml")
     )
     if dest.exists():
         raise ScaffoldError(f"Rule file already exists at {dest}")
@@ -330,52 +339,76 @@ def scaffold_rule(
     dest.parent.mkdir(parents=True, exist_ok=True)
     rule_uuid = str(uuid.uuid4())
 
-    default_logic = (
-        """events:
+    if managed:
+        doc: dict[str, object] = {
+            "metadata": {
+                "id": rule_uuid,
+                "name": rule_name,
+                "description": f"Registered managed rule for {rule_name.replace('_', ' ')}",
+                "owners": ["Detection Engineering <detection@company.com>"],
+                "mitre": {
+                    "execution": ["T1059.001"],
+                },
+                "tags": [engine, "managed"],
+                "references": ["https://attack.mitre.org/techniques/T1059/001/"],
+            },
+            "managed": {
+                "id": managed_id if managed_id else "TODO_MANAGED_RULE_ID",
+            },
+            "runbook": {
+                "context": "Context and background regarding this vendor-managed detection.",
+                "triage": "1. Verify principal user and host.\n2. Examine correlated telemetry.",
+                "response": "1. Isolate compromised entity if warranted.\n2. Revoke active tokens.",
+            },
+            "tests": [],
+        }
+    else:
+        default_logic = (
+            """events:
   $e.metadata.event_type = "USER_LOGIN"
 condition:
   $e"""
-        if engine == "secops"
-        else f'events | where rule_name == "{rule_name}" and event_type == "USER_LOGIN"'
-    )
+            if engine == "secops"
+            else f'events | where rule_name == "{rule_name}" and event_type == "USER_LOGIN"'
+        )
 
-    doc: dict[str, object] = {
-        "metadata": {
-            "id": rule_uuid,
-            "name": rule_name,
-            "description": f"Detection rule for {rule_name.replace('_', ' ')}",
-            "owners": ["Detection Engineering <detection@company.com>"],
-            "mitre": {
-                "execution": ["T1059.001"],
+        doc = {
+            "metadata": {
+                "id": rule_uuid,
+                "name": rule_name,
+                "description": f"Detection rule for {rule_name.replace('_', ' ')}",
+                "owners": ["Detection Engineering <detection@company.com>"],
+                "mitre": {
+                    "execution": ["T1059.001"],
+                },
+                "tags": [engine, "custom"],
+                "references": ["https://attack.mitre.org/techniques/T1059/001/"],
             },
-            "tags": [engine, "custom"],
-            "references": ["https://attack.mitre.org/techniques/T1059/001/"],
-        },
-        "logic": default_logic,
-        "deployment": {
-            "enabled": False,
-            "alerting": False,
-            "run_frequency": "live",
-        },
-        "runbook": {
-            "context": "Context and background regarding this detection.",
-            "triage": "1. Verify principal user and host.\n2. Examine correlated telemetry.",
-            "response": "1. Isolate compromised entity if warranted.\n2. Revoke active tokens.",
-        },
-        "tests": [
-            {
-                "id": "test_basic_detection",
-                "description": "Verify rule detects single event",
-                "events": [
-                    {
-                        "timestamp": "2026-09-17T12:00:00Z",
-                        "payload": {"metadata": {"event_type": "USER_LOGIN"}},
-                    }
-                ],
-                "expect": 1,
-            }
-        ],
-    }
+            "logic": default_logic,
+            "deployment": {
+                "enabled": False,
+                "alerting": False,
+                "run_frequency": "live",
+            },
+            "runbook": {
+                "context": "Context and background regarding this detection.",
+                "triage": "1. Verify principal user and host.\n2. Examine correlated telemetry.",
+                "response": "1. Isolate compromised entity if warranted.\n2. Revoke active tokens.",
+            },
+            "tests": [
+                {
+                    "id": "test_basic_detection",
+                    "description": "Verify rule detects single event",
+                    "events": [
+                        {
+                            "timestamp": "2026-09-17T12:00:00Z",
+                            "payload": {"metadata": {"event_type": "USER_LOGIN"}},
+                        }
+                    ],
+                    "expect": 1,
+                }
+            ],
+        }
 
     # Validate against schema if schema is available
     schema_dir = root / "src" / "graft" / "core" / "schemas"
@@ -389,7 +422,12 @@ condition:
         )
         avail = validator.available_schemas()
         target_schema = None
-        for candidate in (f"{engine}:custom", f"{engine}_custom", "base_custom"):
+        candidates = (
+            ("base_managed",)
+            if managed
+            else (f"{engine}:custom", f"{engine}_custom", "base_custom")
+        )
+        for candidate in candidates:
             if candidate in avail:
                 target_schema = candidate
                 break

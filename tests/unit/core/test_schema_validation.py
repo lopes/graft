@@ -381,11 +381,24 @@ def test_reference_example_rule_validates_cleanly(validator: SchemaValidator) ->
 
 
 def test_reference_managed_manifest_validates_cleanly(validator: SchemaValidator) -> None:
-    managed_path = Path("rulesets/secops/managed.yaml")
+    managed_path = Path("rulesets/secops/managed/index.yaml")
     assert managed_path.is_file()
     data = yaml.safe_load(managed_path.read_text(encoding="utf-8"))
     errors = validator.validate(data, schema_name="secops_managed")
     assert errors == []
+
+
+def test_reference_registered_managed_rules_validate_cleanly(validator: SchemaValidator) -> None:
+    managed_rules = [
+        p
+        for p in Path("rulesets/secops/managed").glob("*.yaml")
+        if p.name not in ("index.yaml", "index.yml")
+    ]
+    assert len(managed_rules) >= 1
+    for rule_path in managed_rules:
+        data = yaml.safe_load(rule_path.read_text(encoding="utf-8"))
+        errors = validator.validate(data, schema_name="base_managed")
+        assert errors == []
 
 
 def test_all_schemas_conform_to_draft202012_metaschema() -> None:

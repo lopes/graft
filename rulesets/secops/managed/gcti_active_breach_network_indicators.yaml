@@ -1,0 +1,34 @@
+metadata:
+  id: "e8a1b7c3-4f92-41d0-9e65-28f19c047110"
+  name: "gcti_active_breach_network_indicators"
+  description: "GCTI curated ruleset matching active breach priority network indicators."
+  owners:
+    - "Cloud Security Operations"
+  mitre:
+    command-and-control:
+      - "T1071.001"
+  tags:
+    - "secops"
+    - "managed"
+    - "gcti"
+    - "network"
+    - "c2"
+  references:
+    - "https://docs.cloud.google.com/chronicle/docs/detection/curated-detections"
+
+managed:
+  id: "433faf9e-4d51-f284-c35b-009528ecff05"
+
+runbook:
+  context: "Google Cloud Threat Intelligence (GCTI) Active Breach Priority Network Indicators detects outbound and inbound network telemetry matching high-confidence command-and-control (C2) domains and IP addresses observed in active intrusion campaigns."
+  triage: |
+    1. Identify the internal host or workload initiating or receiving the network connection.
+    2. Inspect the matched GCTI indicator (domain or IP address), port, protocol, and process lineage.
+    3. Correlate endpoint and DNS telemetry on the affected asset over the preceding 24 hours.
+    4. Check if any other internal assets communicated with the same external infrastructure.
+  response: |
+    1. Isolate the affected host or workload if unauthorized C2 communication is confirmed.
+    2. Block the malicious domain and IP address at perimeter firewalls and DNS resolvers.
+    3. Capture volatile memory or disk artifacts and escalate to Incident Response.
+
+tests: []

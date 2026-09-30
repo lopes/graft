@@ -120,3 +120,22 @@ def test_secops_diff_all_ignores_changed_files() -> None:
     assert code == 2  # rule_2 drift detected
     output = stdout_capture.getvalue()
     assert "rule_2" in output
+
+
+def test_secops_diff_scoped_ignores_registered_managed_rule_changes() -> None:
+    registered_managed_path = Path(
+        "rulesets/secops/managed/gcti_active_breach_network_indicators.yaml"
+    ).resolve()
+    stdout_capture = io.StringIO()
+    with (
+        patch(
+            "graft.cli.engine_controller.get_changed_files",
+            return_value={registered_managed_path},
+        ),
+        patch("sys.stdout", stdout_capture),
+    ):
+        code = main(["secops", "diff"])
+
+    assert code == 0
+    output = stdout_capture.getvalue()
+    assert "No detection rules or managed manifests modified in current change scope." in output

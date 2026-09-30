@@ -12,7 +12,7 @@ def test_get_changed_files_branch_diff(tmp_path: Path) -> None:
             return subprocess.CompletedProcess(
                 args=cmd,
                 returncode=0,
-                stdout="rulesets/secops/custom/rule_a.yaml\nrulesets/secops/managed.yaml\n",
+                stdout="rulesets/secops/custom/rule_a.yaml\nrulesets/secops/managed/index.yaml\n",
                 stderr="",
             )
         return subprocess.CompletedProcess(args=cmd, returncode=0, stdout="", stderr="")
@@ -22,7 +22,7 @@ def test_get_changed_files_branch_diff(tmp_path: Path) -> None:
 
     expected = {
         (tmp_path / "rulesets/secops/custom/rule_a.yaml").resolve(),
-        (tmp_path / "rulesets/secops/managed.yaml").resolve(),
+        (tmp_path / "rulesets/secops/managed/index.yaml").resolve(),
     }
     assert changed == expected
 

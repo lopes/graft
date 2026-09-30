@@ -92,7 +92,7 @@ When pulling managed content:
 1. Graft queries the Chronicle Curated Rule Sets API (`curatedRuleSets`, `curatedRuleSetDeployments`, and `ruleExclusions`).
 2. It resolves category UUIDs to display names (e.g., `Cloud Threats`, `Linux Threats`).
 3. It captures deployment precision (`PRECISE` or `BROAD`), enabled/alerting toggles, and all active UDM exclusion filters (`findingsRefinements`).
-4. It serializes this unified posture into [`rulesets/secops/managed.yaml`](../../rulesets/secops/managed.yaml), conforming to [`src/graft/engines/secops/schemas/managed.schema.json`](../../src/graft/engines/secops/schemas/managed.schema.json).
+4. It serializes this unified posture into [`rulesets/secops/managed/index.yaml`](../../rulesets/secops/managed/index.yaml), conforming to [`src/graft/engines/secops/schemas/managed.schema.json`](../../src/graft/engines/secops/schemas/managed.schema.json).
 
 ### 3. How Custom Rules Are Ingested
 

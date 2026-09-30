@@ -335,7 +335,7 @@ To avoid credential ambiguity across multiple platforms and engines, Graft enfor
 
 ## 7. Google Curated Rule Sets & Managed Manifest (`rulesets/secops/managed.yaml`)
 
-Google SecOps provides Curated Rule Sets—vendor-managed detection packages maintained by Google Cloud Threat Intelligence (GCTI). Graft manages the entire curated content lifecycle declaratively through a single consolidated manifest: [`rulesets/secops/managed.yaml`](../../rulesets/secops/managed.yaml).
+Google SecOps provides Curated Rule Sets—vendor-managed detection packages maintained by Google Cloud Threat Intelligence (GCTI). Graft manages the entire curated content lifecycle declaratively through a single consolidated manifest: [`rulesets/secops/managed/index.yaml`](../../rulesets/secops/managed/index.yaml).
 
 ```mermaid
 flowchart TD
@@ -364,7 +364,7 @@ Google SecOps organizes curated detections in a 3-tier hierarchy:
 
 ### Managed Manifest Format
 
-The manifest [`rulesets/secops/managed.yaml`](../../rulesets/secops/managed.yaml) adheres to [`src/graft/engines/secops/schemas/managed.schema.json`](../../src/graft/engines/secops/schemas/managed.schema.json):
+The manifest [`rulesets/secops/managed/index.yaml`](../../rulesets/secops/managed/index.yaml) adheres to [`src/graft/engines/secops/schemas/managed.schema.json`](../../src/graft/engines/secops/schemas/managed.schema.json):
 
 ```yaml
 categories:
@@ -450,7 +450,7 @@ Exclusion queries evaluate against Unified Data Model (UDM) fields. Unlike YARA-
 Follow this step-by-step operational runbook:
 
 #### Step 1: Identify the Target RuleSet
-1. Open [`rulesets/secops/managed.yaml`](../../rulesets/secops/managed.yaml).
+1. Open [`rulesets/secops/managed/index.yaml`](../../rulesets/secops/managed/index.yaml).
 2. Locate the ruleset where false positives occur (e.g. search for `"Malware Signals - Suspicious Execution"`).
 3. Copy its `id` UUID (e.g. `1c4ab1f6-d801-d6a9-1177-3ec3dd5bcbe9`).
 

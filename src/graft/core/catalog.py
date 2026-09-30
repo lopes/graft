@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Any
 
 from graft.core.blame import extract_git_metadata
+from graft.core.models.managed import ManagedState
 from graft.core.models.rule import RuleEnvelope
 from graft.core.ports.engine import EngineAdapter
 
@@ -55,9 +56,12 @@ def resolve_rule_deployment_status(
     rule: RuleEnvelope,
     engine: str | None = None,
     adapter: EngineAdapter | None = None,
+    managed_state: ManagedState | None = None,
 ) -> str:
     if adapter is not None and hasattr(adapter, "resolve_deployment_status"):
-        return adapter.resolve_deployment_status(rule)
+        return adapter.resolve_deployment_status(rule, managed_state=managed_state)
+    if rule.is_managed:
+        return "disabled"
     return "enabled" if rule.deployment.enabled else "disabled"
 
 
@@ -67,6 +71,7 @@ def build_catalog_entry_from_rule(
     path: Path | str | None = None,
     adapter: EngineAdapter | None = None,
     status: str | None = None,
+    managed_state: ManagedState | None = None,
 ) -> CatalogEntry:
     created_at = "Unknown"
     last_modified_at = "Unknown"
@@ -82,7 +87,9 @@ def build_catalog_entry_from_rule(
             review_count = git_meta.commit_count
             contributor_count = git_meta.contributor_count
 
-    resolved_status = status or resolve_rule_deployment_status(rule, engine, adapter)
+    resolved_status = status or resolve_rule_deployment_status(
+        rule, engine, adapter, managed_state=managed_state
+    )
     mitre_attack = resolve_mitre_attack_pairs(rule.metadata.mitre)
     has_runbook = bool(
         rule.runbook.context.strip() or rule.runbook.triage.strip() or rule.runbook.response.strip()
@@ -92,7 +99,7 @@ def build_catalog_entry_from_rule(
         id=rule.metadata.id,
         name=rule.metadata.name,
         engine=engine,
-        rule_type="custom",
+        rule_type=rule.rule_type,
         status=resolved_status,
         description=rule.metadata.description,
         mitre_attack=mitre_attack,
@@ -113,6 +120,7 @@ def render_catalog_table(entries: Sequence[CatalogEntry]) -> str:
     headers = [
         "Rule Name",
         "Engine",
+        "Type",
         "Status",
         "MITRE ATT&CK",
         "Reviews",
@@ -126,6 +134,7 @@ def render_catalog_table(entries: Sequence[CatalogEntry]) -> str:
             [
                 e.name,
                 e.engine,
+                e.rule_type,
                 e.status,
                 mitre_str,
                 str(e.review_count),
@@ -154,6 +163,7 @@ def export_catalog_markdown(entries: Sequence[CatalogEntry]) -> str:
     headers = [
         "Rule Name",
         "Engine",
+        "Type",
         "Status",
         "MITRE ATT&CK",
         "Owners",
@@ -174,6 +184,7 @@ def export_catalog_markdown(entries: Sequence[CatalogEntry]) -> str:
         row = [
             f"`{e.name}`",
             e.engine,
+            e.rule_type,
             e.status,
             mitre_str,
             owners_str,

@@ -120,3 +120,47 @@ def test_scaffold_rule_custom_destination_string(tmp_path: Path) -> None:
     )
     assert str(rule_path) == custom_out_str
     assert rule_path.exists()
+
+
+def test_scaffold_managed_rule_with_default_placeholder_id(tmp_path: Path) -> None:
+    rule_path = scaffold_rule(
+        "secops",
+        "gcti_active_breach_host_indicators",
+        project_root=tmp_path,
+        managed=True,
+    )
+    assert rule_path == (
+        tmp_path / "rulesets" / "secops" / "managed" / "gcti_active_breach_host_indicators.yaml"
+    )
+    assert rule_path.exists()
+
+    envelope = load_rule_from_yaml(rule_path)
+    assert envelope.is_managed is True
+    assert envelope.rule_type == "managed"
+    assert envelope.managed is not None
+    assert envelope.managed.id == "TODO_MANAGED_RULE_ID"
+    assert envelope.tests == ()
+
+
+def test_scaffold_managed_rule_with_explicit_id(tmp_path: Path) -> None:
+    rule_path = scaffold_rule(
+        "secops",
+        "gcti_active_breach_network_indicators",
+        project_root=tmp_path,
+        managed=True,
+        managed_id="433faf9e-4d51-f284-c35b-009528ecff05",
+    )
+    assert rule_path == (
+        tmp_path / "rulesets" / "secops" / "managed" / "gcti_active_breach_network_indicators.yaml"
+    )
+    envelope = load_rule_from_yaml(rule_path)
+    assert envelope.is_managed is True
+    assert envelope.managed is not None
+    assert envelope.managed.id == "433faf9e-4d51-f284-c35b-009528ecff05"
+
+
+def test_scaffold_rule_rejects_reserved_index_name(tmp_path: Path) -> None:
+    with pytest.raises(ScaffoldError, match="reserved"):
+        scaffold_rule("secops", "index", project_root=tmp_path)
+    with pytest.raises(ScaffoldError, match="reserved"):
+        scaffold_rule("secops", "index", project_root=tmp_path, managed=True)
