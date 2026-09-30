@@ -11,9 +11,9 @@ flowchart TD
     ROOT["Rule Envelope (.yaml)"]
     ROOT --> B1["<b>1. metadata</b><br/>ID, Name, Owners, MITRE, Tags, References"]
     ROOT --> B2["<b>2. logic</b><br/>Engine-Native Query String (e.g. YARA-L 2.0)"]
-    ROOT --> B3["<b>3. deployment</b><br/>Enabled, Alerting, Run Frequency (live/hourly/daily)"]
+    ROOT --> B3["<b>3. deployment</b><br/>Enabled, Alerting & Engine Execution Cadence"]
     ROOT --> B4["<b>4. runbook</b><br/>Context, Triage Checklist, Incident Response Steps"]
-    ROOT --> B5["<b>5. tests</b><br/>Synthetic UDM Events & Expected Match Count"]
+    ROOT --> B5["<b>5. tests</b><br/>Synthetic Test Events & Expected Match Count"]
 ```
 
 ### Block 1: `metadata`
@@ -24,13 +24,13 @@ Core identification, operational ownership, and threat taxonomy mapping. All 7 f
 - `description` *(string, required)*: Plain-text explanation of the detection objective (non-blank, max 128 chars).
 - `owners` *(list of strings, required, min 1 unique item)*: Teams or individuals operationally accountable for maintaining and tuning the rule (e.g., `Cloud Security Operations`, `Detection Engineering <detection@company.com>`).
 - `mitre` *(mapping of tactic to techniques, required, min 1 tactic with min 1 unique technique)*: MITRE ATT&CK Enterprise taxonomy mapping. Must use MITRE's normalized tactic names (lowercase with spaces replaced by dashes, e.g., `initial-access`, `privilege-escalation`, `execution` — see [MITRE Enterprise Tactics](https://attack.mitre.org/tactics/enterprise/)) and real technique IDs (`T1566.002`, `T1098.001`). Validated against the pre-indexed matrix during linting.
-- `tags` *(list of strings, required, min 1 unique item)*: Lowercase snake_case categorical labels (`^[a-z0-9_]+$`, e.g., `google_workspace`, `gcp`, `phishing`).
+- `tags` *(list of strings, required, min 1 unique item)*: Lowercase categorical labels (`^[a-z0-9_/\\-]+$`, e.g., `google_workspace`, `gcp`, `phishing`).
 - `references` *(list of strings, required, min 1 unique item)*: Non-blank strings citing threat research URLs, internal design docs, or external/community author attribution.
 
 #### Ownership (`metadata.owners`) vs. Authorship (`git log` & `metadata.references`)
 In day-to-day SOC and detection engineering operations, the primary question when a rule misfires, needs tuning, or requires review is **"Who is responsible for maintaining this rule today?"**—not who originally wrote the first draft years ago. For that reason, Graft uses `metadata.owners` to track operational accountability and separates it from historical authorship:
 
-- **Internal Authorship & Contributors:** Since all rules live in Git, the initial author and every subsequent contributor are permanently recorded in version control. Run `git log --follow -p <rule.yaml>` to inspect the original commit and revision history, or `git shortlog -sn -- <rule.yaml>` to list all contributors.
+- **Internal Authorship & Contributors:** Since all rules live in Git, the initial author and every subsequent contributor are permanently recorded in version control. `graft export catalog` extracts the initial creator (`author`), creation date (`created_at`), latest revision date (`last_modified_at`), commit count (`review_count`), and unique contributor count (`contributor_count`) automatically via `git log --follow`.
 - **External & Community Attribution:** Because `metadata.references` accepts arbitrary non-blank strings (not just URLs), use `references` to credit external threat researchers, blog posts, or upstream community rules (e.g., `"Adapted from Sigma rule by Florian Roth"`, `"https://lopes.id/log/high-fidelity-nrd-detections/"`).
 
 > [!IMPORTANT]
@@ -46,21 +46,23 @@ In day-to-day SOC and detection engineering operations, the primary question whe
 > In threat detection engineering, static enum fields like `status: production`, `maturity: mature`, or `lifecycle: testing` inevitably rot. Teams rarely remember to update them when rules evolve, creating administrative toil and a false sense of coverage security ("security theater").
 >
 > Graft rejects hardcoded maturity labels. Instead, maturity is treated as an **empirical, measurable property** reflected in objective indicators:
-> - **VCS Lifecycle:** First committed date (`created_at`) and latest revision date (`last_modified_at`).
-> - **Peer Scrutiny:** Total revision history (`review_count`) and breadth of peer review (`contributor_count`).
-> - **Operational Context:** Documented operational triage procedures (`has_runbook`), unified ATT&CK mappings (`mitre_attack`), and tri-state deployment health (`status: enabled | silent | disabled`).
+> - **VCS Lifecycle & Provenance:** First committer (`author`), first committed date (`created_at`), and latest revision date (`last_modified_at`) normalized to UTC `YYYY-MM-DD`.
+> - **Peer Scrutiny:** Total revision history across renames (`review_count`) and breadth of peer review (`contributor_count`).
+> - **Operational Ownership & Context:** Accountable rule owners (`owners`) and bus-factor indicator (`owner_count`), unified ATT&CK mappings (`mitre_attack`), and tri-state deployment health (`status: enabled | silent | disabled`).
 >
 > Graft also deliberately refuses to compute an arbitrary synthetic score (e.g. 0–100) from repo data alone ("no bullshit"). A rule with 10 commits might still produce 10,000 false positives in production. Instead, Graft surfaces these objective indicators via `graft export catalog` so detection engineering teams can join them with external SIEM/SOAR runtime metrics (true-positive rate, precision, alert volume, MTTR) to measure true health.
 
 ### Block 2: `logic`
-Engine-native query logic. For Google SecOps, this contains YARA-L 2.0 sections (`events:`, `match:`, `outcome:`, `condition:`). Graft automatically synthesizes the `rule <name> { meta: ... }` wrapper when sending to Chronicle APIs.
+Engine-native detection query string. Each engine adapter compiles and validates this block according to its target query language.
+- **Example (Google SecOps):** Contains YARA-L 2.0 sections (`events:`, `match:`, `outcome:`, `condition:`). Graft automatically synthesizes the `rule <name> { meta: ... }` wrapper when sending to Chronicle APIs.
 
 ### Block 3: `deployment`
 Operational controls governing how the rule runs in the target engine.
 
 - `enabled` *(boolean, required)*: Whether the rule is actively executing against telemetry.
 - `alerting` *(boolean, required)*: Whether matches produce SOC alerts or silent detections.
-- `run_frequency` *(string, required)*: Execution cadence (`live`, `hourly`, `daily`, `unspecified`).
+- Engine-specific deployment parameters (for example, `run_frequency: live | hourly | daily | unspecified` in Google SecOps) are validated by the engine's `custom.schema.json`.
+
 
 ### Block 4: `runbook`
 Actionable documentation embedded directly alongside detection logic.

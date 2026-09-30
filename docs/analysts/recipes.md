@@ -317,8 +317,8 @@ Graft stays current with modern adversary tactics and techniques, pinning to ATT
 - **Defense Impairment Tactic (`TA0112`):** Introduced in v19.2 to capture actions that disable, corrupt, or modify defenses. The corresponding YAML tactic name is `defense-impairment`.
 - **Technique Revocations & Replacements:** Techniques revoked by MITRE are rejected by `graft lint`. For example, `T1562.001` (Disable or Modify Tools) was revoked in v19.2 and replaced by `T1685` under `defense-impairment`. Graft adopts the latest taxonomy forward.
 
-### Objective Catalog Schema (14 Fields)
-Every catalog export (`table`, `csv`, `json`, `markdown`) normalizes to 14 objective indicators:
+### Objective Catalog Schema (15 Fields)
+Every catalog export (`table`, `csv`, `json`, `markdown`) normalizes to 15 objective indicators:
 
 | Field | Description | Source |
 | :--- | :--- | :--- |
@@ -330,18 +330,21 @@ Every catalog export (`table`, `csv`, `json`, `markdown`) normalizes to 14 objec
 | `description` | Summary of threat behavior detected | Rule YAML `metadata.description` |
 | `mitre_attack` | Semicolon-delimited `TAxxxx:Tyyyy.zzz` pairs | Rule YAML `metadata.mitre` |
 | `tags` | Semicolon-delimited operational tags | Rule YAML `metadata.tags` |
-| `owners` | Accountable rule owners (`;` in CSV, `, ` in Markdown, list in JSON) | Rule YAML `metadata.owners` |
-| `created_at` | Initial commit timestamp (ISO 8601) | Git commit history |
-| `last_modified_at` | Most recent commit timestamp (ISO 8601) | Git commit history |
-| `review_count` | Total number of revision commits | Git revision count |
-| `contributor_count` | Number of distinct Git authors | Git commit history |
-| `has_runbook` | Whether triage and response runbook is documented | Rule YAML `runbook` block |
+| `author` | Initial creator (author name of the earliest Git commit) | Git commit history (`--follow`) |
+| `owners` | Accountable rule owners (`;` in CSV, `, ` in Table/Markdown, list in JSON) | Rule YAML `metadata.owners` |
+| `owner_count` | Number of assigned accountable owners (`len(metadata.owners)`) | Rule YAML `metadata.owners` |
+| `created_at` | Initial commit date normalized to UTC `YYYY-MM-DD` | Git commit history (`--follow`) |
+| `last_modified_at` | Most recent commit date normalized to UTC `YYYY-MM-DD` | Git commit history (`--follow`) |
+| `review_count` | Total number of revision commits across file renames | Git commit history (`--follow`) |
+| `contributor_count` | Number of distinct Git author emails (case-insensitive) | Git commit history (`--follow`) |
 
 > [!NOTE]
-> **Why `priority`, `severity`, `alerting`, and `maturity` Are Omitted:**
+> **Why `priority`, `severity`, `alerting`, `has_runbook`, and `maturity` Are Omitted:**
 > - **`priority` and `severity`** do not belong at detection authoring time: **Priority** belongs at **Triage time** (where queue ordering depends on live asset criticality and identity context), and **Severity** belongs at **Response time** (where incident impact is determined after triage).
+> - **`has_runbook`** is omitted because the `runbook` block (`context`, `triage`, `response`) is strictly required and non-blank in all custom and registered managed rule schemas.
 > - Raw deployment fields (`alerting`, `enabled`, `run_frequency`) vary broadly by engine; Graft abstracts them into an engine-evaluated tri-state `status` (`enabled`, `silent`, `disabled`).
 > - Static `maturity` labels rot into administrative toil and false security. Objective VCS lifecycle and review metrics provide verifiable indicators without synthetic score inflation.
+
 
 ---
 

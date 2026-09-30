@@ -15,7 +15,7 @@ flowchart TD
     subgraph Day0["Day 0: Adoption & Cutover"]
         direction TB
         SIEM["Live SIEM Tenant<br/>(Existing Console Content)"]
-        PULL["<code>graft secops pull</code><br/>(Reverse Sync)"]
+        PULL["<code>graft &lt;engine&gt; pull</code><br/>(Reverse Sync)"]
         ENRICH["Baseline Review & Enrichment<br/>(Runbooks, MITRE, Tests)"]
         CUTOVER["Cutover Commit to <code>main</code><br/>(Git Declared Authoritative SoT)"]
         SIEM --> PULL --> ENRICH --> CUTOVER
@@ -23,9 +23,9 @@ flowchart TD
 
     subgraph Day1["Day 1: Automation & Security"]
         direction TB
-        WIF["GCP Workload Identity Federation<br/>(Cryptographic OIDC Token Exchange)"]
+        WIF["Short-Lived OIDC / Federation<br/>(Cryptographic Token Exchange)"]
         CI["GitHub Actions Pipelines<br/>(PR Verification & Production Deploy)"]
-        IAM["Least-Privilege IAM Roles<br/>(No Static Service Account Keys)"]
+        IAM["Least-Privilege IAM Roles<br/>(No Static Credentials)"]
         WIF --> CI --> IAM
     end
 
@@ -54,9 +54,10 @@ flowchart TD
 - **Full Catalog Reconciliation (`--all`):** Evaluates every detection rule and managed ruleset across the entire repository against the tenant. Used in mainline deployments and automated cron drift detection to guarantee complete catalog convergence.
 
 ### 3. Zero-Trust Security & Identity Federation
-- **Zero Static Keys:** Long-lived service account JSON keys are strictly prohibited.
-- **Workload Identity Federation (WIF):** GitHub Actions runners exchange short-lived OIDC tokens with Google Cloud STS using strict cryptographic attribute pinning (`assertion.repository == 'lopes/graft'`).
-- **Developer Impersonation:** Local developers authenticate via `gcloud auth login` and impersonate a deployment service account using short-lived tokens.
+- **Zero Static Keys:** Long-lived static credentials or service account JSON keys are strictly prohibited.
+- **Cryptographic Identity Federation:** CI/CD runners authenticate via short-lived OIDC token exchange pinned to the repository identity (for example, GCP Workload Identity Federation with `assertion.repository == 'lopes/graft'` for Google SecOps).
+- **Short-Lived Developer Credentials:** Local developers authenticate via ephemeral session tokens or service account impersonation (e.g., `gcloud auth login` with impersonation).
+
 
 ---
 

@@ -10,21 +10,21 @@ Graft provides unified synchronization commands for both custom rules and vendor
 
 ```mermaid
 flowchart TD
-    CLI["<b>graft secops apply / diff</b><br/><code>--target all | custom | managed</code>"]
+    CLI["<b>graft &lt;engine&gt; apply / diff</b><br/><code>--target all | custom | managed</code>"]
     TARGET{"Target Scope"}
 
     CLI --> TARGET
 
-    TARGET -- "custom / all" --> CUSTOM_FLOW["<b>Custom Rules Reconciler</b><br/><code>rulesets/secops/custom/*.yaml</code>"]
-    TARGET -- "managed / all" --> MANAGED_FLOW["<b>Managed Content Reconciler</b><br/><code>rulesets/secops/managed/index.yaml</code>"]
+    TARGET -- "custom / all" --> CUSTOM_FLOW["<b>Custom Rules Reconciler</b><br/><code>rulesets/&lt;engine&gt;/custom/*.yaml</code>"]
+    TARGET -- "managed / all" --> MANAGED_FLOW["<b>Managed Content Reconciler</b><br/><code>rulesets/&lt;engine&gt;/managed/index.yaml</code>"]
 
     CUSTOM_FLOW --> MATCH["Match by metadata.name<br/>Preserve Graft metadata.id"]
-    MATCH --> CUSTOM_API["Chronicle Rules & Deployments API<br/><code>POST rules</code> / <code>PATCH rules/{id}</code>"]
+    MATCH --> CUSTOM_API["RuleDeployerPort<br/>Create / Update Rule & Deployment State"]
 
     MANAGED_FLOW --> MAN_DIFF["Evaluate Ruleset & Exclusion Diff"]
-    MANAGED_API["Chronicle CuratedRuleSets API<br/><code>deployments</code> / <code>exclusions</code>"]
+    MAN_DIFF --> MANAGED_API["ManagedEnginePort<br/>Sync Deployments & Exclusions"]
 
-    CUSTOM_API --> TENANT["<b>Google SecOps Tenant</b>"]
+    CUSTOM_API --> TENANT["<b>Target SIEM Tenant</b>"]
     MANAGED_API --> TENANT
 ```
 
@@ -37,24 +37,27 @@ flowchart TD
 
 ## 2. Custom Rule Reconciliation Lifecycle
 
-Custom detection rules are authored in 5-block envelope YAML files under `rulesets/<engine>/custom/`. During reconciliation:
+Custom detection rules are authored in 5-block envelope YAML files under `rulesets/<engine>/custom/`. During reconciliation via `GitOpsReconciler` and `RuleDeployerPort`:
 
-1. **Identity Matching:** Local rules are mapped to tenant rules by `metadata.name` (corresponding to Chronicle `displayName`).
-2. **Creations:** Rules declared in Git but absent from the tenant are compiled into YARA-L via `synthesize_yaral_rule` (preserving Graft's `metadata.id` in `meta: id = "..."`) and created via `POST rules`. Their deployment toggles (`enabled`, `alerting`) are set via `PATCH rules/{rule_id}/deployment`.
+1. **Identity Matching:** Local rules are mapped to tenant rules by `metadata.name`.
+2. **Creations:** Rules declared in Git but absent from the tenant are compiled into the engine's native format (preserving Graft's `metadata.id`) and created via `RuleDeployerPort.create_rule()`, followed by applying deployment toggles (`enabled`, `alerting`).
 3. **Updates:** For rules existing in both Git and the tenant:
-   - Logic and metadata headers are compared using content-aware comparison (`secops_rule_content_matches`), evaluating semantic equivalence and ensuring `meta.id` in SecOps matches Graft's `metadata.id`.
-   - Deployment configuration (`enabled`, `alerting`) is compared against live tenant deployment state.
-   - If changes are detected, the remote Chronicle resource ID (`ru_<uuid>`) is resolved by the deployer adapter to target `PATCH rules/{resource_id}?update_mask=text` while preserving Graft's UUID in the synthesized rule text, and deployment toggles are synchronized.
+   - Logic and metadata are compared using the engine adapter's semantic comparison (`EngineAdapter.are_rules_equal()`), evaluating equivalence and ensuring the remote rule's embedded ID matches Graft's `metadata.id`.
+   - Deployment configuration (`enabled`, `alerting`, and engine-specific cadence) is compared against live tenant deployment state.
+   - If changes are detected, `RuleDeployerPort.update_rule()` updates the rule in-place on the tenant and synchronizes deployment toggles.
+   - **Example (Google SecOps):** Compiles YARA-L via `synthesize_yaral_rule`, compares semantic equivalence via `secops_rule_content_matches`, and resolves the Chronicle resource ID (`ru_<uuid>`) to target `PATCH rules/{resource_id}?update_mask=text` and `PATCH rules/{resource_id}/deployment`.
 4. **Untracked Reporting:** Rules existing in the tenant that do not exist in Git are surfaced as `[?] Untracked custom rule on tenant: ...` for situational awareness without destructive auto-deletion.
 
 ---
 
 ## 3. Vendor-Managed Content Manifest (`rulesets/<engine>/managed/index.yaml`)
 
-Vendor-managed content state (Google Cloud Curated Rule Sets) is tracked in a single declarative manifest (`rulesets/<engine>/managed/index.yaml`) conforming to `src/graft/engines/secops/schemas/managed.schema.json` (while optional registered managed rule envelopes in `rulesets/<engine>/managed/<rule_name>.yaml` provide MITRE ATT&CK coverage and SOC runbooks):
+Vendor-managed content state is tracked in a single declarative manifest (`rulesets/<engine>/managed/index.yaml`) conforming to `src/graft/engines/<engine>/schemas/managed.schema.json` (while optional registered managed rule envelopes in `rulesets/<engine>/managed/<rule_name>.yaml` provide MITRE ATT&CK coverage and SOC runbooks).
 
+**Example (`rulesets/secops/managed/index.yaml` — Google SecOps Curated Rule Sets):**
 ```yaml
 categories:
+
   - name: "Cloud Threats"
     id: "dd01e72c-a66c-c11c-9a59-55b02f1b43b1"
     rulesets:

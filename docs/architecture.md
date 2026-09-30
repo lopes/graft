@@ -66,16 +66,17 @@ flowchart LR
     REPO --> MANAGED["<b>Managed Detections</b><br/>rulesets/&lt;engine&gt;/managed/index.yaml (State Manifest)<br/>rulesets/&lt;engine&gt;/managed/&lt;rule&gt;.yaml (Optional Registration)"]
     REPO --> ARCHIVED["<b>Archived Detections</b><br/>rulesets/&lt;engine&gt;/_archived/*.yaml<br/>Decommissioned rules preserved for audit history"]
 
-    CUSTOM --> VERIFY["CI: Lint + verifyRuleText + Replay Test"]
+    CUSTOM --> VERIFY["CI: Lint + Syntax Dry-Run + Replay Test"]
     MANAGED --> RECONCILE["CI/CD: GitOps Plan (diff) & Apply + ATT&CK Matrix"]
 ```
 
 - **Track 1: Custom Rules (`rulesets/<engine>/custom/*.yaml`):** Bespoke organizational detections packaged in the 5-block envelope (`metadata`, `logic`, `deployment`, `runbook`, `tests`).
 - **Track 2: Vendor-Managed Content (`rulesets/<engine>/managed/`):**
-  - `rulesets/<engine>/managed/index.yaml`: Single declarative manifest tracking deployment state (`PRECISE` vs. `BROAD`, `enabled`, `alerting`) and active exclusions for vendor-provided rulesets.
+  - `rulesets/<engine>/managed/index.yaml`: Single declarative manifest tracking deployment state (`enabled`, `alerting`, and engine-specific tiers such as `PRECISE` vs. `BROAD` in Google SecOps) and active exclusions for vendor-provided rulesets.
   - `rulesets/<engine>/managed/<rule_name>.yaml`: Optional 4-block registered managed rule envelopes (`metadata`, `managed`, `runbook`, `tests`) linking via `managed.id` to `index.yaml` so vendor coverage is mapped into MITRE ATT&CK matrices and catalogs.
 - **Decommissioned Rules (`rulesets/<engine>/_archived/`):** Standard location for retired detections. Any directory or file starting with an underscore (`_`) under a ruleset (e.g. `_archived/`, `_deprecated/`, `_templates/`) is excluded from discovery, linting, matrix generation, and deployment synchronization.
-- **Objective Visibility & Rigor (`graft export catalog`):** Rather than tracking subjective or stale `status` and `maturity` fields in rule files, Graft extracts factual VCS and envelope indicators (`created_at`, `last_modified_at`, `review_count`, `contributor_count`, `has_runbook`) and resolves live engine deployment state (`status: enabled | silent | disabled`). Operators combine these with live SIEM performance data to measure true detection quality.
+- **Objective Visibility & Rigor (`graft export catalog`):** Rather than tracking subjective or stale `status` and `maturity` fields in rule files, Graft extracts factual VCS and envelope indicators (`author`, `owners`, `owner_count`, `created_at`, `last_modified_at`, `review_count`, `contributor_count`) and resolves live engine deployment state (`status: enabled | silent | disabled`). Operators combine these with live SIEM performance data to measure true detection quality.
+
 
 ---
 
