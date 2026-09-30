@@ -58,6 +58,8 @@ def test_export_catalog_table_default_stdout(capsys: pytest.CaptureFixture[str])
     captured = capsys.readouterr()
     assert "Rule Name" in captured.out
     assert "Type" in captured.out
+    assert "Owners" in captured.out
+    assert "Runbook" not in captured.out
     assert "workspace_nrd_possible_phishing" in captured.out
     assert "gcti_active_breach_network_indicators" in captured.out
     assert "secops" in captured.out
@@ -71,7 +73,11 @@ def test_export_catalog_markdown_stdout(capsys: pytest.CaptureFixture[str]) -> N
     exit_code = main(["export", "catalog", "--format", "markdown"])
     assert exit_code == 0
     captured = capsys.readouterr()
-    assert "| Rule Name | Engine | Type | Status | MITRE ATT&CK | Owners |" in captured.out
+    assert (
+        "| Rule Name | Engine | Type | Status | MITRE ATT&CK | Author | Owners | Owner Count |"
+        in captured.out
+    )
+    assert "Runbook" not in captured.out
     assert "`workspace_nrd_possible_phishing`" in captured.out
     assert "`gcp_iam_service_account_key_create`" in captured.out
     assert "`gcti_active_breach_network_indicators`" in captured.out
@@ -82,7 +88,11 @@ def test_export_catalog_csv_stdout(capsys: pytest.CaptureFixture[str]) -> None:
     exit_code = main(["export", "catalog", "--format", "csv"])
     assert exit_code == 0
     captured = capsys.readouterr()
-    assert "id,name,engine,rule_type,status,description,mitre_attack,tags,owners," in captured.out
+    assert (
+        "id,name,engine,rule_type,status,description,mitre_attack,tags,author,owners,owner_count,"
+        in captured.out
+    )
+    assert "has_runbook" not in captured.out
     assert "workspace_nrd_possible_phishing" in captured.out
     assert "gcti_active_breach_network_indicators" in captured.out
     assert "TA0001:T1566.002" in captured.out
@@ -104,9 +114,12 @@ def test_export_catalog_json_stdout(capsys: pytest.CaptureFixture[str]) -> None:
     for r in data:
         assert "status" in r
         assert "mitre_attack" in r
+        assert "author" in r
         assert "owners" in r
         assert isinstance(r["owners"], list)
-        assert "author" not in r
+        assert "owner_count" in r
+        assert r["owner_count"] == len(r["owners"])
+        assert "has_runbook" not in r
         assert "severity" not in r
 
 

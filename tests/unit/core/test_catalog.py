@@ -37,6 +37,8 @@ def test_resolve_mitre_attack_pairs_unmapped() -> None:
 
 
 def test_resolve_rule_deployment_status_fallback() -> None:
+    from graft.core.models.rule import ManagedRuleRef
+
     meta = RuleMetadata(id="00000000-0000-0000-0000-000000000001", name="r1", description="d")
     runbook = Runbook(context="c", triage="t", response="r")
 
@@ -47,6 +49,13 @@ def test_resolve_rule_deployment_status_fallback() -> None:
         runbook=runbook,
         tests=(),
     )
+    r_silent = RuleEnvelope(
+        metadata=meta,
+        logic="events: $e condition: $e",
+        deployment=BaseDeploymentConfig(enabled=True, alerting=False),
+        runbook=runbook,
+        tests=(),
+    )
     r_disabled = RuleEnvelope(
         metadata=meta,
         logic="events: $e condition: $e",
@@ -54,9 +63,19 @@ def test_resolve_rule_deployment_status_fallback() -> None:
         runbook=runbook,
         tests=(),
     )
+    r_managed = RuleEnvelope(
+        metadata=meta,
+        logic="",
+        deployment=BaseDeploymentConfig(enabled=True, alerting=True),
+        runbook=runbook,
+        tests=(),
+        managed=ManagedRuleRef(id="ur_123"),
+    )
 
     assert resolve_rule_deployment_status(r_enabled) == "enabled"
+    assert resolve_rule_deployment_status(r_silent) == "silent"
     assert resolve_rule_deployment_status(r_disabled) == "disabled"
+    assert resolve_rule_deployment_status(r_managed) == "disabled"
 
 
 def test_build_catalog_entry_from_rule() -> None:
@@ -83,13 +102,14 @@ def test_build_catalog_entry_from_rule() -> None:
     assert entry.status == "enabled"
     assert entry.mitre_attack == ("TA0001:T1566.002",)
     assert entry.tags == ("workspace", "phishing")
+    assert entry.author == "Unknown"
     assert entry.owners == ("Joe Lopes", "Detection Engineering")
-    assert not hasattr(entry, "author")
+    assert entry.owner_count == 2
     assert entry.created_at == "Unknown"
     assert entry.last_modified_at == "Unknown"
     assert entry.review_count == 0
     assert entry.contributor_count == 0
-    assert entry.has_runbook is True
+    assert not hasattr(entry, "has_runbook")
 
 
 def test_build_catalog_entry_with_git(tmp_path: Path) -> None:
@@ -107,12 +127,13 @@ def test_build_catalog_entry_with_git(tmp_path: Path) -> None:
         ),
         logic="events: $e condition: $e",
         deployment=BaseDeploymentConfig(enabled=True, alerting=False, run_frequency="hourly"),
-        runbook=Runbook(context="", triage="", response=""),
+        runbook=Runbook(context="ctx", triage="tr", response="res"),
         tests=(),
     )
 
     mock_git = RuleGitMetadata(
         path=rule_file,
+        author="Alice Smith",
         created_at="2026-02-01",
         last_modified_at="2026-09-20",
         commit_count=7,
@@ -122,12 +143,15 @@ def test_build_catalog_entry_with_git(tmp_path: Path) -> None:
     with patch("graft.core.catalog.extract_git_metadata", return_value=mock_git):
         entry = build_catalog_entry_from_rule(rule=rule, engine="secops", path=rule_file)
 
+    assert entry.status == "silent"
+    assert entry.author == "Alice Smith"
     assert entry.owners == ("Cloud Security Operations",)
+    assert entry.owner_count == 1
     assert entry.created_at == "2026-02-01"
     assert entry.last_modified_at == "2026-09-20"
     assert entry.review_count == 7
     assert entry.contributor_count == 3
-    assert entry.has_runbook is False
+    assert not hasattr(entry, "has_runbook")
 
 
 def test_build_catalog_entry_from_registered_managed_rule() -> None:
@@ -168,6 +192,7 @@ def test_build_catalog_entry_from_registered_managed_rule() -> None:
     assert entry.name == "gcti_active_breach_network_indicators"
     assert entry.rule_type == "managed"
     assert entry.status == "silent"
+    assert entry.owner_count == 1
     mock_adapter.resolve_deployment_status.assert_called_once_with(rule, managed_state=mock_state)
 
 
@@ -181,12 +206,13 @@ def test_render_catalog_table() -> None:
         description="A test rule",
         mitre_attack=("TA0001:T1566.002",),
         tags=("workspace",),
-        owners=("Joe Lopes",),
+        author="Joe Lopes",
+        owners=("Joe Lopes", "Detection Engineering"),
+        owner_count=2,
         created_at="2026-01-01",
         last_modified_at="2026-09-22",
         review_count=4,
         contributor_count=2,
-        has_runbook=True,
     )
 
     table = render_catalog_table([entry])
@@ -195,14 +221,16 @@ def test_render_catalog_table() -> None:
     assert "Type" in table
     assert "Status" in table
     assert "MITRE ATT&CK" in table
+    assert "Owners" in table
     assert "Reviews" in table
-    assert "Runbook" in table
     assert "Updated" in table
+    assert "Runbook" not in table
     assert "workspace_nrd_phishing" in table
     assert "secops" in table
     assert "custom" in table
     assert "enabled" in table
     assert "TA0001:T1566.002" in table
+    assert "Joe Lopes, Detection Engineering" in table
 
 
 def test_export_catalog_markdown() -> None:
@@ -215,22 +243,29 @@ def test_export_catalog_markdown() -> None:
         description="A test rule",
         mitre_attack=("TA0001:T1566.002",),
         tags=("workspace",),
+        author="Joe Lopes",
         owners=("Joe Lopes", "SecOps Team"),
+        owner_count=2,
         created_at="2026-01-01",
         last_modified_at="2026-09-22",
         review_count=4,
         contributor_count=2,
-        has_runbook=True,
     )
 
     md = export_catalog_markdown([entry])
-    assert "| Rule Name | Engine | Type | Status | MITRE ATT&CK | Owners |" in md
     assert (
-        "| `test_rule` | secops | custom | enabled | TA0001:T1566.002 | Joe Lopes, SecOps Team |"
+        "| Rule Name | Engine | Type | Status | MITRE ATT&CK | Author | Owners | Owner Count |"
         in md
     )
-    assert "| Reviews | Contributors | Runbook |" in md
-    assert "| 4 | 2 | yes |" in md
+    expected_row = (
+        "| `test_rule` | secops | custom | enabled | TA0001:T1566.002 "
+        "| Joe Lopes | Joe Lopes, SecOps Team | 2 |"
+    )
+    assert expected_row in md
+
+    assert "| Created | Last Updated | Reviews | Contributors |" in md
+    assert "| 2026-01-01 | 2026-09-22 | 4 | 2 |" in md
+    assert "Runbook" not in md
 
 
 def test_export_catalog_csv() -> None:
@@ -243,12 +278,13 @@ def test_export_catalog_csv() -> None:
         description="A test rule",
         mitre_attack=("TA0001:T1566.002",),
         tags=("workspace", "phishing"),
+        author="Joe Lopes",
         owners=("Joe Lopes", "SecOps Team"),
+        owner_count=2,
         created_at="2026-01-01",
         last_modified_at="2026-09-22",
         review_count=4,
         contributor_count=2,
-        has_runbook=True,
     )
 
     csv_output = export_catalog_csv([entry])
@@ -260,13 +296,14 @@ def test_export_catalog_csv() -> None:
     assert rows[0]["status"] == "enabled"
     assert rows[0]["mitre_attack"] == "TA0001:T1566.002"
     assert rows[0]["tags"] == "workspace;phishing"
+    assert rows[0]["author"] == "Joe Lopes"
     assert rows[0]["owners"] == "Joe Lopes;SecOps Team"
-    assert "author" not in rows[0]
+    assert rows[0]["owner_count"] == "2"
     assert rows[0]["created_at"] == "2026-01-01"
     assert rows[0]["last_modified_at"] == "2026-09-22"
     assert rows[0]["review_count"] == "4"
     assert rows[0]["contributor_count"] == "2"
-    assert rows[0]["has_runbook"] == "True"
+    assert "has_runbook" not in rows[0]
     assert "severity" not in rows[0]
     assert "has_tests" not in rows[0]
 
@@ -281,12 +318,13 @@ def test_export_catalog_json() -> None:
         description="A test rule",
         mitre_attack=("TA0001:T1566.002",),
         tags=("workspace",),
+        author="Joe Lopes",
         owners=("Joe Lopes", "SecOps Team"),
+        owner_count=2,
         created_at="2026-01-01",
         last_modified_at="2026-09-22",
         review_count=4,
         contributor_count=2,
-        has_runbook=True,
     )
 
     payload = export_catalog_json([entry])
@@ -295,12 +333,13 @@ def test_export_catalog_json() -> None:
     assert payload[0]["engine"] == "secops"
     assert payload[0]["status"] == "enabled"
     assert payload[0]["mitre_attack"] == ["TA0001:T1566.002"]
+    assert payload[0]["author"] == "Joe Lopes"
     assert payload[0]["owners"] == ["Joe Lopes", "SecOps Team"]
-    assert "author" not in payload[0]
+    assert payload[0]["owner_count"] == 2
     assert payload[0]["created_at"] == "2026-01-01"
     assert payload[0]["last_modified_at"] == "2026-09-22"
     assert payload[0]["review_count"] == 4
     assert payload[0]["contributor_count"] == 2
-    assert payload[0]["has_runbook"] is True
+    assert "has_runbook" not in payload[0]
     assert "severity" not in payload[0]
     assert "has_tests" not in payload[0]

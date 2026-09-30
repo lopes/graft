@@ -76,7 +76,8 @@ def test_export_navigator_layer_structure() -> None:
     assert "engine" in meta_names
     assert "type" in meta_names
     assert "rules" in meta_names
-    assert "runbook" in meta_names
+    assert "status" in meta_names
+    assert "runbook" not in meta_names
 
     assert len(t0["links"]) == 1
     assert "rulesets/secops/custom/rule_gcp.yaml" in t0["links"][0]["url"]
@@ -153,3 +154,6 @@ def test_export_navigator_layer_managed_rule_type_and_explicit_status() -> None:
     status_meta = next(m for m in t0["metadata"] if m["name"] == "status")
     assert type_meta["value"] == "managed"
     assert status_meta["value"] == "silent"
+
+    fallback_report = calculate_mitre_coverage([managed_rule])
+    assert fallback_report.tactic_coverages[0].statuses == ["disabled"]
