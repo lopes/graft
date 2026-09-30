@@ -119,8 +119,11 @@ Before declaring any work complete, the following checks must return 0 errors:
 
 ---
 
-## 8. Version Control, Scoped Commits & Remote Push
+## 8. Version Control, Branching, Scoped Commits & Remote Push
 
+- **Always Work in a Feature Branch (Never Commit Directly to `main`):**
+  - Before making any code, rule, or documentation modifications, create or switch to a dedicated feature branch (`git checkout -b <branch-name>`).
+  - Working in branches isolates changes from `main` for safe experimentation and trivial rollback, ensures every change goes through a Pull Request so pre-merge quality and cloud verification gates (`pr-validation.yml`) run before merging to `main`, and continuously exercises our CI/CD workflows.
 - Follow [Scoped Commits](https://scopedcommits.com/): `<scope>: <description>`
   - Scope first, lowercase, one-sentence imperative description.
   - Commit frequently during the phase as logical increments pass tests.
@@ -132,9 +135,9 @@ Before declaring any work complete, the following checks must return 0 errors:
   - GitHub OAuth tokens (`gh auth token`) reject pushing changes to `.github/workflows/` unless the token possesses the `workflow` scope (`gh auth refresh -s workflow`).
   - In environments where `gh` lacks `workflow` scope, pushes modifying workflow files must be executed via SSH (`git push origin <branch>`).
 - **Mandatory Remote Push at Phase Completion:**
-  - At the conclusion of each phase—after all quality gates pass, the progress tracker is updated, and the phase commit is created—**push changes to the remote repository**:
+  - At the conclusion of each phase—after all quality gates pass, the progress tracker is updated, and the phase commit is created—**push changes to the remote feature branch**:
     ```bash
-    git push origin <current-branch>
+    git push -u origin <current-branch>
     ```
   - Never push broken tests, failing lints, or incomplete phase work.
 
@@ -145,13 +148,13 @@ Before declaring any work complete, the following checks must return 0 errors:
 Follow this disciplined protocol during development and maintenance sessions:
 
 ### Start-of-Session Routine (Agent Boots Up)
-1. **Inspect Baseline:** Run `git status`, `git log -n 3`, and `uv run pytest` to ensure you are starting from a clean, passing baseline.
+1. **Inspect Baseline & Branch:** Run `git status`, `git log -n 3`, and `uv run pytest` to ensure you are starting from a clean, passing baseline. Verify you are on a dedicated feature branch (or create one from `main` via `git checkout -b <branch-name>`) before modifying any files.
 2. **Ground in Operational Directives:** Review `AGENTS.md` and relevant tracks in `docs/` for architecture, stdlib-first boundaries, and quality gates.
 3. **Design Alignment & Scrutiny:** Present detailed structural designs, schema field names, API signatures, and data contracts to the user for review and critique. Discuss trade-offs and obtain alignment before writing any implementation code.
 4. **Execute via Strict TDD:** Implement agreed changes using strict Red-Green-Refactor TDD.
 
 ### End-of-Session Routine (Session Handoff & Completion)
 1. **Verify Quality Gates:** Run `uv run ruff check .`, `uv run ruff format --check .`, `uv run mypy --strict src tests`, and `uv run pytest`.
-2. **Commit Changes:** Create a scoped commit following Scoped Commits: `<scope>: <description>`.
-3. **Push to Remote:** Run `git push origin <current-branch>` (or verify local commits are ready for user push).
+2. **Commit Changes:** Create a scoped commit on the feature branch following Scoped Commits: `<scope>: <description>`.
+3. **Push to Remote & Open PR:** Run `git push -u origin <current-branch>` (or verify local branch commits are ready for user push and PR creation).
 4. **Handoff Report:** Output a clean summary stating what was done, what files were created/modified, and verified quality gate results.
