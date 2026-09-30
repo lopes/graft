@@ -15,7 +15,7 @@ Driven engine adapter connecting Graft's hexagonal detection core to the **Googl
 - [`deployer.py`](deployer.py) — [`SecOpsDeployerAdapter`](deployer.py), custom rule CRUD and in-place revision reconciliation.
 - [`managed.py`](managed.py) & [`managed_loader.py`](managed_loader.py) — [`SecOpsManagedAdapter`](managed.py), managing Google Cloud Curated Rule Sets (`PRECISE` / `BROAD`) and `findingsRefinements` exclusions.
 - [`replay.py`](replay.py) — [`SecOpsReplayEngine`](replay.py), quarantined synthetic UDM replay test harness.
-- [`schemas/`](schemas/) — Co-located JSON Schemas (`rule.schema.json` and `managed.schema.json`).
+- [`schemas/`](schemas/) — Co-located JSON Schemas (`custom.schema.json` and `managed.schema.json`).
 
 ---
 

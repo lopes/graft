@@ -43,9 +43,23 @@ class TestVector:
 
 
 @dataclass(frozen=True)
+class ManagedRuleRef:
+    id: str
+
+
+@dataclass(frozen=True)
 class RuleEnvelope:
     metadata: RuleMetadata
-    logic: str
-    deployment: BaseDeploymentConfig
-    runbook: Runbook
+    logic: str = ""
+    deployment: BaseDeploymentConfig = field(default_factory=BaseDeploymentConfig)
+    runbook: Runbook = field(default_factory=Runbook)
     tests: tuple[TestVector, ...] = ()
+    managed: ManagedRuleRef | None = None
+
+    @property
+    def is_managed(self) -> bool:
+        return self.managed is not None
+
+    @property
+    def rule_type(self) -> str:
+        return "managed" if self.managed is not None else "custom"

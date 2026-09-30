@@ -20,6 +20,7 @@ class RuleUniquenessValidator:
     def __init__(self) -> None:
         self._seen_ids: dict[str, tuple[str, str]] = {}
         self._seen_names: dict[tuple[str, str], str] = {}
+        self._seen_managed_ids: dict[tuple[str, str], str] = {}
 
     def add_and_validate(
         self,
@@ -76,8 +77,32 @@ class RuleUniquenessValidator:
         else:
             self._seen_names[engine_name_key] = path_str
 
+        if rule.managed is not None:
+            managed_key = (engine, rule.managed.id)
+            if managed_key in self._seen_managed_ids:
+                conflicting_path = self._seen_managed_ids[managed_key]
+                violations.append(
+                    RuleUniquenessViolation(
+                        rule_id=rule_id,
+                        rule_name=rule_name,
+                        engine=engine,
+                        path=path_str,
+                        conflicting_path=conflicting_path,
+                        conflicting_engine=engine,
+                        violation_type="managed_id",
+                        message=(
+                            f"Duplicate managed.id '{rule.managed.id}' in engine '{engine}' "
+                            f"in '{path_str}' conflicts with '{conflicting_path}'. "
+                            "Managed rule IDs must be mapped 1-to-1 within their engine."
+                        ),
+                    )
+                )
+            else:
+                self._seen_managed_ids[managed_key] = path_str
+
         return violations
 
     def reset(self) -> None:
         self._seen_ids.clear()
         self._seen_names.clear()
+        self._seen_managed_ids.clear()

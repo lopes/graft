@@ -120,3 +120,57 @@ def test_validator_reset() -> None:
         rule1, engine="secops", path=Path("rulesets/secops/custom/r1.yaml")
     )
     assert len(v) == 0
+
+
+def test_duplicate_managed_id_within_same_engine_rejected() -> None:
+    from graft.core.models.rule import ManagedRuleRef
+
+    validator = RuleUniquenessValidator()
+    rule1 = RuleEnvelope(
+        metadata=RuleMetadata(id="id-1", name="managed_one", description="First"),
+        runbook=Runbook(),
+        managed=ManagedRuleRef(id="f5533b66-9327-9880-93e6-75a738ac2345"),
+    )
+    rule2 = RuleEnvelope(
+        metadata=RuleMetadata(id="id-2", name="managed_two", description="Second"),
+        runbook=Runbook(),
+        managed=ManagedRuleRef(id="f5533b66-9327-9880-93e6-75a738ac2345"),
+    )
+
+    v1 = validator.add_and_validate(
+        rule1, engine="secops", path=Path("rulesets/secops/managed/m1.yaml")
+    )
+    v2 = validator.add_and_validate(
+        rule2, engine="secops", path=Path("rulesets/secops/managed/m2.yaml")
+    )
+
+    assert len(v1) == 0
+    assert len(v2) == 1
+    assert v2[0].violation_type == "managed_id"
+    assert "f5533b66-9327-9880-93e6-75a738ac2345" in v2[0].message
+
+
+def test_same_managed_id_across_different_engines_allowed() -> None:
+    from graft.core.models.rule import ManagedRuleRef
+
+    validator = RuleUniquenessValidator()
+    rule_secops = RuleEnvelope(
+        metadata=RuleMetadata(id="id-1", name="managed_one", description="First"),
+        runbook=Runbook(),
+        managed=ManagedRuleRef(id="shared-vendor-id-100"),
+    )
+    rule_cs = RuleEnvelope(
+        metadata=RuleMetadata(id="id-2", name="managed_two", description="Second"),
+        runbook=Runbook(),
+        managed=ManagedRuleRef(id="shared-vendor-id-100"),
+    )
+
+    v1 = validator.add_and_validate(
+        rule_secops, engine="secops", path=Path("rulesets/secops/managed/m1.yaml")
+    )
+    v2 = validator.add_and_validate(
+        rule_cs, engine="crowdstrike", path=Path("rulesets/crowdstrike/managed/m1.yaml")
+    )
+
+    assert len(v1) == 0
+    assert len(v2) == 0

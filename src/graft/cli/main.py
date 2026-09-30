@@ -93,6 +93,12 @@ def build_parser() -> argparse.ArgumentParser:
     new_rule_p.add_argument("name", help="Rule identifier slug (e.g. suspicious_powershell)")
     new_rule_p.add_argument("--engine", required=True, help="Target engine (e.g. secops, sentinel)")
     new_rule_p.add_argument("--out", help="Custom output path for generated YAML rule")
+    new_rule_p.add_argument(
+        "--managed",
+        default=None,
+        metavar="MANAGED_ID",
+        help="Scaffold a registered managed rule in rulesets/<engine>/managed/",
+    )
 
     # 5. Discover & register pluggable engines (e.g., secops, sentinel, crowdstrike)
     discover_and_register_engines(subparsers)
@@ -162,10 +168,15 @@ def main(argv: Sequence[str] | None = None) -> int:
 
             if args.new_type == "rule":
                 out_path = Path(args.out) if getattr(args, "out", None) else None
+                managed_arg = getattr(args, "managed", None)
+                is_managed = managed_arg is not None
+                managed_id = managed_arg if isinstance(managed_arg, str) else None
                 rule_path = scaffold_rule(
                     engine=args.engine,
                     rule_name=args.name,
                     out_path=out_path,
+                    managed=is_managed,
+                    managed_id=managed_id,
                 )
                 if args.json:
                     sys.stdout.write(json.dumps({"success": True, "path": str(rule_path)}) + "\n")

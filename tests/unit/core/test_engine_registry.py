@@ -139,7 +139,11 @@ class DummyAdapter(EngineAdapter):
     def get_replay(self) -> ReplayHarnessPort | None:
         return None
 
-    def resolve_deployment_status(self, rule: RuleEnvelope) -> str:
+    def resolve_deployment_status(
+        self,
+        rule: RuleEnvelope,
+        managed_state: object = None,
+    ) -> str:
         return "enabled" if rule.deployment.enabled else "disabled"
 
 
@@ -166,7 +170,7 @@ def test_engine_adapter_protocol_conformance(tmp_path: Path) -> None:
     )
     assert adapter.are_rules_equal(dummy_rule, dummy_rule) is True
     assert adapter.deconstruct_rule(dummy_rule) == dummy_rule
-    assert adapter.load_managed_manifest(tmp_path / "managed.yaml") is None
+    assert adapter.load_managed_manifest(tmp_path / "index.yaml") is None
 
 
 def test_engine_registry_loads_adapter_class(

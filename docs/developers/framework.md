@@ -82,13 +82,13 @@ To maintain strict architectural boundaries, responsibilities are cleanly divide
 
 | Capability / Concern | Handled by Driving Core | Handled by Driven Adapter |
 | :--- | :--- | :--- |
-| **Rule Representation** | Provides universal 5-block `RuleEnvelope` model and base JSON schemas. | Maps envelope fields (`metadata`, `logic`, `deployment`) to engine-native payload formats. |
-| **Detection Rule Schema** | Loads and validates base envelope structure (`metadata`, `runbook`, `tests`). | Provides `schemas/rule.schema.json` (extending `base_rule.schema.json`) to validate engine-specific deployment and logic constraints. |
+| **Rule Representation** | Provides universal `RuleEnvelope` model (5-block custom rules and 4-block registered managed rules) and base JSON schemas (`base_custom.schema.json`, `base_managed.schema.json`). | Maps custom envelope fields (`metadata`, `logic`, `deployment`) to engine-native payload formats, and resolves registered managed rule status from `managed/index.yaml`. |
+| **Detection Rule Schema** | Loads and validates base envelope structures (`base_custom.schema.json` for `custom/*.yaml` and `base_managed.schema.json` for `managed/<rule>.yaml`). | Provides `schemas/custom.schema.json` (extending `base_custom.schema.json`) for custom rules and `schemas/managed.schema.json` for `managed/index.yaml`. |
 | **Reconciliation Logic** | Computes diffs, evaluates Scoped vs. Full Catalog scopes, and determines required mutations. | Executes atomic remote API calls (`create_rule`, `update_rule`, `set_rule_state`, `set_ruleset_deployment`). |
 | **Authentication & HTTP** | Manages environment variable resolution and `.env` loading. | Establishes authenticated sessions (STS/WIF, OAuth2, API tokens) and issues HTTP requests via `urllib.request`. |
 | **Syntax Verification** | Orchestrates file discovery and aggregates compiler results. | Invokes the vendor's syntax validation API (e.g., Chronicle `:verifyRuleText` or Azure API syntax check). |
 | **Synthetic Replay** | Parses `tests:` block fixtures and evaluates expected match counts. | Transports synthetic events to staging infrastructure or non-alerting quarantine and executes detection evaluation. |
-| **Vendor Managed Content** | Validates `managed.yaml` schema and computes exclusion/ruleset diffs. | Interacts with vendor curated rules APIs (e.g., Chronicle CuratedRuleSets or Sentinel Analytics Templates). |
+| **Vendor Managed Content** | Validates `managed/index.yaml` against `schemas/managed.schema.json`, computes exclusion/ruleset diffs, and enforces 1-to-1 `managed.id` uniqueness and existence against `index.yaml`. | Defines the engine-specific `managed/index.yaml` structure with a unique `id` per managed rule/ruleset, interacts with vendor curated rules APIs, and implements `has_managed_rule_id`. |
 | **Logging & Diagnostics** | Configures UTC ISO-8601 formatting (`graft.cli`), logs rule/exclusion CRUD lifecycle (`INFO`), logs failure context (`ERROR`), and emits partial-progress abort summaries (`graft.reconciler`). | Logs HTTP retry backoffs (`WARNING`), multi-step partial mutation warnings (`WARNING`), and low-level API sub-steps (`DEBUG`) under `graft.<engine>.*`; raises exceptions containing HTTP status, vendor status code, method, and endpoint path. |
 
 ---
@@ -124,7 +124,11 @@ class EngineAdapter(Protocol):
 
     def get_replay(self) -> ReplayHarnessPort | None: ...
 
-    def resolve_deployment_status(self, rule: RuleEnvelope) -> str: ...
+    def resolve_deployment_status(
+        self,
+        rule: RuleEnvelope,
+        managed_state: ManagedState | None = None,
+    ) -> str: ...
 
     def are_rules_equal(self, desired: RuleEnvelope, remote: RuleEnvelope) -> bool: ...
 
@@ -133,14 +137,17 @@ class EngineAdapter(Protocol):
     def load_managed_manifest(self, path: Path) -> ManagedState | None: ...
 
     def dump_managed_manifest(self, state: ManagedState, path: Path) -> None: ...
+
+    def has_managed_rule_id(self, managed_id: str, state: ManagedState) -> bool: ...
 ```
 
 The composite adapter acts as a capabilities factory and lifecycle hook provider:
 - **Port Factories (`get_compiler`, `get_deployer`, `get_managed`, `get_replay`):** Return the concrete port implementation or `None` when a capability is unsupported.
-- **`resolve_deployment_status(rule)`:** Translates engine-specific deployment toggles into an engine-agnostic status (`enabled`, `silent`, `disabled`).
+- **`resolve_deployment_status(rule, managed_state)`:** Translates engine-specific deployment toggles into an engine-agnostic status (`enabled`, `silent`, `disabled`). For custom rules (`rule.is_managed == False`), it inspects `rule.deployment`; for registered managed rules (`rule.is_managed == True`), it resolves the live deployment status from `managed_state` (`rulesets/<engine>/managed/index.yaml`).
 - **`are_rules_equal(desired, remote)`:** Compares a desired Git `RuleEnvelope` against a remote tenant `RuleEnvelope` during `diff`/`apply` (defaults to trimmed `logic` comparison; engines that compile metadata into the query payload, such as `SecOpsAdapter`, override this to compare compiled payloads).
 - **`deconstruct_rule(remote_rule)`:** Extracts embedded metadata from a raw remote rule during `pull` (defaults to returning `remote_rule` unchanged).
-- **`load_managed_manifest(path)` / `dump_managed_manifest(state, path)`:** Parses and serializes `rulesets/<engine>/managed.yaml` when `managed_rules: true` (defaults to `None`).
+- **`load_managed_manifest(path)` / `dump_managed_manifest(state, path)`:** Parses and serializes `rulesets/<engine>/managed/index.yaml` when `managed_rules: true` (defaults to `None`).
+- **`has_managed_rule_id(managed_id, state)`:** Verifies whether a registered managed rule's `managed.id` exists in the parsed `ManagedState` from `rulesets/<engine>/managed/index.yaml`. Used by `graft lint` to enforce referential integrity between `rulesets/<engine>/managed/<rule_name>.yaml` and `index.yaml`.
 
 ---
 
@@ -239,7 +246,7 @@ class ReplayHarnessPort(Protocol):
 
 ---
 
-## 4. Custom Rules vs. Managed Rules: Definition & Strict Optionality
+## 4. Custom Rules vs. Managed Rules: Definition, Registration & Adapter Contract
 
 In modern SIEM architectures, detection content falls into two fundamentally distinct categories:
 
@@ -248,10 +255,10 @@ In modern SIEM architectures, detection content falls into two fundamentally dis
 | Concept | Custom Detection Rules | Vendor-Managed Content |
 | :--- | :--- | :--- |
 | **Ownership** | Authored and maintained 100% by the organization's detection engineers. | Authored and maintained by the SIEM vendor (e.g., Google Cloud Threat Intelligence, Microsoft Threat Experts). |
-| **Representation** | Individual 5-block envelope YAML files under `rulesets/<engine>/custom/<rule>.yaml`. | Single consolidated manifest under `rulesets/<engine>/managed.yaml`. |
-| **Logic Visibility** | Full query logic (`events`, `match`, `condition`) is authored and visible. | Proprietary vendor logic is black-boxed; operators configure operational parameters. |
-| **Operator Control** | Complete CRUD control over queries, test vectors, and runbooks. | Toggles precision (`PRECISE` vs `BROAD`), activation, alert generation, and customer exclusion filters. |
-| **Engine Port** | Handled via [`RuleDeployerPort`](../../src/graft/core/ports/deployer.py). | Handled via [`ManagedEnginePort`](../../src/graft/core/ports/managed.py). |
+| **Representation** | Individual 5-block envelope YAML files under `rulesets/<engine>/custom/<rule>.yaml`. | Consolidated state manifest at `rulesets/<engine>/managed/index.yaml` plus optional 4-block registered rule envelopes at `rulesets/<engine>/managed/<rule>.yaml`. |
+| **Logic Visibility** | Full query logic (`events`, `match`, `condition`) is authored and visible. | Proprietary vendor logic is black-boxed; operators configure operational parameters in `managed/index.yaml`. |
+| **Operator Control** | Complete CRUD control over queries, test vectors, and runbooks. | Toggles precision (`PRECISE` vs `BROAD`), activation, alert generation, customer exclusions in `index.yaml`, and optional MITRE/runbook registration in `managed/<rule>.yaml`. |
+| **Engine Port** | Handled via [`RuleDeployerPort`](../../src/graft/core/ports/deployer.py). | Handled via [`ManagedEnginePort`](../../src/graft/core/ports/managed.py) and `EngineAdapter` hooks. |
 
 ### 2. Strict Optionality via `capabilities`
 
@@ -269,6 +276,34 @@ capabilities:
   managed_rules: false        # Engine DOES NOT have vendor-curated content
   replay_testing: false       # Engine DOES NOT have synthetic replay APIs
 ```
+
+### 3. Managed Content Index (`managed/index.yaml`) & Registered Rule Contract (For Engine Programmers)
+
+When an engine supports vendor-managed detections (`managed_rules: true`), Graft separates **engine-specific deployment state** from **engine-agnostic governance and MITRE coverage**:
+
+```mermaid
+flowchart LR
+    INDEX["<b>rulesets/&lt;engine&gt;/managed/index.yaml</b><br/>• Engine-Specific Format<br/>• Validated by <code>schemas/managed.schema.json</code><br/>• Must expose a unique <code>id</code> per managed rule"]
+    REG["<b>rulesets/&lt;engine&gt;/managed/&lt;rule&gt;.yaml</b><br/>• Standardized 4-Block Envelope<br/>• Validated by <code>base_managed.schema.json</code><br/>• Links via <code>managed.id</code>"]
+    LINT["<b>graft lint &amp; export</b><br/>• Verifies <code>managed.id</code> exists in <code>index.yaml</code><br/>• Enforces 1-to-1 uniqueness (no overlap)<br/>• Resolves live status from <code>index.yaml</code>"]
+
+    REG -- "managed.id" --> INDEX
+    INDEX --> LINT
+    REG --> LINT
+```
+
+Engine programmers implementing `managed_rules: true` must adhere to three mandatory architectural contracts:
+
+1. **Engine-Specific `index.yaml` with Mandatory Unique IDs:**
+   - The YAML structure of `rulesets/<engine>/managed/index.yaml` (and its schema at `src/graft/engines/<engine>/schemas/managed.schema.json`) depends entirely on the target engine's API (e.g., Google SecOps organizes content into `categories[].rulesets[]` with `PRECISE`/`BROAD` deployments; CrowdStrike or Sentinel use different hierarchy models).
+   - **Programmer Responsibility:** Regardless of the vendor's hierarchy, **the engine programmer must ensure every managed rule or ruleset entry in `index.yaml` exposes a stable, unique `id` string**. Detection analysts use this exact `id` when optionally registering a managed rule in `rulesets/<engine>/managed/<rule_name>.yaml` (`managed.id: "<id>"`) to map vendor coverage into MITRE ATT&CK matrices and catalogs.
+2. **Referential & 1-to-1 Uniqueness Validation Against `index.yaml`:**
+   - **Existence Check (`has_managed_rule_id`):** Programmers must implement `EngineAdapter.has_managed_rule_id(self, managed_id: str, state: ManagedState) -> bool` to check whether `managed_id` exists in the parsed `index.yaml` state. During `graft lint`, Core validates every registered managed rule YAML (`rulesets/<engine>/managed/<rule_name>.yaml`) against `rulesets/<engine>/managed/index.yaml` and rejects any file whose `managed.id` is not present in `index.yaml`.
+   - **No Overlapping Registrations (1-to-1 Mapping):** Core's [`RuleUniquenessValidator`](../../src/graft/core/validation/uniqueness_validator.py) enforces strict 1-to-1 uniqueness on `managed.id` within each engine. Two YAML files under `rulesets/<engine>/managed/` can never link to the same managed rule `id` in `index.yaml`.
+   - **Reserved Filename (`index`):** The rule name `"index"` is reserved for `index.yaml` and rejected by [`base_managed.schema.json`](../../src/graft/core/schemas/base_managed.schema.json).
+3. **Single Source of Truth for Deployment Status (`resolve_deployment_status`):**
+   - Registered managed rule files (`managed/<rule_name>.yaml`) contain 4 blocks (`metadata`, `managed`, `runbook`, `tests`) and intentionally omit `logic` and `deployment` to prevent state duplication.
+   - Programmers must implement `EngineAdapter.resolve_deployment_status(self, rule: RuleEnvelope, managed_state: ManagedState | None = None) -> str` so that when `rule.is_managed` is `True`, the adapter looks up `rule.managed.id` inside `managed_state` (`index.yaml`) and returns `"enabled"`, `"silent"`, or `"disabled"`.
 
 ---
 
@@ -329,12 +364,14 @@ Graft dynamically discovers engines without requiring hardcoded imports in Core:
 
 1. **Manifest Discovery:** At startup, `EngineRegistry._discover()` scans all subdirectories under `src/graft/engines/` for `engine.yaml`.
 2. **Manifest Validation:** Every manifest is validated against [`src/graft/core/schemas/engine_manifest.schema.json`](../../src/graft/core/schemas/engine_manifest.schema.json).
-3. **Rule Schema Discovery:** When `graft lint` validates a rule or manifest for an engine, [`SchemaValidator`](../../src/graft/core/validation/schema_validator.py) checks for co-located schemas at:
+3. **Rule & Manifest Schema Discovery:** When `graft lint` validates a rule or manifest for an engine, [`SchemaValidator`](../../src/graft/core/validation/schema_validator.py) resolves schemas using a consistent `custom` / `managed` naming convention:
    ```text
-   src/graft/engines/<engine>/schemas/rule.schema.json
-   src/graft/engines/<engine>/schemas/managed.schema.json
+   src/graft/core/schemas/base_custom.schema.json       # Base 5-block custom rule envelope
+   src/graft/core/schemas/base_managed.schema.json      # Base 4-block registered managed rule envelope
+   src/graft/engines/<engine>/schemas/custom.schema.json  # Engine custom rule schema (extends base_custom.schema.json)
+   src/graft/engines/<engine>/schemas/managed.schema.json # Engine managed/index.yaml schema
    ```
-   If present, Core validates the rule envelope and managed manifest against these schemas without leaking vendor specifics into Core.
+   Core validates `rulesets/<engine>/custom/*.yaml` against `<engine>/schemas/custom.schema.json`, `rulesets/<engine>/managed/<rule>.yaml` against `base_managed.schema.json`, and `rulesets/<engine>/managed/index.yaml` against `<engine>/schemas/managed.schema.json` without leaking vendor specifics into Core.
 4. **Adapter Instantiation:** When an engine command is executed, Core dynamically imports the `adapter_class` declared in the manifest (e.g., `graft.engines.sentinel.adapter:SentinelAdapter`), instantiates it with the target environment (`env="production"`), and verifies that it implements [`EngineAdapter`](../../src/graft/core/ports/engine.py).
 
 ---

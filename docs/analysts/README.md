@@ -18,7 +18,7 @@ flowchart LR
     DIFF --> PR["7. Pull Request<br/>Review & Merge"]
 ```
 
-1. **Scaffold:** Bootstrap a clean 5-block envelope with generated UUID and schema defaults (`graft <engine> new <rule_name>`).
+1. **Scaffold:** Bootstrap a clean 5-block custom rule envelope (`graft <engine> new <rule_name>`) or a 4-block registered managed rule envelope (`graft <engine> new <rule_name> --managed <id>`) with generated UUID and schema defaults.
 2. **Author:** Write your detection query (e.g. YARA-L 2.0), populate investigation and response runbooks, map MITRE ATT&CK techniques, and add synthetic test events.
 3. **Offline Lint:** Validate your rule locally in sub-seconds against strict JSON Schemas and STIX ATT&CK matrices (`graft lint <path>`).
 4. **Dry-Run Syntax:** Submit the rule to the SIEM's remote dry-run compilation API without altering production state (`graft <engine> verify <path>`).
@@ -31,6 +31,6 @@ flowchart LR
 ## Analyst Documentation Index
 
 - **📖 [Detection Recipes Cookbook](recipes.md):** Step-by-step practical recipes for everyday rule management tasks using Google SecOps as the reference implementation.
-- **📝 [Rule Authoring Specification](rule_authoring.md):** Complete specification of the 5-block envelope (`metadata`, `logic`, `deployment`, `runbook`, `tests`), uniqueness constraints, and YARA-L patterns.
+- **📝 [Rule Authoring Specification](rule_authoring.md):** Complete specification of the 5-block custom rule envelope (`metadata`, `logic`, `deployment`, `runbook`, `tests`), the 4-block registered managed rule envelope (`metadata`, `managed`, `runbook`, `tests`), uniqueness constraints, and YARA-L patterns.
 - **🧪 [Synthetic Replay Testing](replay_testing.md):** Guide to crafting synthetic UDM event fixtures, running quarantined tests, and asserting detection outcomes without alert pollution.
 - **📊 [Threat Coverage & Catalogs](visibility_and_matrix.md):** Mapping detections to the MITRE ATT&CK matrix, generating ATT&CK Navigator v4.5 heatmaps, and exporting Git blame-attributed rule catalogs.

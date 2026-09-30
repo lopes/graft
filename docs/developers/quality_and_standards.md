@@ -128,7 +128,9 @@ Operational logs are a first-class engineering contract across CLI, Core, and Dr
 
 ---
 
-## 7. Version Control & Scoped Commits
+## 7. Version Control, Branching & Scoped Commits
+
+- **Always Work in a Feature Branch:** Never commit directly to `main`. Always branch from `main` (`git checkout -b <branch-name>`) before making changes. Feature branches make rollback trivial, isolate experimental work from working code, and ensure every change runs through Pull Request verification gates (`pr-validation.yml`) before merging.
 
 All commits must follow [Scoped Commits](https://scopedcommits.com/):
 

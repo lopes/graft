@@ -84,7 +84,7 @@ Synthetic replay test fixtures for automated validation.
 
 ## 2. Rule Identification & Uniqueness Scoping
 
-To maintain data integrity across multi-engine deployments, audit catalogs, and SIEM migrations, Graft enforces a dual-tier uniqueness model:
+To maintain data integrity across multi-engine deployments, audit catalogs, and SIEM migrations, Graft enforces a three-tier uniqueness model:
 
 ```mermaid
 flowchart TD
@@ -93,7 +93,8 @@ flowchart TD
     end
 
     subgraph EngineScope["Engine Scope (Per Engine)"]
-        NAME["<b>metadata.name (Engine-Scoped Uniqueness)</b><br/>Must be unique within the specific engine directory (rulesets/&lt;engine&gt;/custom/)<br/><i>e.g. Rules in different engines CAN share the same technical name</i>"]
+        NAME["<b>metadata.name (Engine-Scoped Uniqueness)</b><br/>Must be unique across <code>custom/</code> and <code>managed/</code> within the engine<br/><i>e.g. Rules in different engines CAN share the same technical name</i>"]
+        MAN_ID["<b>managed.id (1-to-1 Managed Registration)</b><br/>Must match an ID in <code>managed/index.yaml</code> and never overlap<br/><i>Two YAML files cannot link to the same vendor managed rule ID</i>"]
     end
 ```
 
@@ -102,10 +103,14 @@ flowchart TD
 - **Rationale:** The `metadata.id` represents the immutable, canonical identity of the detection concept within the enterprise. It is referenced by audit logs, compliance exports, ATT&CK Navigator heatmaps, and cross-platform SIEM migration tooling. No two rule files in the repository may share an `id`, even if they target completely different detection engines (e.g., Google SecOps vs. CrowdStrike Falcon).
 
 ### 2. Engine Scope: `metadata.name`
-- **Constraint:** Must be a lowercase alphanumeric snake_case slug (`^[a-z0-9_]+$`, max 64 characters) and unique within the target engine (`rulesets/<engine>/custom/`).
-- **Rationale:** The `metadata.name` serves as the native SIEM identifier (such as the YARA-L rule identifier `rule <name> { ... }` in Chronicle or the detection title in other platforms). While two rules in the same engine cannot share a name (which would create an overwrite collision on the tenant), rules across different engines **can** share the same `name` (e.g. `rulesets/secops/custom/gcp_iam_service_account_key_create.yaml` and a corresponding `rulesets/crowdstrike/custom/gcp_iam_service_account_key_create.yaml`).
+- **Constraint:** Must be a lowercase alphanumeric snake_case slug (`^[a-z0-9_]+$`, max 64 characters, `"index"` reserved for `managed/index.yaml`) and unique within the target engine (`rulesets/<engine>/custom/` and `rulesets/<engine>/managed/`).
+- **Rationale:** The `metadata.name` serves as the native SIEM identifier (such as the YARA-L rule identifier `rule <name> { ... }` in Chronicle or the detection title in other platforms). While two rules in the same engine cannot share a name (which would create an overwrite or catalog collision), rules across different engines **can** share the same `name` (e.g. `rulesets/secops/custom/gcp_iam_service_account_key_create.yaml` and a corresponding `rulesets/crowdstrike/custom/gcp_iam_service_account_key_create.yaml`).
 
-### 3. Automated Verification
+### 3. Engine Scope: `managed.id` (Registered Managed Rules)
+- **Constraint:** When registering a vendor-managed rule in `rulesets/<engine>/managed/<rule_name>.yaml`, `managed.id` must match a valid rule/ruleset `id` in `rulesets/<engine>/managed/index.yaml` and be strictly unique (1-to-1) within that engine.
+- **Rationale:** Prevents duplicate or conflicting MITRE ATT&CK mappings and runbooks for the same underlying vendor detection.
+
+### 4. Automated Verification
 Rule uniqueness is enforced automatically during:
 - Local rule linting (`graft lint`).
 - Git pre-commit hooks (`.githooks/pre-commit`).
@@ -238,24 +243,27 @@ tests:
 
 ### Scaffolding a New Rule
 
-Use `graft secops new` or `graft new rule` to bootstrap a complete 5-block envelope with schema defaults and unique UUID:
+Use `graft secops new` or `graft new rule` to bootstrap a complete 5-block custom rule envelope (or a 4-block registered managed rule envelope via `--managed <id>`) with schema defaults and a unique UUID:
 
 ```bash
-# SecOps engine shortcut (recommended):
+# Custom rule — SecOps engine shortcut (recommended):
 graft secops new gcp_cloud_storage_public_bucket
 
-# Engine-agnostic dispatcher:
+# Custom rule — Engine-agnostic dispatcher:
 graft new rule gcp_cloud_storage_public_bucket --engine secops
+
+# Registered managed rule — Link to an ID from rulesets/secops/managed/index.yaml:
+graft secops new gcti_active_breach_network_indicators --managed 433faf9e-4d51-f284-c35b-009528ecff05
 
 # Specify a custom target path:
 graft secops new gcp_cloud_storage_public_bucket --out rulesets/secops/custom/tier1/storage.yaml
 ```
 
-The generated file includes pre-populated runbook sections, deployment defaults (`enabled: false`, `alerting: false`, `run_frequency: "live"`), and a template test fixture.
+For custom rules, the generated file includes pre-populated runbook sections, deployment defaults (`enabled: false`, `alerting: false`, `run_frequency: "live"`), and a template test fixture.
 
 ### Validating Rules Offline
 
-Graft's linter validates JSON Schema constraints and verifies MITRE techniques against the bundled ATT&CK matrix in milliseconds without network calls:
+Graft's linter validates JSON Schema constraints, verifies MITRE techniques against the bundled ATT&CK matrix, and cross-checks registered managed rule IDs against `rulesets/<engine>/managed/index.yaml` in milliseconds without network calls:
 
 ```bash
 # Lint specific rule
@@ -275,8 +283,9 @@ graft --json lint
 ```text
 [PASS] rulesets/secops/custom/workspace_nrd_possible_phishing.yaml
 [PASS] rulesets/secops/custom/gcp_iam_service_account_key_create.yaml
-[PASS] rulesets/secops/managed.yaml
-Checked 4 rules across 1 engines. All rules passed validation.
+[PASS] rulesets/secops/managed/gcti_active_breach_network_indicators.yaml
+[PASS] rulesets/secops/managed/index.yaml
+Checked 5 rules across 1 engines. All rules passed validation.
 ```
 
 When schema constraints or invalid MITRE tactics/techniques are detected:
@@ -303,7 +312,69 @@ git config --unset core.hooksPath
 
 ---
 
-## 5. Decommissioning Rules & Underscore Convention
+## 5. Registering Vendor-Managed Rules for Coverage & Runbooks (`rulesets/<engine>/managed/<rule_name>.yaml`)
+
+Security operations teams frequently rely on vendor-managed detections (such as Google Cloud Curated Rule Sets) as an active part of their threat coverage. While `rulesets/<engine>/managed/index.yaml` tracks the engine-specific deployment posture (`PRECISE` vs `BROAD`, `enabled`, `alerting`) and exclusions (`findingsRefinements`), vendor APIs do not store your team's operational ownership, custom SOC triage playbooks, or organization-specific MITRE ATT&CK mappings.
+
+To include vendor-managed rules in MITRE ATT&CK Navigator heatmaps (`graft export matrix`) and governance catalogs (`graft export catalog`), analysts can **optionally register** any managed rule or ruleset from `index.yaml` as a standalone YAML file under `rulesets/<engine>/managed/<rule_name>.yaml`.
+
+### 1. The 4-Block Registered Managed Rule Envelope (`base_managed.schema.json`)
+
+Registered managed rules follow [`base_managed.schema.json`](../../src/graft/core/schemas/base_managed.schema.json), which mirrors the custom rule envelope while replacing `logic` and `deployment` with a `managed` reference block:
+
+```mermaid
+flowchart TD
+    ROOT["Registered Managed Rule (rulesets/&lt;engine&gt;/managed/&lt;rule&gt;.yaml)"]
+    ROOT --> B1["<b>1. metadata</b><br/>UUID, Name, Description, Owners, MITRE, Tags, References"]
+    ROOT --> B2["<b>2. managed</b><br/><code>id</code>: Exact vendor rule/ruleset ID from <code>managed/index.yaml</code>"]
+    ROOT --> B3["<b>3. runbook</b><br/>Context, Triage Checklist, Incident Response Steps"]
+    ROOT --> B4["<b>4. tests</b><br/>Optional Synthetic Test Vectors (<code>[]</code> permitted)"]
+```
+
+- **Why `logic` and `deployment` Are Omitted:** Vendor detection logic is proprietary and black-boxed by the SIEM, and operational activation (`enabled`, `alerting`) is already controlled in `rulesets/<engine>/managed/index.yaml`. Omitting `deployment` from the registered rule file guarantees that `index.yaml` remains the single Source of Truth for deployment status (`enabled | silent | disabled`).
+- **Why `tests: []` Is Permitted:** Because analysts cannot inspect or dry-run proprietary vendor query logic locally, `tests` may be an empty list (`[]`) or contain synthetic telemetry vectors for live staging verification.
+
+### 2. How to Find the Managed ID and Register a Rule
+
+1. **Locate the Target ID in `rulesets/<engine>/managed/index.yaml`:**
+   Open `rulesets/<engine>/managed/index.yaml` and find the vendor rule or ruleset entry you want to map. Copy its `id` value.
+   For example, in [`rulesets/secops/managed/index.yaml`](../../rulesets/secops/managed/index.yaml):
+   ```yaml
+   categories:
+     - name: "Cloud Threats"
+       id: "dd01e72c-a66c-c11c-9a59-55b02f1b43b1"
+       rulesets:
+         - id: "433faf9e-4d51-f284-c35b-009528ecff05"
+           name: "GCTI Active Breach Network Indicators"
+           deployments:
+             - type: PRECISE
+               enabled: true
+               alerting: true
+   ```
+   Here, the ruleset ID to use is `433faf9e-4d51-f284-c35b-009528ecff05`.
+
+2. **Scaffold the Registered Managed Rule:**
+   Pass `--managed <id>` to `graft <engine> new`:
+   ```bash
+   graft secops new gcti_active_breach_network_indicators --managed 433faf9e-4d51-f284-c35b-009528ecff05
+   ```
+   This creates [`rulesets/secops/managed/gcti_active_breach_network_indicators.yaml`](../../rulesets/secops/managed/gcti_active_breach_network_indicators.yaml) with a fresh `metadata.id` UUID and `managed.id: "433faf9e-4d51-f284-c35b-009528ecff05"`.
+
+3. **Document Metadata, MITRE Mappings & Runbook:**
+   Fill in `metadata.description`, `owners`, `mitre`, `tags`, `references`, and the SOC `runbook` (`context`, `triage`, `response`).
+
+4. **Validate via `graft lint`:**
+   ```bash
+   graft lint
+   ```
+   During linting, Graft automatically verifies:
+   - The file conforms to `base_managed.schema.json` and all MITRE ATT&CK techniques are valid.
+   - `managed.id` matches an existing entry in `rulesets/<engine>/managed/index.yaml`.
+   - No other YAML file in `rulesets/<engine>/managed/` links to the same `managed.id` (strict 1-to-1 mapping).
+
+---
+
+## 6. Decommissioning Rules & Underscore Convention
 
 When a detection is retired, superseded, or taken offline, **do not hard-delete the file**. Deleting rules destroys version history context, runbook guidance, and synthetic test payloads that may be needed for historic incident triage, post-mortems, or compliance audits.
 

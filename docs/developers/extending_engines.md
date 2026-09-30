@@ -19,7 +19,8 @@ src/graft/engines/sentinel/
 ├── compiler.py           # Syntax verification implementing RuleCompilerPort
 ├── deployer.py           # Custom rule CRUD implementing RuleDeployerPort
 ├── schemas/
-│   └── rule.schema.json      # Engine-specific rule schema for graft lint
+│   ├── custom.schema.json    # Engine custom rule schema (extends base_custom.schema.json)
+│   └── managed.schema.json   # Optional: schema for rulesets/<engine>/managed/index.yaml
 └── README.md                 # Engine documentation
 ```
 
@@ -34,8 +35,11 @@ tests/engines/sentinel/
 Additionally, Graft maintains an engine-namespaced rule catalog:
 ```text
 rulesets/sentinel/
-└── custom/
-    └── sentinel_example_rule.yaml  # Initial scaffolded rule envelope
+├── custom/
+│   └── sentinel_example_rule.yaml  # Initial scaffolded custom rule envelope
+└── managed/                        # Optional (when managed_rules: true)
+    ├── index.yaml                  # Engine-specific managed ruleset manifest
+    └── <rule_name>.yaml            # Optional registered managed rule envelopes
 ```
 
 ---
@@ -50,9 +54,9 @@ uv run graft new engine sentinel
 
 This command:
 1. Validates the engine identifier slug (`^[a-z0-9_]+$`).
-2. Creates `src/graft/engines/sentinel/` and all boilerplate files.
-3. Creates `rulesets/sentinel/custom/` with an example detection envelope.
-4. Generates initial in-tree test files.
+2. Creates `src/graft/engines/sentinel/` with boilerplate adapter, compiler, deployer, config, `schemas/custom.schema.json`, and `schemas/managed.schema.json`.
+3. Creates `rulesets/sentinel/custom/` (with an initial example detection envelope), `rulesets/sentinel/managed/`, and `rulesets/sentinel/_archived/`.
+4. Generates initial in-tree test files in `tests/engines/sentinel/`.
 
 ---
 
@@ -90,21 +94,21 @@ env_vars:
 
 ---
 
-## 4. Step 3: Define Engine Rule Schema (`schemas/rule.schema.json`)
+## 4. Step 3: Define Engine Custom Rule Schema (`schemas/custom.schema.json`)
 
-Custom detection envelopes use a 5-block structure: `metadata`, `logic`, `deployment`, `runbook`, `tests`. Each engine co-locates a Draft 2020-12 JSON schema that extends `base_rule.schema.json` via `allOf`.
+Custom detection envelopes use a 5-block structure: `metadata`, `logic`, `deployment`, `runbook`, `tests`. Each engine co-locates a Draft 2020-12 JSON schema (`schemas/custom.schema.json`) that extends `base_custom.schema.json` via `allOf`.
 
-Edit `src/graft/engines/sentinel/schemas/rule.schema.json`:
+Edit `src/graft/engines/sentinel/schemas/custom.schema.json`:
 
 ```json
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "sentinel_rule.schema.json",
+  "$id": "sentinel_custom.schema.json",
   "title": "Sentinel Custom Rule Envelope Schema",
   "type": "object",
   "allOf": [
     {
-      "$ref": "base_rule.schema.json"
+      "$ref": "base_custom.schema.json"
     },
     {
       "type": "object",
@@ -128,7 +132,7 @@ Edit `src/graft/engines/sentinel/schemas/rule.schema.json`:
 }
 ```
 
-When an analyst runs `graft lint`, Graft automatically discovers `schemas/rule.schema.json` and validates all `rulesets/sentinel/custom/*.yaml` envelopes against it.
+When an analyst runs `graft lint`, Graft automatically discovers `schemas/custom.schema.json` and validates all `rulesets/sentinel/custom/*.yaml` envelopes against it.
 
 ---
 
@@ -312,11 +316,12 @@ class SentinelDeployerAdapter(RuleDeployerPort):
 
 ## 8. Step 7: Assemble the Composite Adapter (`adapter.py`)
 
-The composite adapter implements [`EngineAdapter`](../../src/graft/core/ports/engine.py). Inheriting from `EngineAdapter` provides default implementations for `resolve_deployment_status`, `are_rules_equal`, `deconstruct_rule`, `load_managed_manifest`, and `dump_managed_manifest`, which your adapter can override when needed (for example, `SecOpsAdapter` overrides `are_rules_equal` and `deconstruct_rule` to inject/extract YAML `metadata` and `runbook` fields into the YARA-L `meta:` block):
+The composite adapter implements [`EngineAdapter`](../../src/graft/core/ports/engine.py). Inheriting from `EngineAdapter` provides default implementations for `resolve_deployment_status`, `are_rules_equal`, `deconstruct_rule`, `load_managed_manifest`, `dump_managed_manifest`, and `has_managed_rule_id`, which your adapter can override when needed (for example, `SecOpsAdapter` overrides `are_rules_equal` and `deconstruct_rule` to inject/extract YAML `metadata` and `runbook` fields into the YARA-L `meta:` block):
 
 ```python
 from __future__ import annotations
 
+from graft.core.models.managed import ManagedState
 from graft.core.models.rule import RuleEnvelope
 from graft.core.ports.compiler import RuleCompilerPort
 from graft.core.ports.deployer import RuleDeployerPort
@@ -351,7 +356,13 @@ class SentinelAdapter(EngineAdapter):
     def get_replay(self) -> ReplayHarnessPort | None:
         return None
 
-    def resolve_deployment_status(self, rule: RuleEnvelope) -> str:
+    def resolve_deployment_status(
+        self,
+        rule: RuleEnvelope,
+        managed_state: ManagedState | None = None,
+    ) -> str:
+        if rule.is_managed:
+            return "disabled"
         if not rule.deployment.enabled:
             return "disabled"
         return "enabled" if rule.deployment.alerting else "silent"
@@ -359,7 +370,49 @@ class SentinelAdapter(EngineAdapter):
 
 ---
 
-## 9. Step 8: Write In-Tree Tests
+## 9. Step 8 (Optional): Supporting Vendor-Managed Content (`managed/index.yaml`)
+
+If your target engine provides vendor-managed detections (e.g., Google SecOps Curated Rule Sets, CrowdStrike IOA Rule Groups, or Microsoft Sentinel Analytics Templates) and you set `managed_rules: true` in `engine.yaml`, you must implement both the engine-specific state manifest (`rulesets/<engine>/managed/index.yaml`) and the validation hooks required for optional analyst rule registration (`rulesets/<engine>/managed/<rule_name>.yaml`).
+
+> [!IMPORTANT]
+> **Engine Programmer Directive: `managed/index.yaml` Unique ID & Validation Contract**
+> 1. **Engine-Specific Format, Mandatory Unique ID:** The structure of `rulesets/<engine>/managed/index.yaml` (and its schema at `src/graft/engines/<engine>/schemas/managed.schema.json`) depends on your engine's API. However, **it is your responsibility as the engine programmer to provide a unique `id` field for every managed rule or ruleset in `index.yaml`**. Detection analysts use that `id` (`managed.id`) to optionally register managed rules in `rulesets/<engine>/managed/<rule_name>.yaml` so they appear in MITRE ATT&CK matrices and catalogs.
+> 2. **Referential Validation (`has_managed_rule_id`):** You must override `has_managed_rule_id(self, managed_id: str, state: ManagedState) -> bool` on your `EngineAdapter` to verify whether `managed_id` exists in `index.yaml`. During `graft lint`, Core validates every registered managed rule YAML against `index.yaml`—if `managed.id` does not match an entry in `index.yaml`, linting fails.
+> 3. **No Overlapping Registrations (1-to-1 Enforcement):** Core's `RuleUniquenessValidator` automatically enforces that no two files under `rulesets/<engine>/managed/*.yaml` can link to the same `managed.id`.
+> 4. **Deployment Status Resolution (`resolve_deployment_status`):** Because registered managed rule files (`managed/<rule_name>.yaml`) omit the `deployment:` block, your `resolve_deployment_status(self, rule: RuleEnvelope, managed_state: ManagedState | None = None) -> str` implementation must resolve `"enabled"`, `"silent"`, or `"disabled"` by looking up `rule.managed.id` inside `managed_state` (`index.yaml`).
+
+Example implementation on `EngineAdapter` (modeled after [`SecOpsAdapter`](../../src/graft/engines/secops/adapter.py)):
+
+```python
+def has_managed_rule_id(self, managed_id: str, state: ManagedState) -> bool:
+    return any(rs.id == managed_id for cat in state.categories for rs in cat.rulesets)
+
+
+def resolve_deployment_status(
+    self,
+    rule: RuleEnvelope,
+    managed_state: ManagedState | None = None,
+) -> str:
+    if rule.is_managed and rule.managed is not None:
+        if managed_state is None:
+            return "disabled"
+        for cat in managed_state.categories:
+            for rs in cat.rulesets:
+                if rs.id == rule.managed.id:
+                    if any(d.enabled and d.alerting for d in rs.deployments):
+                        return "enabled"
+                    if any(d.enabled for d in rs.deployments):
+                        return "silent"
+                    return "disabled"
+        return "disabled"
+    if not rule.deployment.enabled:
+        return "disabled"
+    return "enabled" if rule.deployment.alerting else "silent"
+```
+
+---
+
+## 10. Step 9: Write In-Tree Tests
 
 In Graft, engine tests live in `tests/engines/<engine>/`. Root `tests/unit/core/` is reserved strictly for engine-agnostic core logic and CLI routing.
 
@@ -386,11 +439,12 @@ uv run pytest tests/engines/sentinel
 
 ---
 
-## 10. Summary Verification Checklist
+## 11. Summary Verification Checklist
 
 Before submitting an engine PR:
 - [ ] Manifest `engine.yaml` is valid according to `src/graft/core/schemas/engine_manifest.schema.json`.
-- [ ] Rule schema `schemas/rule.schema.json` validates example rules.
+- [ ] Custom rule schema `schemas/custom.schema.json` (extending `base_custom.schema.json`) validates example custom rules.
+- [ ] If `managed_rules: true`, `schemas/managed.schema.json` validates `rulesets/<engine>/managed/index.yaml`, every managed rule/ruleset entry exposes a unique `id`, and `has_managed_rule_id` + `resolve_deployment_status` are implemented and tested.
 - [ ] All HTTP interactions use `urllib.request` (zero third-party dependencies).
 - [ ] Module loggers use `graft.<engine>.<module>`, emit `WARNING` on transient retries (`429`/`503`) or two-stage partial mutations, and format API exceptions with HTTP status code, vendor status, method, and endpoint path.
 - [ ] Adapter passes `isinstance(adapter, EngineAdapter)` protocol checks.

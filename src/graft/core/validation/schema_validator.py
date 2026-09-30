@@ -28,24 +28,24 @@ class SchemaValidator:
 
     def _find_schemas_dir(self) -> Path:
         primary = Path(__file__).resolve().parent.parent / "schemas"
-        if primary.is_dir() and (primary / "base_rule.schema.json").exists():
+        if primary.is_dir() and (primary / "base_custom.schema.json").exists():
             return primary
         current = Path(__file__).resolve().parent
         for parent in [current, *current.parents]:
             candidate_core = parent / "src" / "graft" / "core" / "schemas"
-            if candidate_core.is_dir() and (candidate_core / "base_rule.schema.json").exists():
+            if candidate_core.is_dir() and (candidate_core / "base_custom.schema.json").exists():
                 return candidate_core
             candidate = parent / "schemas"
-            if candidate.is_dir() and (candidate / "base_rule.schema.json").exists():
+            if candidate.is_dir() and (candidate / "base_custom.schema.json").exists():
                 return candidate
         cwd_candidate = Path.cwd() / "src" / "graft" / "core" / "schemas"
-        if cwd_candidate.is_dir() and (cwd_candidate / "base_rule.schema.json").exists():
+        if cwd_candidate.is_dir() and (cwd_candidate / "base_custom.schema.json").exists():
             return cwd_candidate
         cwd_root = Path.cwd() / "schemas"
-        if cwd_root.is_dir() and (cwd_root / "base_rule.schema.json").exists():
+        if cwd_root.is_dir() and (cwd_root / "base_custom.schema.json").exists():
             return cwd_root
         raise FileNotFoundError(
-            "Could not locate schemas directory containing base_rule.schema.json"
+            "Could not locate schemas directory containing base_custom.schema.json"
         )
 
     def _find_engines_dir(self) -> Path | None:
@@ -66,7 +66,6 @@ class SchemaValidator:
         return None
 
     def _load_schemas(self) -> None:
-        # 1. Collect all schema files with origin context: (file_path, engine_name | None)
         schema_entries: list[tuple[Path, str | None]] = [
             (sf, None) for sf in self._schemas_dir.glob("*.schema.json")
         ]
@@ -101,19 +100,8 @@ class SchemaValidator:
             validator = Draft202012Validator(schema_data, registry=self._registry)
 
             if engine_name is not None:
-                # Register namespaced keys: <engine>:<stem> and <engine>_<stem>
                 self._validators[f"{engine_name}:{stem}"] = validator
                 self._validators[f"{engine_name}_{stem}"] = validator
-                # Semantic aliases for rule and managed schemas
-                if stem == "rule":
-                    self._validators[f"{engine_name}_custom"] = validator
-                    self._validators[f"{engine_name}:custom"] = validator
-                elif stem.endswith("_custom"):
-                    self._validators[f"{engine_name}:rule"] = validator
-                    self._validators[f"{engine_name}_rule"] = validator
-                elif stem.endswith("_managed"):
-                    self._validators[f"{engine_name}:managed"] = validator
-                    self._validators[f"{engine_name}_managed"] = validator
             else:
                 self._validators[stem] = validator
 
@@ -126,7 +114,7 @@ class SchemaValidator:
         return sorted([k for k in self._validators if not k.endswith(".schema.json")])
 
     def validate(
-        self, instance: object, schema_name: str = "base_rule"
+        self, instance: object, schema_name: str = "base_custom"
     ) -> list[ValidationErrorDetail]:
         validator = self._validators.get(schema_name)
         if validator is None:
@@ -146,5 +134,5 @@ class SchemaValidator:
             )
         return errors
 
-    def is_valid(self, instance: object, schema_name: str = "base_rule") -> bool:
+    def is_valid(self, instance: object, schema_name: str = "base_custom") -> bool:
         return len(self.validate(instance, schema_name=schema_name)) == 0

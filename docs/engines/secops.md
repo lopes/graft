@@ -333,18 +333,20 @@ To avoid credential ambiguity across multiple platforms and engines, Graft enfor
 
 ---
 
-## 7. Google Curated Rule Sets & Managed Manifest (`rulesets/secops/managed.yaml`)
+## 7. Google Curated Rule Sets & Managed Manifest (`rulesets/secops/managed/index.yaml`)
 
-Google SecOps provides Curated Rule Sets—vendor-managed detection packages maintained by Google Cloud Threat Intelligence (GCTI). Graft manages the entire curated content lifecycle declaratively through a single consolidated manifest: [`rulesets/secops/managed.yaml`](../../rulesets/secops/managed.yaml).
+Google SecOps provides Curated Rule Sets—vendor-managed detection packages maintained by Google Cloud Threat Intelligence (GCTI). Graft manages the entire curated content lifecycle declaratively through a single consolidated manifest: [`rulesets/secops/managed/index.yaml`](../../rulesets/secops/managed/index.yaml), and supports optional registration of individual curated rulesets in `rulesets/secops/managed/<rule_name>.yaml` for MITRE ATT&CK coverage and SOC runbooks.
 
 ```mermaid
 flowchart TD
-    MANIFEST["<b>rulesets/secops/managed.yaml</b>"]
+    MANIFEST["<b>rulesets/secops/managed/index.yaml</b>"]
     CATS["<b>categories:</b><br/>Curated RuleSet Categories & Deployments"]
     EXCLS["<b>exclusions:</b><br/>Detection Exclusions (findingsRefinements)"]
+    REG["<b>rulesets/secops/managed/&lt;rule&gt;.yaml</b><br/>Optional 4-Block Registration<br/>Links via <code>managed.id</code>"]
 
     MANIFEST --> CATS
     MANIFEST --> EXCLS
+    REG -- "managed.id" --> RS
 
     CATS --> RS["<b>Curated RuleSets</b><br/>• PRECISE (enabled, alerting)<br/>• BROAD (enabled, alerting)"]
     EXCLS --> APP["<b>Target Application:</b><br/>• ruleset_id (Curated RuleSet UUID)<br/>• rule_id (Custom Rule Name/ID)"]
@@ -364,7 +366,7 @@ Google SecOps organizes curated detections in a 3-tier hierarchy:
 
 ### Managed Manifest Format
 
-The manifest [`rulesets/secops/managed.yaml`](../../rulesets/secops/managed.yaml) adheres to [`src/graft/engines/secops/schemas/managed.schema.json`](../../src/graft/engines/secops/schemas/managed.schema.json):
+The manifest [`rulesets/secops/managed/index.yaml`](../../rulesets/secops/managed/index.yaml) adheres to [`src/graft/engines/secops/schemas/managed.schema.json`](../../src/graft/engines/secops/schemas/managed.schema.json):
 
 ```yaml
 categories:
@@ -387,6 +389,16 @@ exclusions:
     ruleset_id: "1c4ab1f6-d801-d6a9-1177-3ec3dd5bcbe9"
     expression: 'principal.hostname = "backup-server.corp.internal"'
 ```
+
+### Optional Registration of Curated Rule Sets (`rulesets/secops/managed/<rule_name>.yaml`)
+
+To include an enabled Curated Rule Set in MITRE ATT&CK Navigator heatmaps (`graft export matrix`) and governance catalogs (`graft export catalog`), copy its `id` UUID from `rulesets/secops/managed/index.yaml` and scaffold a 4-block registered managed rule envelope:
+
+```bash
+graft secops new gcti_active_breach_network_indicators --managed 433faf9e-4d51-f284-c35b-009528ecff05
+```
+
+`graft lint` verifies that `managed.id` exists in `rulesets/secops/managed/index.yaml` and that no two registered YAML files reference the same ruleset UUID. Live deployment status (`enabled | silent | disabled`) is resolved automatically from the ruleset's `PRECISE`/`BROAD` deployments in `index.yaml`.
 
 ---
 
@@ -429,7 +441,7 @@ sequenceDiagram
    - The Google SecOps API does not support HTTP `DELETE /findingsRefinements/{id}`.
    - To safely retire an exclusion, Graft patches the deployment sub-resource with `{"enabled": false, "archived": true}`. Archived exclusions are ignored during synchronization, preventing stale exclusions from remaining active.
 4. **Idempotent Reconciliation:**
-   - In `managed.yaml`, operators assign a human-readable `id` slug (e.g. `exclude-ansible-runner`).
+   - In `managed/index.yaml`, operators assign a human-readable `id` slug (e.g. `exclude-ansible-runner`).
    - When synchronizing, Graft matches exclusions by `id` first, and falls back to `description` (`displayName`). This ensures seamless reconciliation even after SecOps assigns an internal `fr_{uuid}`.
 
 ### Exclusion Expression Grammar (UDM Syntax)
@@ -450,7 +462,7 @@ Exclusion queries evaluate against Unified Data Model (UDM) fields. Unlike YARA-
 Follow this step-by-step operational runbook:
 
 #### Step 1: Identify the Target RuleSet
-1. Open [`rulesets/secops/managed.yaml`](../../rulesets/secops/managed.yaml).
+1. Open [`rulesets/secops/managed/index.yaml`](../../rulesets/secops/managed/index.yaml).
 2. Locate the ruleset where false positives occur (e.g. search for `"Malware Signals - Suspicious Execution"`).
 3. Copy its `id` UUID (e.g. `1c4ab1f6-d801-d6a9-1177-3ec3dd5bcbe9`).
 
@@ -460,7 +472,7 @@ Formulate a precise UDM filter matching the benign activity without broadening s
 principal.user.userid = "svc-maintenance-runner"
 ```
 
-#### Step 3: Add to `rulesets/secops/managed.yaml`
+#### Step 3: Add to `rulesets/secops/managed/index.yaml`
 Add the exclusion entry to the `exclusions:` list at the bottom of the file:
 
 ```yaml
@@ -496,7 +508,7 @@ Open a Pull Request. Once reviewed and merged into `main`:
 
 #### Step 6: Retiring an Exclusion (Rollback / Decommission)
 When an exclusion is no longer needed:
-1. Delete its entry from the `exclusions:` block in `rulesets/secops/managed.yaml` (or leave `exclusions: []`).
+1. Delete its entry from the `exclusions:` block in `rulesets/secops/managed/index.yaml` (or leave `exclusions: []`).
 2. Run `uv run graft lint` and commit:
    ```bash
    git commit -am "secops: rollback test exclusion for suspicious execution curated ruleset"
@@ -608,7 +620,7 @@ To bootstrap Graft without manual transcription:
    ```
    This performs a two-track ingestion:
    - **Custom Rules:** Fetches all tenant rules via `GET rules?view=FULL`, decompiles YARA-L headers and metadata, generates standard 5-block envelope YAMLs, and populates `rulesets/secops/custom/*.yaml`.
-   - **Managed Manifest:** Ingests live curated rulesets and exclusions into `rulesets/secops/managed.yaml`.
+   - **Managed Manifest:** Ingests live curated rulesets and exclusions into `rulesets/secops/managed/index.yaml`.
 
 2. **Verify & Enrich:**
    ```bash

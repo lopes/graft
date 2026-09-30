@@ -10,7 +10,7 @@ Graft aggregates technique mappings across all rules (custom detections and vend
 
 ```mermaid
 flowchart LR
-    RULES["Rule Repository<br/>• Custom 5-Block Envelopes<br/>• Managed Manifest Exclusions"] --> EXTRACT["<b>Matrix Aggregator</b><br/><code>src/graft/core/matrix.py</code>"]
+    RULES["Rule Repository<br/>• Custom 5-Block Envelopes (custom/*.yaml)<br/>• Registered Managed Rules (managed/&lt;rule&gt;.yaml)"] --> EXTRACT["<b>Matrix Aggregator</b><br/><code>src/graft/core/matrix.py</code>"]
     EXTRACT --> TABLE["Terminal Table<br/><code>--format=table</code>"]
     EXTRACT --> NAV["ATT&CK Navigator v4.5 JSON<br/><code>--format=navigator</code>"]
 

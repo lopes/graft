@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "base_rule.schema.json",
-  "title": "Graft Base Rule Envelope Schema",
+  "$id": "base_custom.schema.json",
+  "title": "Graft Base Custom Rule Envelope Schema",
   "type": "object",
   "required": [
     "metadata",
@@ -30,6 +30,9 @@
         "name": {
           "type": "string",
           "pattern": "^[a-z0-9_]+$",
+          "not": {
+            "const": "index"
+          },
           "minLength": 1,
           "maxLength": 64
         },

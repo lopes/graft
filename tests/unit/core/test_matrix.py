@@ -74,6 +74,7 @@ def test_export_navigator_layer_structure() -> None:
 
     meta_names = [m["name"] for m in t0["metadata"]]
     assert "engine" in meta_names
+    assert "type" in meta_names
     assert "rules" in meta_names
     assert "runbook" in meta_names
 
@@ -117,4 +118,38 @@ def test_export_navigator_layer_silent_status() -> None:
     layer = export_navigator_layer(report)
     t0 = layer["techniques"][0]
     status_meta = next(m for m in t0["metadata"] if m["name"] == "status")
+    assert status_meta["value"] == "silent"
+
+
+def test_export_navigator_layer_managed_rule_type_and_explicit_status() -> None:
+    from graft.core.models.rule import ManagedRuleRef
+
+    managed_rule = RuleEnvelope(
+        metadata=RuleMetadata(
+            id="00000000-0000-0000-0000-000000000010",
+            name="gcti_active_breach_network_indicators",
+            description="Managed GCTI ruleset",
+            mitre={"command-and-control": ("T1071.001",)},
+        ),
+        logic="",
+        deployment=BaseDeploymentConfig(enabled=False, alerting=False),
+        runbook=Runbook(context="ctx", triage="tr", response="res"),
+        tests=(),
+        managed=ManagedRuleRef(id="433faf9e-4d51-f284-c35b-009528ecff05"),
+    )
+    report = calculate_mitre_coverage(
+        [
+            (
+                managed_rule,
+                "secops",
+                Path("rulesets/secops/managed/gcti_active_breach_network_indicators.yaml"),
+                "silent",
+            )
+        ]
+    )
+    layer = export_navigator_layer(report)
+    t0 = layer["techniques"][0]
+    type_meta = next(m for m in t0["metadata"] if m["name"] == "type")
+    status_meta = next(m for m in t0["metadata"] if m["name"] == "status")
+    assert type_meta["value"] == "managed"
     assert status_meta["value"] == "silent"

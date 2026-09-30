@@ -130,6 +130,47 @@ def test_build_catalog_entry_with_git(tmp_path: Path) -> None:
     assert entry.has_runbook is False
 
 
+def test_build_catalog_entry_from_registered_managed_rule() -> None:
+    from unittest.mock import MagicMock
+
+    from graft.core.models.managed import ManagedState
+    from graft.core.models.rule import ManagedRuleRef
+
+    rule = RuleEnvelope(
+        metadata=RuleMetadata(
+            id="00000000-0000-0000-0000-000000000010",
+            name="gcti_active_breach_network_indicators",
+            description="Registers GCTI Active Breach Network Indicators ruleset.",
+            owners=("Security Operations",),
+            mitre={"command-and-control": ("T1071.001",)},
+            tags=("secops", "managed"),
+            references=(
+                "https://docs.cloud.google.com/chronicle/docs/detection/curated-detections",
+            ),
+        ),
+        logic="",
+        deployment=BaseDeploymentConfig(enabled=False, alerting=False),
+        runbook=Runbook(context="ctx", triage="tr", response="res"),
+        tests=(),
+        managed=ManagedRuleRef(id="433faf9e-4d51-f284-c35b-009528ecff05"),
+    )
+
+    mock_adapter = MagicMock()
+    mock_adapter.resolve_deployment_status.return_value = "silent"
+    mock_state = ManagedState(rulesets=(), exclusions=())
+
+    entry = build_catalog_entry_from_rule(
+        rule=rule,
+        engine="secops",
+        adapter=mock_adapter,
+        managed_state=mock_state,
+    )
+    assert entry.name == "gcti_active_breach_network_indicators"
+    assert entry.rule_type == "managed"
+    assert entry.status == "silent"
+    mock_adapter.resolve_deployment_status.assert_called_once_with(rule, managed_state=mock_state)
+
+
 def test_render_catalog_table() -> None:
     entry = CatalogEntry(
         id="00000000-0000-0000-0000-000000000001",
@@ -151,6 +192,7 @@ def test_render_catalog_table() -> None:
     table = render_catalog_table([entry])
     assert "Rule Name" in table
     assert "Engine" in table
+    assert "Type" in table
     assert "Status" in table
     assert "MITRE ATT&CK" in table
     assert "Reviews" in table
@@ -158,6 +200,7 @@ def test_render_catalog_table() -> None:
     assert "Updated" in table
     assert "workspace_nrd_phishing" in table
     assert "secops" in table
+    assert "custom" in table
     assert "enabled" in table
     assert "TA0001:T1566.002" in table
 
@@ -181,8 +224,11 @@ def test_export_catalog_markdown() -> None:
     )
 
     md = export_catalog_markdown([entry])
-    assert "| Rule Name | Engine | Status | MITRE ATT&CK | Owners |" in md
-    assert "| `test_rule` | secops | enabled | TA0001:T1566.002 | Joe Lopes, SecOps Team |" in md
+    assert "| Rule Name | Engine | Type | Status | MITRE ATT&CK | Owners |" in md
+    assert (
+        "| `test_rule` | secops | custom | enabled | TA0001:T1566.002 | Joe Lopes, SecOps Team |"
+        in md
+    )
     assert "| Reviews | Contributors | Runbook |" in md
     assert "| 4 | 2 | yes |" in md
 

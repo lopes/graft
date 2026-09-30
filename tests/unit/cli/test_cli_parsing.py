@@ -63,6 +63,25 @@ def test_parse_new_rule_command() -> None:
     assert args.new_type == "rule"
     assert args.name == "suspicious_powershell"
     assert args.engine == "secops"
+    assert args.managed is None
+
+    with pytest.raises(SystemExit):
+        parser.parse_args(
+            ["new", "rule", "gcti_host_indicators", "--engine", "secops", "--managed"]
+        )
+
+    args_managed_id = parser.parse_args(
+        [
+            "new",
+            "rule",
+            "gcti_host_indicators",
+            "--engine",
+            "secops",
+            "--managed",
+            "f5533b66-9327-9880-93e6-75a738ac2345",
+        ]
+    )
+    assert args_managed_id.managed == "f5533b66-9327-9880-93e6-75a738ac2345"
 
 
 def test_parse_secops_subcommands() -> None:
@@ -73,6 +92,10 @@ def test_parse_secops_subcommands() -> None:
     assert args.command == "secops"
     assert args.engine_command == "new"
     assert args.rule_name == "test_rule"
+    assert args.managed is None
+
+    args_managed = parser.parse_args(["secops", "new", "managed_rule", "--managed", "rs-123"])
+    assert args_managed.managed == "rs-123"
 
     # verify
     args = parser.parse_args(["secops", "verify", "--env", "staging"])

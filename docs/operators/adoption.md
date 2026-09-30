@@ -27,7 +27,7 @@ flowchart TD
         SIEM["<b>Live SecOps Tenant</b><br/>• Active Curated Rule Sets & Exclusions<br/>• Active Custom YARA-L Rules & Deployments"]
         PULL["<code>graft secops pull --env production</code><br/><i>(Reverse Synchronization)</i>"]
         SIEM --> PULL
-        PULL --> MAN["<code>rulesets/secops/managed.yaml</code>"]
+        PULL --> MAN["<code>rulesets/secops/managed/index.yaml</code>"]
         PULL --> CUST["<code>rulesets/secops/custom/*.yaml</code>"]
     end
 
@@ -80,7 +80,7 @@ Alternatively, you can target individual subsystems:
 uv run graft secops pull --target custom --env production --out-dir rulesets/secops/custom
 
 # Pull vendor-managed curated content manifest only
-uv run graft secops pull --target managed --env production --out-manifest rulesets/secops/managed.yaml
+uv run graft secops pull --target managed --env production --out-manifest rulesets/secops/managed/index.yaml
 
 # Force overwrite existing local files without confirmation prompts
 uv run graft secops pull --env production --force
@@ -92,7 +92,7 @@ When pulling managed content:
 1. Graft queries the Chronicle Curated Rule Sets API (`curatedRuleSets`, `curatedRuleSetDeployments`, and `ruleExclusions`).
 2. It resolves category UUIDs to display names (e.g., `Cloud Threats`, `Linux Threats`).
 3. It captures deployment precision (`PRECISE` or `BROAD`), enabled/alerting toggles, and all active UDM exclusion filters (`findingsRefinements`).
-4. It serializes this unified posture into [`rulesets/secops/managed.yaml`](../../rulesets/secops/managed.yaml), conforming to [`src/graft/engines/secops/schemas/managed.schema.json`](../../src/graft/engines/secops/schemas/managed.schema.json).
+4. It serializes this unified posture into [`rulesets/secops/managed/index.yaml`](../../rulesets/secops/managed/index.yaml), conforming to [`src/graft/engines/secops/schemas/managed.schema.json`](../../src/graft/engines/secops/schemas/managed.schema.json).
 
 ### 3. How Custom Rules Are Ingested
 

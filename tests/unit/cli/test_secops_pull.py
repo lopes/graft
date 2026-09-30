@@ -183,7 +183,7 @@ def test_secops_pull_custom_rules(
 def test_secops_pull_managed_manifest(
     mock_secops_client: MagicMock, tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    manifest_path = tmp_path / "managed.yaml"
+    manifest_path = tmp_path / "index.yaml"
 
     with patch("graft.engines.secops.adapter.SecOpsClient", return_value=mock_secops_client):
         exit_code = main(
@@ -207,7 +207,7 @@ def test_secops_pull_all_json(
     mock_secops_client: MagicMock, tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
     custom_dir = tmp_path / "custom"
-    manifest_path = tmp_path / "managed.yaml"
+    manifest_path = tmp_path / "index.yaml"
 
     with patch("graft.engines.secops.adapter.SecOpsClient", return_value=mock_secops_client):
         exit_code = main(

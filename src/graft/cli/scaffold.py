@@ -29,12 +29,14 @@ def scaffold_engine(name: str, project_root: Path | None = None) -> dict[str, Pa
     schemas_dir = engine_dir / "schemas"
     tests_engine_dir = root / "tests" / "engines" / name
     rules_custom_dir = root / "rulesets" / name / "custom"
+    rules_managed_dir = root / "rulesets" / name / "managed"
     rules_archived_dir = root / "rulesets" / name / "_archived"
 
     engine_dir.mkdir(parents=True, exist_ok=True)
     schemas_dir.mkdir(parents=True, exist_ok=True)
     tests_engine_dir.mkdir(parents=True, exist_ok=True)
     rules_custom_dir.mkdir(parents=True, exist_ok=True)
+    rules_managed_dir.mkdir(parents=True, exist_ok=True)
     rules_archived_dir.mkdir(parents=True, exist_ok=True)
 
     class_prefix = "".join(part.capitalize() for part in name.split("_"))
@@ -74,6 +76,7 @@ env_vars:
     adapter_py = engine_dir / "adapter.py"
     adapter_content = f"""from __future__ import annotations
 
+from graft.core.models.managed import ManagedState
 from graft.core.models.rule import RuleEnvelope
 from graft.core.ports.compiler import RuleCompilerPort
 from graft.core.ports.deployer import RuleDeployerPort
@@ -102,7 +105,26 @@ class {class_prefix}Adapter(EngineAdapter):
     def get_replay(self) -> ReplayHarnessPort | None:
         return None
 
-    def resolve_deployment_status(self, rule: RuleEnvelope) -> str:
+    def has_managed_rule_id(self, managed_id: str, state: ManagedState) -> bool:
+        return any(rs.id == managed_id for cat in state.categories for rs in cat.rulesets)
+
+    def resolve_deployment_status(
+        self,
+        rule: RuleEnvelope,
+        managed_state: ManagedState | None = None,
+    ) -> str:
+        if rule.is_managed and rule.managed is not None:
+            if managed_state is None:
+                return "disabled"
+            for cat in managed_state.categories:
+                for rs in cat.rulesets:
+                    if rs.id == rule.managed.id:
+                        if any(d.enabled and d.alerting for d in rs.deployments):
+                            return "enabled"
+                        if any(d.enabled for d in rs.deployments):
+                            return "silent"
+                        return "disabled"
+            return "disabled"
         if not rule.deployment.enabled:
             return "disabled"
         if not rule.deployment.alerting:
@@ -184,16 +206,16 @@ class {class_prefix}DeployerAdapter(RuleDeployerPort):
     )
     created_files["deployer"] = deployer_py
 
-    # 4. Co-located Schema in src/graft/engines/{name}/schemas/rule.schema.json
-    schema_file = schemas_dir / "rule.schema.json"
+    # 4. Co-located Schemas in src/graft/engines/{name}/schemas/
+    schema_file = schemas_dir / "custom.schema.json"
     schema_content = f"""{{
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "{name}_rule.schema.json",
+  "$id": "{name}_custom.schema.json",
   "title": "{class_prefix} Custom Rule Envelope Schema",
   "type": "object",
   "allOf": [
     {{
-      "$ref": "base_rule.schema.json"
+      "$ref": "base_custom.schema.json"
     }},
     {{
       "type": "object",
@@ -231,6 +253,91 @@ class {class_prefix}DeployerAdapter(RuleDeployerPort):
 """
     schema_file.write_text(schema_content, encoding="utf-8")
     created_files["schema"] = schema_file
+
+    managed_schema_file = schemas_dir / "managed.schema.json"
+    managed_schema_content = f"""{{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "{name}_managed.schema.json",
+  "title": "{class_prefix} Managed Content Manifest Schema (managed/index.yaml)",
+  "type": "object",
+  "required": [
+    "categories",
+    "exclusions"
+  ],
+  "properties": {{
+    "categories": {{
+      "type": "array",
+      "items": {{
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "rulesets"
+        ],
+        "properties": {{
+          "id": {{
+            "type": "string",
+            "minLength": 1
+          }},
+          "name": {{
+            "type": "string",
+            "minLength": 1
+          }},
+          "rulesets": {{
+            "type": "array",
+            "items": {{
+              "type": "object",
+              "required": [
+                "id",
+                "name"
+              ],
+              "properties": {{
+                "id": {{
+                  "type": "string",
+                  "minLength": 1
+                }},
+                "name": {{
+                  "type": "string",
+                  "minLength": 1
+                }}
+              }}
+            }}
+          }}
+        }},
+        "additionalProperties": false
+      }}
+    }},
+    "exclusions": {{
+      "type": "array",
+      "items": {{
+        "type": "object",
+        "required": [
+          "id",
+          "description",
+          "expression"
+        ],
+        "properties": {{
+          "id": {{
+            "type": "string",
+            "minLength": 1
+          }},
+          "description": {{
+            "type": "string",
+            "minLength": 1
+          }},
+          "expression": {{
+            "type": "string",
+            "minLength": 1
+          }}
+        }}
+      }}
+    }}
+  }},
+  "additionalProperties": false
+}}
+"""
+    managed_schema_file.write_text(managed_schema_content, encoding="utf-8")
+    created_files["managed_schema"] = managed_schema_file
 
     # 5. README documentation
     readme_file = engine_dir / "README.md"
@@ -280,6 +387,7 @@ def test_{name}_adapter_protocol_conformance() -> None:
     assert adapter.get_compiler() is not None
     assert adapter.get_deployer() is not None
     assert callable(adapter.resolve_deployment_status)
+    assert callable(adapter.has_managed_rule_id)
 """,
         encoding="utf-8",
     )
@@ -314,68 +422,102 @@ def scaffold_rule(
     rule_name: str,
     project_root: Path | None = None,
     out_path: Path | str | None = None,
+    managed: bool = False,
+    managed_id: str | None = None,
 ) -> Path:
     _validate_identifier(rule_name, "rule")
+    if rule_name == "index":
+        raise ScaffoldError("Invalid rule name 'index'. 'index' is reserved for managed/index.yaml")
     _validate_identifier(engine, "engine")
+    if managed_id is not None:
+        managed = True
     root = Path(project_root) if project_root else Path.cwd()
 
+    subdir = "managed" if managed else "custom"
     dest = (
-        Path(out_path)
-        if out_path
-        else (root / "rulesets" / engine / "custom" / f"{rule_name}.yaml")
+        Path(out_path) if out_path else (root / "rulesets" / engine / subdir / f"{rule_name}.yaml")
     )
     if dest.exists():
         raise ScaffoldError(f"Rule file already exists at {dest}")
 
-    dest.parent.mkdir(parents=True, exist_ok=True)
-    rule_uuid = str(uuid.uuid4())
-
-    default_logic = (
-        """events:
+    if managed:
+        if not managed_id or not managed_id.strip():
+            raise ScaffoldError(
+                "Scaffolding a managed rule requires a non-empty managed rule ID (--managed <id>)"
+            )
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        rule_uuid = str(uuid.uuid4())
+        doc: dict[str, object] = {
+            "metadata": {
+                "id": rule_uuid,
+                "name": rule_name,
+                "description": f"Registered managed rule for {rule_name.replace('_', ' ')}",
+                "owners": ["Detection Engineering <detection@company.com>"],
+                "mitre": {
+                    "execution": ["T1059.001"],
+                },
+                "tags": [engine, "managed"],
+                "references": ["https://attack.mitre.org/techniques/T1059/001/"],
+            },
+            "managed": {
+                "id": managed_id.strip(),
+            },
+            "runbook": {
+                "context": "Context and background regarding this vendor-managed detection.",
+                "triage": "1. Verify principal user and host.\n2. Examine correlated telemetry.",
+                "response": "1. Isolate compromised entity if warranted.\n2. Revoke active tokens.",
+            },
+            "tests": [],
+        }
+    else:
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        rule_uuid = str(uuid.uuid4())
+        default_logic = (
+            """events:
   $e.metadata.event_type = "USER_LOGIN"
 condition:
   $e"""
-        if engine == "secops"
-        else f'events | where rule_name == "{rule_name}" and event_type == "USER_LOGIN"'
-    )
+            if engine == "secops"
+            else f'events | where rule_name == "{rule_name}" and event_type == "USER_LOGIN"'
+        )
 
-    doc: dict[str, object] = {
-        "metadata": {
-            "id": rule_uuid,
-            "name": rule_name,
-            "description": f"Detection rule for {rule_name.replace('_', ' ')}",
-            "owners": ["Detection Engineering <detection@company.com>"],
-            "mitre": {
-                "execution": ["T1059.001"],
+        doc = {
+            "metadata": {
+                "id": rule_uuid,
+                "name": rule_name,
+                "description": f"Detection rule for {rule_name.replace('_', ' ')}",
+                "owners": ["Detection Engineering <detection@company.com>"],
+                "mitre": {
+                    "execution": ["T1059.001"],
+                },
+                "tags": [engine, "custom"],
+                "references": ["https://attack.mitre.org/techniques/T1059/001/"],
             },
-            "tags": [engine, "custom"],
-            "references": ["https://attack.mitre.org/techniques/T1059/001/"],
-        },
-        "logic": default_logic,
-        "deployment": {
-            "enabled": False,
-            "alerting": False,
-            "run_frequency": "live",
-        },
-        "runbook": {
-            "context": "Context and background regarding this detection.",
-            "triage": "1. Verify principal user and host.\n2. Examine correlated telemetry.",
-            "response": "1. Isolate compromised entity if warranted.\n2. Revoke active tokens.",
-        },
-        "tests": [
-            {
-                "id": "test_basic_detection",
-                "description": "Verify rule detects single event",
-                "events": [
-                    {
-                        "timestamp": "2026-09-17T12:00:00Z",
-                        "payload": {"metadata": {"event_type": "USER_LOGIN"}},
-                    }
-                ],
-                "expect": 1,
-            }
-        ],
-    }
+            "logic": default_logic,
+            "deployment": {
+                "enabled": False,
+                "alerting": False,
+                "run_frequency": "live",
+            },
+            "runbook": {
+                "context": "Context and background regarding this detection.",
+                "triage": "1. Verify principal user and host.\n2. Examine correlated telemetry.",
+                "response": "1. Isolate compromised entity if warranted.\n2. Revoke active tokens.",
+            },
+            "tests": [
+                {
+                    "id": "test_basic_detection",
+                    "description": "Verify rule detects single event",
+                    "events": [
+                        {
+                            "timestamp": "2026-09-17T12:00:00Z",
+                            "payload": {"metadata": {"event_type": "USER_LOGIN"}},
+                        }
+                    ],
+                    "expect": 1,
+                }
+            ],
+        }
 
     # Validate against schema if schema is available
     schema_dir = root / "src" / "graft" / "core" / "schemas"
@@ -389,7 +531,12 @@ condition:
         )
         avail = validator.available_schemas()
         target_schema = None
-        for candidate in (f"{engine}:rule", f"{engine}_rule", f"{engine}_custom"):
+        candidates = (
+            ("base_managed",)
+            if managed
+            else (f"{engine}:custom", f"{engine}_custom", "base_custom")
+        )
+        for candidate in candidates:
             if candidate in avail:
                 target_schema = candidate
                 break
