@@ -5,6 +5,7 @@ import yaml
 
 from graft.core.models.rule import (
     BaseDeploymentConfig,
+    ManagedRuleRef,
     RuleEnvelope,
     RuleMetadata,
     Runbook,
@@ -21,7 +22,7 @@ class RuleLoadError(Exception):
 
 def load_rule_from_str(
     content: str,
-    schema_name: str = "base_rule",
+    schema_name: str = "base_custom",
     validate_mitre: bool = True,
 ) -> RuleEnvelope:
     try:
@@ -61,12 +62,24 @@ def load_rule_from_str(
         references=tuple(str(r) for r in metadata_raw.get("references", ())),
     )
 
-    deployment_raw: dict[str, Any] = data.get("deployment", {})
-    deployment = BaseDeploymentConfig(
-        enabled=bool(deployment_raw.get("enabled", True)),
-        alerting=bool(deployment_raw.get("alerting", True)),
-        run_frequency=str(deployment_raw.get("run_frequency", "unspecified")),
-    )
+    managed_raw = data.get("managed")
+    managed_ref: ManagedRuleRef | None = None
+    if isinstance(managed_raw, dict) and "id" in managed_raw:
+        managed_ref = ManagedRuleRef(id=str(managed_raw["id"]))
+        logic_str = ""
+        deployment = BaseDeploymentConfig(
+            enabled=False,
+            alerting=False,
+            run_frequency="unspecified",
+        )
+    else:
+        logic_str = str(data.get("logic", ""))
+        deployment_raw: dict[str, Any] = data.get("deployment", {})
+        deployment = BaseDeploymentConfig(
+            enabled=bool(deployment_raw.get("enabled", True)),
+            alerting=bool(deployment_raw.get("alerting", True)),
+            run_frequency=str(deployment_raw.get("run_frequency", "unspecified")),
+        )
 
     runbook_raw: dict[str, Any] = data.get("runbook", {})
     runbook = Runbook(
@@ -106,10 +119,11 @@ def load_rule_from_str(
 
     return RuleEnvelope(
         metadata=metadata,
-        logic=str(data["logic"]),
+        logic=logic_str,
         deployment=deployment,
         runbook=runbook,
         tests=tuple(tests_list),
+        managed=managed_ref,
     )
 
 
@@ -125,20 +139,26 @@ def load_rule_from_yaml(
 
     if schema_name is None:
         parts = file_path.parts
+        is_managed_dir = "managed" in parts
         for folder in ("rulesets", "rules"):
             if folder in parts:
                 idx = parts.index(folder)
                 if idx + 1 < len(parts):
                     engine = parts[idx + 1]
+                    if idx + 2 < len(parts) and parts[idx + 2] == "managed":
+                        is_managed_dir = True
                     validator = SchemaValidator()
                     avail = validator.available_schemas()
-                    if f"{engine}:rule" in avail:
-                        schema_name = f"{engine}:rule"
-                    elif f"{engine}_custom" in avail:
-                        schema_name = f"{engine}_custom"
+                    if is_managed_dir:
+                        schema_name = "base_managed"
+                    else:
+                        if f"{engine}:custom" in avail:
+                            schema_name = f"{engine}:custom"
+                        elif f"{engine}_custom" in avail:
+                            schema_name = f"{engine}_custom"
                 break
         if schema_name is None:
-            schema_name = "base_rule"
+            schema_name = "base_managed" if is_managed_dir else "base_custom"
 
     return load_rule_from_str(content, schema_name=schema_name, validate_mitre=validate_mitre)
 
@@ -156,27 +176,33 @@ def rule_to_dict(rule: RuleEnvelope) -> dict[str, Any]:
 
     doc: dict[str, Any] = {
         "metadata": metadata_dict,
-        "logic": rule.logic,
-        "deployment": {
+    }
+    if rule.managed is not None:
+        doc["managed"] = {
+            "id": rule.managed.id,
+        }
+    else:
+        doc["logic"] = rule.logic
+        doc["deployment"] = {
             "enabled": rule.deployment.enabled,
             "alerting": rule.deployment.alerting,
             "run_frequency": rule.deployment.run_frequency,
-        },
-        "runbook": {
-            "context": rule.runbook.context,
-            "triage": rule.runbook.triage,
-            "response": rule.runbook.response,
-        },
-        "tests": [
-            {
-                "id": t.id,
-                "description": t.description,
-                "expect": t.expect,
-                "events": [{"timestamp": ev.timestamp, "payload": ev.payload} for ev in t.events],
-            }
-            for t in rule.tests
-        ],
+        }
+
+    doc["runbook"] = {
+        "context": rule.runbook.context,
+        "triage": rule.runbook.triage,
+        "response": rule.runbook.response,
     }
+    doc["tests"] = [
+        {
+            "id": t.id,
+            "description": t.description,
+            "expect": t.expect,
+            "events": [{"timestamp": ev.timestamp, "payload": ev.payload} for ev in t.events],
+        }
+        for t in rule.tests
+    ]
     return doc
 
 

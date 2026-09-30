@@ -96,3 +96,59 @@ def test_secops_adapter_resolve_deployment_status() -> None:
     assert adapter.resolve_deployment_status(rule_enabled) == "enabled"
     assert adapter.resolve_deployment_status(rule_silent) == "silent"
     assert adapter.resolve_deployment_status(rule_disabled) == "disabled"
+
+
+def test_secops_adapter_managed_rule_validation_and_status_resolution() -> None:
+    from graft.core.models.managed import ManagedDeployment, ManagedRuleSet, ManagedState
+    from graft.core.models.rule import ManagedRuleRef, RuleEnvelope, RuleMetadata, Runbook
+
+    state = ManagedState(
+        rulesets=(
+            ManagedRuleSet(
+                id="rs-enabled",
+                name="Enabled Ruleset",
+                category="Cloud",
+                deployments=(
+                    ManagedDeployment(type="PRECISE", enabled=True, alerting=True),
+                    ManagedDeployment(type="BROAD", enabled=False, alerting=False),
+                ),
+            ),
+            ManagedRuleSet(
+                id="rs-silent",
+                name="Silent Ruleset",
+                category="Cloud",
+                deployments=(
+                    ManagedDeployment(type="PRECISE", enabled=True, alerting=False),
+                    ManagedDeployment(type="BROAD", enabled=True, alerting=False),
+                ),
+            ),
+            ManagedRuleSet(
+                id="rs-disabled",
+                name="Disabled Ruleset",
+                category="Cloud",
+                deployments=(
+                    ManagedDeployment(type="PRECISE", enabled=False, alerting=False),
+                    ManagedDeployment(type="BROAD", enabled=False, alerting=False),
+                ),
+            ),
+        )
+    )
+
+    adapter = SecOpsAdapter()
+    assert adapter.has_managed_rule_id("rs-enabled", state) is True
+    assert adapter.has_managed_rule_id("rs-missing", state) is False
+
+    def _make_managed(mid: str) -> RuleEnvelope:
+        return RuleEnvelope(
+            metadata=RuleMetadata(
+                id="c4e9b8f2-89b1-4f81-9b16-928d54128f73", name="m", description="d"
+            ),
+            runbook=Runbook(context="c", triage="t", response="r"),
+            managed=ManagedRuleRef(id=mid),
+        )
+
+    assert adapter.resolve_deployment_status(_make_managed("rs-enabled"), state) == "enabled"
+    assert adapter.resolve_deployment_status(_make_managed("rs-silent"), state) == "silent"
+    assert adapter.resolve_deployment_status(_make_managed("rs-disabled"), state) == "disabled"
+    assert adapter.resolve_deployment_status(_make_managed("rs-missing"), state) == "disabled"
+    assert adapter.resolve_deployment_status(_make_managed("rs-enabled"), None) == "disabled"

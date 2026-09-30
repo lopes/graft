@@ -21,10 +21,28 @@ class EngineAdapter(Protocol):
 
     def get_replay(self) -> ReplayHarnessPort | None: ...
 
-    def resolve_deployment_status(self, rule: RuleEnvelope) -> str:
+    def resolve_deployment_status(
+        self,
+        rule: RuleEnvelope,
+        managed_state: ManagedState | None = None,
+    ) -> str:
+        if rule.managed is not None:
+            if managed_state is None:
+                return "disabled"
+            for rs in managed_state.rulesets:
+                if rs.id == rule.managed.id:
+                    if any(d.enabled and d.alerting for d in rs.deployments):
+                        return "enabled"
+                    if any(d.enabled and not d.alerting for d in rs.deployments):
+                        return "silent"
+                    return "disabled"
+            return "disabled"
         if not rule.deployment.enabled:
             return "disabled"
         return "enabled" if rule.deployment.alerting else "silent"
+
+    def has_managed_rule_id(self, managed_id: str, state: ManagedState) -> bool:
+        return any(rs.id == managed_id for rs in state.rulesets)
 
     def are_rules_equal(self, desired: RuleEnvelope, remote: RuleEnvelope) -> bool:
         return desired.logic.strip() == remote.logic.strip()

@@ -8,6 +8,7 @@ from graft.core.models.managed import (
 )
 from graft.core.models.rule import (
     BaseDeploymentConfig,
+    ManagedRuleRef,
     RuleEnvelope,
     RuleMetadata,
     Runbook,
@@ -23,6 +24,7 @@ __all__ = [
     "EngineManifest",
     "ManagedDeployment",
     "ManagedExclusion",
+    "ManagedRuleRef",
     "ManagedRuleSet",
     "ManagedState",
     "RuleEnvelope",

@@ -403,18 +403,18 @@ def test_all_schemas_conform_to_draft202012_metaschema() -> None:
 def test_schema_validator_discovers_engine_schemas(tmp_path: Path) -> None:
     schemas_dir = tmp_path / "schemas"
     schemas_dir.mkdir(parents=True)
-    base_rule = Path("src/graft/core/schemas/base_rule.schema.json").read_text(encoding="utf-8")
-    (schemas_dir / "base_rule.schema.json").write_text(base_rule, encoding="utf-8")
+    base_custom = Path("src/graft/core/schemas/base_custom.schema.json").read_text(encoding="utf-8")
+    (schemas_dir / "base_custom.schema.json").write_text(base_custom, encoding="utf-8")
 
     engines_dir = tmp_path / "engines"
     test_engine_schemas = engines_dir / "mock_siem" / "schemas"
     test_engine_schemas.mkdir(parents=True)
-    (test_engine_schemas / "rule.schema.json").write_text(
+    (test_engine_schemas / "custom.schema.json").write_text(
         """{
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "rule.schema.json",
+  "$id": "mock_siem_custom.schema.json",
   "allOf": [
-    { "$ref": "base_rule.schema.json" },
+    { "$ref": "base_custom.schema.json" },
     {
       "type": "object",
       "properties": {
@@ -433,8 +433,8 @@ def test_schema_validator_discovers_engine_schemas(tmp_path: Path) -> None:
     )
 
     validator = SchemaValidator(schemas_dir=schemas_dir, engines_dir=engines_dir)
-    assert "mock_siem:rule" in validator.available_schemas()
-    assert "mock_siem_rule" in validator.available_schemas()
+    assert "mock_siem:custom" in validator.available_schemas()
+    assert "mock_siem_custom" in validator.available_schemas()
 
     valid_inst = {
         "metadata": {
@@ -451,7 +451,7 @@ def test_schema_validator_discovers_engine_schemas(tmp_path: Path) -> None:
         "runbook": {"context": "c", "triage": "t", "response": "r"},
         "tests": [],
     }
-    assert validator.is_valid(valid_inst, schema_name="mock_siem:rule") is True
+    assert validator.is_valid(valid_inst, schema_name="mock_siem:custom") is True
 
     invalid_inst = {
         "metadata": {
@@ -468,4 +468,82 @@ def test_schema_validator_discovers_engine_schemas(tmp_path: Path) -> None:
         "runbook": {"context": "c", "triage": "t", "response": "r"},
         "tests": [],
     }
-    assert validator.is_valid(invalid_inst, schema_name="mock_siem:rule") is False
+    assert validator.is_valid(invalid_inst, schema_name="mock_siem:custom") is False
+
+
+@pytest.fixture
+def valid_managed_rule_dict() -> dict[str, object]:
+    return {
+        "metadata": {
+            "id": "c4e9b8f2-89b1-4f81-9b16-928d54128f73",
+            "name": "gcti_active_breach_host_indicators",
+            "description": "Registers GCTI Active Breach Priority Host Indicators ruleset.",
+            "owners": ["Security Operations"],
+            "mitre": {
+                "command-and-control": ["T1071.001"],
+            },
+            "tags": ["secops", "managed", "gcti"],
+            "references": [
+                "https://docs.cloud.google.com/chronicle/docs/detection/curated-detections"
+            ],
+        },
+        "managed": {
+            "id": "f5533b66-9327-9880-93e6-75a738ac2345",
+        },
+        "runbook": {
+            "context": "High-confidence host indicators associated with active breaches.",
+            "triage": "1. Inspect endpoint telemetry and matched indicator.",
+            "response": "1. Isolate host and initiate incident response.",
+        },
+        "tests": [],
+    }
+
+
+def test_valid_managed_rule_envelope_passes(
+    validator: SchemaValidator, valid_managed_rule_dict: dict[str, object]
+) -> None:
+    errors = validator.validate(valid_managed_rule_dict, schema_name="base_managed")
+    assert errors == []
+    assert validator.is_valid(valid_managed_rule_dict, schema_name="base_managed") is True
+
+
+def test_managed_rule_rejects_logic_and_deployment_blocks(
+    validator: SchemaValidator, valid_managed_rule_dict: dict[str, object]
+) -> None:
+    with_logic = {**valid_managed_rule_dict, "logic": "events: $e condition: $e"}
+    assert validator.is_valid(with_logic, schema_name="base_managed") is False
+
+    with_deployment = {**valid_managed_rule_dict, "deployment": {"enabled": True}}
+    assert validator.is_valid(with_deployment, schema_name="base_managed") is False
+
+
+def test_managed_rule_requires_non_empty_managed_id(
+    validator: SchemaValidator, valid_managed_rule_dict: dict[str, object]
+) -> None:
+    valid_managed_rule_dict["managed"] = {}
+    assert validator.is_valid(valid_managed_rule_dict, schema_name="base_managed") is False
+
+    valid_managed_rule_dict["managed"] = {"id": "   "}
+    assert validator.is_valid(valid_managed_rule_dict, schema_name="base_managed") is False
+
+    valid_managed_rule_dict["managed"] = {"id": "non-uuid-vendor-id_123", "extra": "nope"}
+    assert validator.is_valid(valid_managed_rule_dict, schema_name="base_managed") is False
+
+    valid_managed_rule_dict["managed"] = {"id": "non-uuid-vendor-id_123"}
+    assert validator.is_valid(valid_managed_rule_dict, schema_name="base_managed") is True
+
+
+def test_rule_name_index_is_reserved_and_rejected(
+    validator: SchemaValidator,
+    valid_secops_custom_dict: dict[str, object],
+    valid_managed_rule_dict: dict[str, object],
+) -> None:
+    custom_meta = valid_secops_custom_dict["metadata"]
+    assert isinstance(custom_meta, dict)
+    custom_meta["name"] = "index"
+    assert validator.is_valid(valid_secops_custom_dict, schema_name="secops_custom") is False
+
+    managed_meta = valid_managed_rule_dict["metadata"]
+    assert isinstance(managed_meta, dict)
+    managed_meta["name"] = "index"
+    assert validator.is_valid(valid_managed_rule_dict, schema_name="base_managed") is False

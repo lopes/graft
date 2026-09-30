@@ -28,8 +28,8 @@ def test_scaffold_engine_creates_structure_and_files(tmp_path: Path) -> None:
     assert (engine_dir / "deployer.py").exists()
     assert (engine_dir / "README.md").exists()
 
-    # 2. Co-located schema in src/graft/engines/sentinel/schemas/rule.schema.json
-    schema_file = engine_dir / "schemas" / "rule.schema.json"
+    # 2. Co-located schema in src/graft/engines/sentinel/schemas/custom.schema.json
+    schema_file = engine_dir / "schemas" / "custom.schema.json"
     assert schema_file.exists()
 
     # 3. Rulesets directory & initial example rule
@@ -37,7 +37,7 @@ def test_scaffold_engine_creates_structure_and_files(tmp_path: Path) -> None:
     assert rules_dir.is_dir()
     example_rule = rules_dir / "sentinel_example_rule.yaml"
     assert example_rule.is_file()
-    example_envelope = load_rule_from_yaml(example_rule, schema_name="base_rule")
+    example_envelope = load_rule_from_yaml(example_rule, schema_name="base_custom")
     assert example_envelope.metadata.name == "sentinel_example_rule"
     assert "$e.metadata.event_type" not in example_envelope.logic
     assert (tmp_path / "rulesets" / "sentinel" / "_archived").is_dir()

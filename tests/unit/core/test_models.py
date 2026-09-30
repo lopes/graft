@@ -136,3 +136,37 @@ def test_compilation_result() -> None:
     assert res.success is False
     assert len(res.diagnostics) == 1
     assert res.diagnostics[0].line == 4
+
+
+def test_managed_rule_envelope_structure() -> None:
+    from graft.core.models.rule import ManagedRuleRef
+
+    meta = RuleMetadata(
+        id="c4e9b8f2-89b1-4f81-9b16-928d54128f73",
+        name="secops_curated_suspicious_exec",
+        description="Registers Google SecOps Malware Signals curated ruleset",
+        owners=("SecOps",),
+        mitre={"execution": ("T1059.001",)},
+        tags=("secops", "managed"),
+        references=("https://cloud.google.com/chronicle/docs/detection/curated-detections",),
+    )
+    managed_ref = ManagedRuleRef(id="1c4ab1f6-d801-d6a9-1177-3ec3dd5bcbe9")
+    runbook = Runbook(
+        context="Curated ruleset detecting suspicious execution.",
+        triage="1. Review process tree.",
+        response="1. Isolate host.",
+    )
+    envelope = RuleEnvelope(
+        metadata=meta,
+        runbook=runbook,
+        tests=(),
+        managed=managed_ref,
+    )
+
+    assert envelope.is_managed is True
+    assert envelope.rule_type == "managed"
+    assert envelope.managed is not None
+    assert envelope.managed.id == "1c4ab1f6-d801-d6a9-1177-3ec3dd5bcbe9"
+    assert envelope.logic == ""
+    with pytest.raises(FrozenInstanceError):
+        envelope.managed = ManagedRuleRef(id="other")  # type: ignore[misc]

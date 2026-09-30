@@ -184,16 +184,16 @@ class {class_prefix}DeployerAdapter(RuleDeployerPort):
     )
     created_files["deployer"] = deployer_py
 
-    # 4. Co-located Schema in src/graft/engines/{name}/schemas/rule.schema.json
-    schema_file = schemas_dir / "rule.schema.json"
+    # 4. Co-located Schema in src/graft/engines/{name}/schemas/custom.schema.json
+    schema_file = schemas_dir / "custom.schema.json"
     schema_content = f"""{{
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "{name}_rule.schema.json",
+  "$id": "{name}_custom.schema.json",
   "title": "{class_prefix} Custom Rule Envelope Schema",
   "type": "object",
   "allOf": [
     {{
-      "$ref": "base_rule.schema.json"
+      "$ref": "base_custom.schema.json"
     }},
     {{
       "type": "object",
@@ -389,7 +389,7 @@ condition:
         )
         avail = validator.available_schemas()
         target_schema = None
-        for candidate in (f"{engine}:rule", f"{engine}_rule", f"{engine}_custom"):
+        for candidate in (f"{engine}:custom", f"{engine}_custom", "base_custom"):
             if candidate in avail:
                 target_schema = candidate
                 break
