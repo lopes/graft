@@ -29,12 +29,14 @@ def scaffold_engine(name: str, project_root: Path | None = None) -> dict[str, Pa
     schemas_dir = engine_dir / "schemas"
     tests_engine_dir = root / "tests" / "engines" / name
     rules_custom_dir = root / "rulesets" / name / "custom"
+    rules_managed_dir = root / "rulesets" / name / "managed"
     rules_archived_dir = root / "rulesets" / name / "_archived"
 
     engine_dir.mkdir(parents=True, exist_ok=True)
     schemas_dir.mkdir(parents=True, exist_ok=True)
     tests_engine_dir.mkdir(parents=True, exist_ok=True)
     rules_custom_dir.mkdir(parents=True, exist_ok=True)
+    rules_managed_dir.mkdir(parents=True, exist_ok=True)
     rules_archived_dir.mkdir(parents=True, exist_ok=True)
 
     class_prefix = "".join(part.capitalize() for part in name.split("_"))
@@ -74,6 +76,7 @@ env_vars:
     adapter_py = engine_dir / "adapter.py"
     adapter_content = f"""from __future__ import annotations
 
+from graft.core.models.managed import ManagedState
 from graft.core.models.rule import RuleEnvelope
 from graft.core.ports.compiler import RuleCompilerPort
 from graft.core.ports.deployer import RuleDeployerPort
@@ -102,11 +105,26 @@ class {class_prefix}Adapter(EngineAdapter):
     def get_replay(self) -> ReplayHarnessPort | None:
         return None
 
+    def has_managed_rule_id(self, managed_id: str, state: ManagedState) -> bool:
+        return any(rs.id == managed_id for cat in state.categories for rs in cat.rulesets)
+
     def resolve_deployment_status(
         self,
         rule: RuleEnvelope,
-        managed_state: object = None,
+        managed_state: ManagedState | None = None,
     ) -> str:
+        if rule.is_managed and rule.managed is not None:
+            if managed_state is None:
+                return "disabled"
+            for cat in managed_state.categories:
+                for rs in cat.rulesets:
+                    if rs.id == rule.managed.id:
+                        if any(d.enabled and d.alerting for d in rs.deployments):
+                            return "enabled"
+                        if any(d.enabled for d in rs.deployments):
+                            return "silent"
+                        return "disabled"
+            return "disabled"
         if not rule.deployment.enabled:
             return "disabled"
         if not rule.deployment.alerting:
@@ -188,7 +206,7 @@ class {class_prefix}DeployerAdapter(RuleDeployerPort):
     )
     created_files["deployer"] = deployer_py
 
-    # 4. Co-located Schema in src/graft/engines/{name}/schemas/custom.schema.json
+    # 4. Co-located Schemas in src/graft/engines/{name}/schemas/
     schema_file = schemas_dir / "custom.schema.json"
     schema_content = f"""{{
   "$schema": "https://json-schema.org/draft/2020-12/schema",
@@ -235,6 +253,91 @@ class {class_prefix}DeployerAdapter(RuleDeployerPort):
 """
     schema_file.write_text(schema_content, encoding="utf-8")
     created_files["schema"] = schema_file
+
+    managed_schema_file = schemas_dir / "managed.schema.json"
+    managed_schema_content = f"""{{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "{name}_managed.schema.json",
+  "title": "{class_prefix} Managed Content Manifest Schema (managed/index.yaml)",
+  "type": "object",
+  "required": [
+    "categories",
+    "exclusions"
+  ],
+  "properties": {{
+    "categories": {{
+      "type": "array",
+      "items": {{
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "rulesets"
+        ],
+        "properties": {{
+          "id": {{
+            "type": "string",
+            "minLength": 1
+          }},
+          "name": {{
+            "type": "string",
+            "minLength": 1
+          }},
+          "rulesets": {{
+            "type": "array",
+            "items": {{
+              "type": "object",
+              "required": [
+                "id",
+                "name"
+              ],
+              "properties": {{
+                "id": {{
+                  "type": "string",
+                  "minLength": 1
+                }},
+                "name": {{
+                  "type": "string",
+                  "minLength": 1
+                }}
+              }}
+            }}
+          }}
+        }},
+        "additionalProperties": false
+      }}
+    }},
+    "exclusions": {{
+      "type": "array",
+      "items": {{
+        "type": "object",
+        "required": [
+          "id",
+          "description",
+          "expression"
+        ],
+        "properties": {{
+          "id": {{
+            "type": "string",
+            "minLength": 1
+          }},
+          "description": {{
+            "type": "string",
+            "minLength": 1
+          }},
+          "expression": {{
+            "type": "string",
+            "minLength": 1
+          }}
+        }}
+      }}
+    }}
+  }},
+  "additionalProperties": false
+}}
+"""
+    managed_schema_file.write_text(managed_schema_content, encoding="utf-8")
+    created_files["managed_schema"] = managed_schema_file
 
     # 5. README documentation
     readme_file = engine_dir / "README.md"
@@ -284,6 +387,7 @@ def test_{name}_adapter_protocol_conformance() -> None:
     assert adapter.get_compiler() is not None
     assert adapter.get_deployer() is not None
     assert callable(adapter.resolve_deployment_status)
+    assert callable(adapter.has_managed_rule_id)
 """,
         encoding="utf-8",
     )
@@ -336,10 +440,13 @@ def scaffold_rule(
     if dest.exists():
         raise ScaffoldError(f"Rule file already exists at {dest}")
 
-    dest.parent.mkdir(parents=True, exist_ok=True)
-    rule_uuid = str(uuid.uuid4())
-
     if managed:
+        if not managed_id or not managed_id.strip():
+            raise ScaffoldError(
+                "Scaffolding a managed rule requires a non-empty managed rule ID (--managed <id>)"
+            )
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        rule_uuid = str(uuid.uuid4())
         doc: dict[str, object] = {
             "metadata": {
                 "id": rule_uuid,
@@ -353,7 +460,7 @@ def scaffold_rule(
                 "references": ["https://attack.mitre.org/techniques/T1059/001/"],
             },
             "managed": {
-                "id": managed_id if managed_id else "TODO_MANAGED_RULE_ID",
+                "id": managed_id.strip(),
             },
             "runbook": {
                 "context": "Context and background regarding this vendor-managed detection.",
@@ -363,6 +470,8 @@ def scaffold_rule(
             "tests": [],
         }
     else:
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        rule_uuid = str(uuid.uuid4())
         default_logic = (
             """events:
   $e.metadata.event_type = "USER_LOGIN"

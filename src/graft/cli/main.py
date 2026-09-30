@@ -95,8 +95,6 @@ def build_parser() -> argparse.ArgumentParser:
     new_rule_p.add_argument("--out", help="Custom output path for generated YAML rule")
     new_rule_p.add_argument(
         "--managed",
-        nargs="?",
-        const=True,
         default=None,
         metavar="MANAGED_ID",
         help="Scaffold a registered managed rule in rulesets/<engine>/managed/",

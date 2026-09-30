@@ -28,13 +28,16 @@ def test_scaffold_engine_creates_structure_and_files(tmp_path: Path) -> None:
     assert (engine_dir / "deployer.py").exists()
     assert (engine_dir / "README.md").exists()
 
-    # 2. Co-located schema in src/graft/engines/sentinel/schemas/custom.schema.json
-    schema_file = engine_dir / "schemas" / "custom.schema.json"
-    assert schema_file.exists()
+    # 2. Co-located schemas in src/graft/engines/sentinel/schemas/
+    custom_schema_file = engine_dir / "schemas" / "custom.schema.json"
+    managed_schema_file = engine_dir / "schemas" / "managed.schema.json"
+    assert custom_schema_file.exists()
+    assert managed_schema_file.exists()
 
-    # 3. Rulesets directory & initial example rule
+    # 3. Rulesets directories (custom/, managed/, _archived/) & initial example rule
     rules_dir = tmp_path / "rulesets" / "sentinel" / "custom"
     assert rules_dir.is_dir()
+    assert (tmp_path / "rulesets" / "sentinel" / "managed").is_dir()
     example_rule = rules_dir / "sentinel_example_rule.yaml"
     assert example_rule.is_file()
     example_envelope = load_rule_from_yaml(example_rule, schema_name="base_custom")
@@ -57,14 +60,18 @@ def test_scaffold_engine_creates_structure_and_files(tmp_path: Path) -> None:
     # 6. .env.example updated with engine section
     assert "# ENGINE: SENTINEL" in env_example.read_text(encoding="utf-8")
 
-    # 7. Generated adapter implements resolve_deployment_status and deployer wires logging
+    # 7. Generated adapter implements status/ID hooks and deployer wires logging
     adapter_code = (engine_dir / "adapter.py").read_text(encoding="utf-8")
+    assert "from graft.core.models.managed import ManagedState" in adapter_code
     assert "def resolve_deployment_status(" in adapter_code
+    assert "managed_state: ManagedState | None = None" in adapter_code
+    assert "def has_managed_rule_id(" in adapter_code
     deployer_code = (engine_dir / "deployer.py").read_text(encoding="utf-8")
     assert 'logging.getLogger("graft.sentinel.deployer")' in deployer_code
     assert "logger.debug(" in deployer_code
     test_adapter_code = (tests_engine_dir / "test_adapter.py").read_text(encoding="utf-8")
     assert "resolve_deployment_status" in test_adapter_code
+    assert "has_managed_rule_id" in test_adapter_code
 
 
 def test_scaffold_engine_invalid_name(tmp_path: Path) -> None:
@@ -122,24 +129,22 @@ def test_scaffold_rule_custom_destination_string(tmp_path: Path) -> None:
     assert rule_path.exists()
 
 
-def test_scaffold_managed_rule_with_default_placeholder_id(tmp_path: Path) -> None:
-    rule_path = scaffold_rule(
-        "secops",
-        "gcti_active_breach_host_indicators",
-        project_root=tmp_path,
-        managed=True,
-    )
-    assert rule_path == (
-        tmp_path / "rulesets" / "secops" / "managed" / "gcti_active_breach_host_indicators.yaml"
-    )
-    assert rule_path.exists()
-
-    envelope = load_rule_from_yaml(rule_path)
-    assert envelope.is_managed is True
-    assert envelope.rule_type == "managed"
-    assert envelope.managed is not None
-    assert envelope.managed.id == "TODO_MANAGED_RULE_ID"
-    assert envelope.tests == ()
+def test_scaffold_managed_rule_requires_managed_id(tmp_path: Path) -> None:
+    with pytest.raises(ScaffoldError, match="requires a non-empty managed rule ID"):
+        scaffold_rule(
+            "secops",
+            "gcti_active_breach_host_indicators",
+            project_root=tmp_path,
+            managed=True,
+        )
+    with pytest.raises(ScaffoldError, match="requires a non-empty managed rule ID"):
+        scaffold_rule(
+            "secops",
+            "gcti_active_breach_host_indicators",
+            project_root=tmp_path,
+            managed=True,
+            managed_id="   ",
+        )
 
 
 def test_scaffold_managed_rule_with_explicit_id(tmp_path: Path) -> None:
@@ -155,12 +160,21 @@ def test_scaffold_managed_rule_with_explicit_id(tmp_path: Path) -> None:
     )
     envelope = load_rule_from_yaml(rule_path)
     assert envelope.is_managed is True
+    assert envelope.rule_type == "managed"
+    assert envelope.metadata.id is not None
     assert envelope.managed is not None
     assert envelope.managed.id == "433faf9e-4d51-f284-c35b-009528ecff05"
+    assert envelope.tests == ()
 
 
 def test_scaffold_rule_rejects_reserved_index_name(tmp_path: Path) -> None:
     with pytest.raises(ScaffoldError, match="reserved"):
         scaffold_rule("secops", "index", project_root=tmp_path)
     with pytest.raises(ScaffoldError, match="reserved"):
-        scaffold_rule("secops", "index", project_root=tmp_path, managed=True)
+        scaffold_rule(
+            "secops",
+            "index",
+            project_root=tmp_path,
+            managed=True,
+            managed_id="433faf9e-4d51-f284-c35b-009528ecff05",
+        )

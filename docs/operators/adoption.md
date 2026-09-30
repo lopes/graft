@@ -27,7 +27,7 @@ flowchart TD
         SIEM["<b>Live SecOps Tenant</b><br/>• Active Curated Rule Sets & Exclusions<br/>• Active Custom YARA-L Rules & Deployments"]
         PULL["<code>graft secops pull --env production</code><br/><i>(Reverse Synchronization)</i>"]
         SIEM --> PULL
-        PULL --> MAN["<code>rulesets/secops/managed.yaml</code>"]
+        PULL --> MAN["<code>rulesets/secops/managed/index.yaml</code>"]
         PULL --> CUST["<code>rulesets/secops/custom/*.yaml</code>"]
     end
 
@@ -80,7 +80,7 @@ Alternatively, you can target individual subsystems:
 uv run graft secops pull --target custom --env production --out-dir rulesets/secops/custom
 
 # Pull vendor-managed curated content manifest only
-uv run graft secops pull --target managed --env production --out-manifest rulesets/secops/managed.yaml
+uv run graft secops pull --target managed --env production --out-manifest rulesets/secops/managed/index.yaml
 
 # Force overwrite existing local files without confirmation prompts
 uv run graft secops pull --env production --force

@@ -773,8 +773,6 @@ def register_engine_commands(
         new_p.add_argument("--out", help="Custom target path for rule YAML")
         new_p.add_argument(
             "--managed",
-            nargs="?",
-            const=True,
             default=None,
             metavar="MANAGED_ID",
             help="Scaffold a registered managed rule in rulesets/<engine>/managed/",

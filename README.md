@@ -21,7 +21,7 @@
 > **Public Repository Notice & Operational Boundaries:**
 > - **Public Lab Environment:** This public repository (`lopes/graft`) is strictly connected to an isolated lab/demo environment for open-source development and experimentation. It is never connected to production tenants.
 > - **Production Repositories Must Be Private:** Any detection engineering team or operator adopting or forking Graft for production use **must maintain their repository in private version control** under strict organizational access controls. While the Graft engine is open-source, version-controlling live production deployment states (`enabled`, `alerting`) or operational exclusions (`findingsRefinements`) in a public repository will leak defensive postures, monitoring coverage blind spots, and internal entity identities (hostnames, IP ranges, usernames, service accounts).
-> - **Curated Content Is Public:** The vendor-managed detection catalog metadata tracked in `rulesets/secops/managed.yaml` (category names, ruleset titles, descriptions, and catalog UUIDs) represents standard vendor content that is **publicly published** in official Google Cloud documentation. See [Google SecOps Curated Detections](https://docs.cloud.google.com/chronicle/docs/detection/curated-detections) and [Review Curated Detection Categories](https://docs.cloud.google.com/chronicle/docs/detection/cloud-threats-category).
+> - **Curated Content Is Public:** The vendor-managed detection catalog metadata tracked in `rulesets/secops/managed/index.yaml` (category names, ruleset titles, descriptions, and catalog UUIDs) represents standard vendor content that is **publicly published** in official Google Cloud documentation. See [Google SecOps Curated Detections](https://docs.cloud.google.com/chronicle/docs/detection/curated-detections) and [Review Curated Detection Categories](https://docs.cloud.google.com/chronicle/docs/detection/cloud-threats-category).
 > - **Specification & Architecture:** Complete architectural foundations, component specifications, and engineering directives are documented in [docs/README.md](docs/README.md) and [AGENTS.md](AGENTS.md).
 
 ---
@@ -36,7 +36,7 @@ Graft acts as the unified trunk:
 
 - **Standardized Core:** Author, document, and test detection rules, metadata, and testing fixtures in a unified, version-controlled repository using a normalized 5-block envelope (`metadata`, `logic`, `deployment`, `runbook`, `tests`).
 - **Resilient Branches (Ports & Adapters):** Seamlessly "graft" rules into production engines. Deploy natively into **Google SecOps** using YARA-L 2.0 today, and branch into auxiliary SIEMs, EDRs, or cloud telemetry tomorrow without refactoring engineering workflows.
-- **Dual-Track Governance:** Manage bespoke organizational detections (`rulesets/<engine>/custom/`) side-by-side with vendor-managed detections (`rulesets/<engine>/managed.yaml`) under GitOps plan/apply reconciliation.
+- **Dual-Track Governance:** Manage bespoke organizational detections (`rulesets/<engine>/custom/`) side-by-side with vendor-managed detections (`rulesets/<engine>/managed/index.yaml` and optional registered rule envelopes `rulesets/<engine>/managed/<rule_name>.yaml`) under GitOps plan/apply reconciliation.
 - **Frictionless CI/CD:** Decouple detection authoring from manual UI workflows with automated schema validation, pre-merge API dry runs (`verifyRuleText`), and synthetic replay testing against dedicated staging infrastructure.
 
 ---
@@ -70,7 +70,7 @@ Detection logic is only as effective as the operational response it enables:
 ### 3. Dual-Track GitOps Drift Reconciliation
 Modern SIEMs run a combination of bespoke custom rules and vendor-managed curated detections. Graft manages both under unified version control:
 - **Custom Rule Synchronization:** Authors maintain declarative custom rules in Git (`rulesets/<engine>/custom/`). Graft calculates precise diffs between local state and live tenant APIs, automating safe creates and updates.
-- **Vendor-Managed Curated Content Control:** Manage vendor curated rule sets (`rulesets/<engine>/managed.yaml`) directly in code. Operators can declare precision tiers (`PRECISE` vs `BROAD`), toggle alerting states, and commit declarative rule exclusions (`findingsRefinements`) to suppress benign environmental noise.
+- **Vendor-Managed Curated Content Control & Registration:** Manage vendor curated rule sets (`rulesets/<engine>/managed/index.yaml`) directly in code. Operators can declare precision tiers (`PRECISE` vs `BROAD`), toggle alerting states, commit declarative rule exclusions (`findingsRefinements`), and optionally register managed rules (`rulesets/<engine>/managed/<rule_name>.yaml`) to map vendor coverage into MITRE ATT&CK matrices and catalogs.
 - **Dual-Mode Drift Reconciliation:**
   - **Scoped PR Reconciliation (Default):** Evaluates only files modified in the active Git branch against tenant state, enabling lightning-fast pull request validations in CI/CD.
   - **Full Catalog Convergence (`--all`):** Scans the entire tenant catalog to detect and reconcile out-of-band console drift, enforcing Git as the authoritative Source of Truth.
@@ -184,10 +184,13 @@ graft --json lint
 
 #### 2. Rule & Engine Scaffolding
 ```bash
-# Bootstrap a new detection rule (creates 5-block envelope with schema defaults)
+# Bootstrap a new custom detection rule (creates 5-block envelope with schema defaults)
 graft secops new suspicious_powershell_download
 # or using the engine-agnostic router:
 graft new rule suspicious_powershell_download --engine secops
+
+# Register an enabled vendor-managed rule from rulesets/<engine>/managed/index.yaml
+graft secops new gcti_active_breach_network_indicators --managed 433faf9e-4d51-f284-c35b-009528ecff05
 
 # Bootstrap an entirely new detection engine adapter (code, schema, rules, tests)
 graft new engine sentinel

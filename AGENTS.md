@@ -28,8 +28,9 @@
   - **`src/graft/engines/` (Driven Adapters):** Concrete engine implementations (e.g., `src/graft/engines/secops/`). **Engines carry the entire burden** of translating external SIEM APIs, authenticating, compiling queries, and handling synthetic replay vectors. Core never adapts to an engine; engines adapt to Core.
   - **`src/graft/cli/` (Driving Adapter):** Standard library `argparse` CLI routing commands to core services and engine adapters.
 - **Ruleset Taxonomy:**
-  - `rulesets/<engine>/custom/`: 5-block envelope YAML files (`metadata`, `logic`, `deployment`, `runbook`, `tests`) authored and owned by the organization.
-  - `rulesets/<engine>/managed.yaml`: Single consolidated manifest tracking vendor-managed content state (e.g., Google Curated Rule Sets: `PRECISE` vs `BROAD` deployments, `enabled`, `alerting`) and active exclusions.
+  - `rulesets/<engine>/custom/`: 5-block envelope YAML files (`metadata`, `logic`, `deployment`, `runbook`, `tests`) authored and owned by the organization, validated against `src/graft/engines/<engine>/schemas/custom.schema.json` (extending `base_custom.schema.json`).
+  - `rulesets/<engine>/managed/index.yaml`: Single consolidated manifest tracking vendor-managed content state (e.g., Google Curated Rule Sets: `PRECISE` vs `BROAD` deployments, `enabled`, `alerting`) and active exclusions, validated against `src/graft/engines/<engine>/schemas/managed.schema.json`. Engine adapters must expose a unique `id` per managed rule/ruleset entry in `index.yaml`.
+  - `rulesets/<engine>/managed/<rule_name>.yaml`: Optional 4-block registered managed rule envelopes (`metadata`, `managed`, `runbook`, `tests`) validated against `base_managed.schema.json` so vendor-managed coverage is included in MITRE ATT&CK matrices and catalogs. `graft lint` enforces that `managed.id` exists in `managed/index.yaml` and does not overlap across files (strict 1-to-1 mapping).
   - `rulesets/<engine>/_archived/`: Standardized directory for decommissioned rules. Any folder or file prefix starting with an underscore (`_`) under a ruleset is excluded from loading, linting, matrix exports, and sync operations.
 - **Environment Topologies:**
   - All SecOps credentials and tenant coordinates are split into Staging and Production according to `docs/engines/secops.md`.

@@ -65,10 +65,10 @@ def test_parse_new_rule_command() -> None:
     assert args.engine == "secops"
     assert args.managed is None
 
-    args_managed_flag = parser.parse_args(
-        ["new", "rule", "gcti_host_indicators", "--engine", "secops", "--managed"]
-    )
-    assert args_managed_flag.managed is True
+    with pytest.raises(SystemExit):
+        parser.parse_args(
+            ["new", "rule", "gcti_host_indicators", "--engine", "secops", "--managed"]
+        )
 
     args_managed_id = parser.parse_args(
         [

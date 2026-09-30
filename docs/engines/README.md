@@ -18,13 +18,15 @@ graft/
 │   ├── deployer.py           # Remote rule CRUD (RuleDeployerPort)
 │   ├── managed.py            # Managed state sync (ManagedEnginePort)
 │   ├── replay.py             # Synthetic replay harness (ReplayHarnessPort)
-│   ├── schemas/              # Co-located engine schemas (rule.schema.json)
+│   ├── schemas/              # Co-located engine schemas (custom.schema.json, managed.schema.json)
 │   └── README.md             # Engine-specific documentation
 ├── tests/engines/<engine>/   # Engine unit & contract tests
 └── rulesets/<engine>/
     ├── _archived/            # Decommissioned rules preserved for audit history
     ├── custom/               # 5-block envelope custom rules (.yaml)
-    └── managed.yaml          # Declarative vendor-managed content manifest
+    └── managed/
+        ├── index.yaml        # Declarative vendor-managed content manifest
+        └── <rule_name>.yaml  # Optional 4-block registered managed rule envelopes
 ```
 
 ---

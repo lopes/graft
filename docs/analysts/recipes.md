@@ -15,25 +15,29 @@ This cookbook provides practical, copy-pasteable recipes for everyday detection 
 7. [Recipe 7: Embedding Investigation Runbooks](#recipe-7-embedding-investigation-runbooks)
 8. [Recipe 8: Safely Disabling or Deprecating a Rule](#recipe-8-safely-disabling-or-deprecating-a-rule)
 9. [Recipe 9: Generating MITRE ATT&CK Matrices & Catalogs](#recipe-9-generating-mitre-attck-matrices--catalogs)
+10. [Recipe 10: Registering & Mapping a Vendor-Managed Rule](#recipe-10-registering--mapping-a-vendor-managed-rule)
 
 ---
 
 ## Recipe 1: Scaffolding a New Rule
 
 ### Objective
-Create a new detection rule file with an auto-generated UUID, valid schema defaults, and an initial test vector skeleton.
+Create a new detection rule file with an auto-generated UUID, valid schema defaults, and an initial test vector skeleton (or a 4-block registered managed rule envelope via `--managed <id>`).
 
 ### Command
 ```bash
-# Using the engine-specific command:
+# Custom rule — Using the engine-specific command:
 graft secops new gcp_iam_service_account_key_create
 
-# Or using the root command router:
+# Custom rule — Or using the root command router:
 graft new rule gcp_iam_service_account_key_create --engine secops
+
+# Registered managed rule — Link to a vendor ID in rulesets/secops/managed/index.yaml:
+graft secops new gcti_active_breach_network_indicators --managed 433faf9e-4d51-f284-c35b-009528ecff05
 ```
 
 ### Result
-Graft creates `rulesets/secops/custom/gcp_iam_service_account_key_create.yaml` with pre-populated `metadata`, `logic`, `deployment`, `runbook`, and `tests` blocks.
+For custom rules, Graft creates `rulesets/secops/custom/gcp_iam_service_account_key_create.yaml` with pre-populated `metadata`, `logic`, `deployment`, `runbook`, and `tests` blocks. When `--managed <id>` is supplied, Graft creates `rulesets/secops/managed/<rule_name>.yaml` with `metadata`, `managed`, `runbook`, and `tests: []`.
 
 ---
 
@@ -338,3 +342,64 @@ Every catalog export (`table`, `csv`, `json`, `markdown`) normalizes to 14 objec
 > - **`priority` and `severity`** do not belong at detection authoring time: **Priority** belongs at **Triage time** (where queue ordering depends on live asset criticality and identity context), and **Severity** belongs at **Response time** (where incident impact is determined after triage).
 > - Raw deployment fields (`alerting`, `enabled`, `run_frequency`) vary broadly by engine; Graft abstracts them into an engine-evaluated tri-state `status` (`enabled`, `silent`, `disabled`).
 > - Static `maturity` labels rot into administrative toil and false security. Objective VCS lifecycle and review metrics provide verifiable indicators without synthetic score inflation.
+
+---
+
+## Recipe 10: Registering & Mapping a Vendor-Managed Rule
+
+### Objective
+Optionally register an enabled vendor-managed rule or ruleset from `rulesets/<engine>/managed/index.yaml` so its MITRE ATT&CK coverage, accountable owners, and SOC triage runbook appear in `graft export matrix` and `graft export catalog`.
+
+### Step 1: Find the Managed Rule ID in `index.yaml`
+Open [`rulesets/secops/managed/index.yaml`](../../rulesets/secops/managed/index.yaml) and copy the unique `id` of the curated ruleset you want to map (for example, `433faf9e-4d51-f284-c35b-009528ecff05` for `"GCTI Active Breach Network Indicators"`).
+
+### Step 2: Scaffold the Registered Managed Rule
+```bash
+graft secops new gcti_active_breach_network_indicators --managed 433faf9e-4d51-f284-c35b-009528ecff05
+```
+
+### Step 3: Populate Metadata, MITRE & Runbook
+Edit `rulesets/secops/managed/gcti_active_breach_network_indicators.yaml` (validated against `base_managed.schema.json`):
+```yaml
+metadata:
+  id: "a4d89e12-3b77-4f08-9c61-82d47e910b3a"
+  name: "gcti_active_breach_network_indicators"
+  description: "Google Cloud Threat Intelligence network indicators from active breach investigations."
+  owners:
+    - "Cloud Security Operations"
+  mitre:
+    command-and-control:
+      - "T1071"
+      - "T1071.001"
+  tags:
+    - "gcti"
+    - "curated"
+    - "network"
+  references:
+    - "https://cloud.google.com/chronicle/docs/detection/cloud-threats-category"
+
+managed:
+  id: "433faf9e-4d51-f284-c35b-009528ecff05"
+
+runbook:
+  context: |
+    Matches network telemetry against curated indicators of compromise (IoCs) maintained by GCTI.
+  triage: |
+    1. Inspect the matched indicator (domain, IP, or URI) and principal asset.
+    2. Pivot on the principal asset across DNS, proxy, and process telemetry.
+  response: |
+    1. Isolate the affected host or workload if active C2 is confirmed.
+    2. Block the indicator across perimeter firewall and DNS controls.
+
+tests: []
+```
+
+### Step 4: Validate & Export
+```bash
+# Verifies schema, MITRE taxonomy, and 1-to-1 existence in managed/index.yaml
+graft lint
+
+# View the registered managed rule alongside custom rules (rule_type: managed)
+graft export catalog
+graft export matrix --format table
+```

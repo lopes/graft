@@ -16,7 +16,7 @@ flowchart TD
     CLI --> TARGET
 
     TARGET -- "custom / all" --> CUSTOM_FLOW["<b>Custom Rules Reconciler</b><br/><code>rulesets/secops/custom/*.yaml</code>"]
-    TARGET -- "managed / all" --> MANAGED_FLOW["<b>Managed Content Reconciler</b><br/><code>rulesets/secops/managed.yaml</code>"]
+    TARGET -- "managed / all" --> MANAGED_FLOW["<b>Managed Content Reconciler</b><br/><code>rulesets/secops/managed/index.yaml</code>"]
 
     CUSTOM_FLOW --> MATCH["Match by metadata.name<br/>Preserve Graft metadata.id"]
     MATCH --> CUSTOM_API["Chronicle Rules & Deployments API<br/><code>POST rules</code> / <code>PATCH rules/{id}</code>"]
@@ -29,7 +29,7 @@ flowchart TD
 ```
 
 ### Supported Scopes (`--target`)
-- **`all` (Default):** Reconciles both custom detection rules (`rulesets/<engine>/custom/`) and vendor-managed content (`rulesets/<engine>/managed.yaml`).
+- **`all` (Default):** Reconciles both custom detection rules (`rulesets/<engine>/custom/`) and vendor-managed content (`rulesets/<engine>/managed/index.yaml`).
 - **`custom`:** Scopes reconciliation strictly to custom rules owned by your team.
 - **`managed`:** Scopes reconciliation strictly to vendor-managed rule sets and exclusions.
 
@@ -49,9 +49,9 @@ Custom detection rules are authored in 5-block envelope YAML files under `rulese
 
 ---
 
-## 3. Vendor-Managed Content Manifest (`rulesets/<engine>/managed.yaml`)
+## 3. Vendor-Managed Content Manifest (`rulesets/<engine>/managed/index.yaml`)
 
-Vendor-managed content state (Google Cloud Curated Rule Sets) is tracked in a single declarative manifest conforming to `src/graft/engines/secops/schemas/managed.schema.json`:
+Vendor-managed content state (Google Cloud Curated Rule Sets) is tracked in a single declarative manifest (`rulesets/<engine>/managed/index.yaml`) conforming to `src/graft/engines/secops/schemas/managed.schema.json` (while optional registered managed rule envelopes in `rulesets/<engine>/managed/<rule_name>.yaml` provide MITRE ATT&CK coverage and SOC runbooks):
 
 ```yaml
 categories:
@@ -159,14 +159,14 @@ Graft computes an in-memory diff before issuing mutations. If an existing rule's
 Granular operations for vendor-curated rule sets and exclusions:
 
 ```bash
-# Compare local managed.yaml against tenant Curated Rule Sets
+# Compare local managed/index.yaml against tenant Curated Rule Sets
 graft secops managed diff --env production
 
-# Apply managed.yaml deployments and exclusions to tenant
+# Apply managed/index.yaml deployments and exclusions to tenant
 graft secops managed apply --env production
 
-# Pull live Curated Rule Sets and exclusions into managed.yaml
-graft secops managed pull --env production --out rulesets/secops/managed.yaml
+# Pull live Curated Rule Sets and exclusions into managed/index.yaml
+graft secops managed pull --env production --out rulesets/secops/managed/index.yaml
 ```
 
 ### 4. Reverse Synchronization & Brownfield Ingestion (`graft secops pull`)

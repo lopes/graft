@@ -4,6 +4,20 @@ All notable changes to **Graft** are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- **Optional Vendor-Managed Rule Registration (`rulesets/<engine>/managed/<rule_name>.yaml`):**
+  - Standardized 4-block managed rule envelope (`metadata`, `managed`, `runbook`, `tests`) validated by `src/graft/core/schemas/base_managed.schema.json`.
+  - Scaffolding support via `graft <engine> new <rule_name> --managed <id>` and `graft new rule <rule_name> --engine <engine> --managed <id>`.
+  - Shift-left validation in `graft lint` verifying that every registered `managed.id` exists in `rulesets/<engine>/managed/index.yaml` (`EngineAdapter.has_managed_rule_id`) and enforcing strict 1-to-1 uniqueness per engine (`RuleUniquenessValidator`).
+  - Automatic inclusion of registered managed rules in MITRE ATT&CK Navigator layers (`graft export matrix`) and governance catalogs (`graft export catalog` with `rule_type="managed"` and live deployment status resolved from `managed/index.yaml`).
+
+### Changed
+- **Ruleset & Schema Taxonomy Standardization:**
+  - Migrated engine managed state manifests from `rulesets/<engine>/managed.yaml` to `rulesets/<engine>/managed/index.yaml`.
+  - Renamed `base_rule.schema.json` to `base_custom.schema.json` and engine custom rule schemas from `rule.schema.json` to `custom.schema.json` across core and engine packages for consistent `custom` / `managed` naming.
+
 ## [0.1.0] - 2026-09-28
 
 ### Added
