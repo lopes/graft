@@ -716,3 +716,106 @@ def test_main_uncaught_exception_logged_via_logger_error(
     captured = capsys.readouterr()
     assert "Unexpected error:" not in captured.err
     assert any("unhandled failure during command" in r.message for r in caplog.records)
+
+
+def test_main_lint_treats_rule_named_managed_yaml_as_custom_rule(tmp_path: Path) -> None:
+    custom_dir = tmp_path / "rulesets" / "secops" / "custom"
+    custom_dir.mkdir(parents=True)
+    rule_file = custom_dir / "managed.yaml"
+    rule_file.write_text(
+        'metadata:\n  id: "11111111-2222-3333-4444-555555555555"\n  name: "managed"\n'
+        '  description: "Custom rule named managed.yaml"\n  owners: ["SOC"]\n'
+        '  mitre:\n    execution:\n      - "T1059"\n'
+        '  tags: ["test"]\n  references: ["Internal reference"]\n'
+        'logic: |\n  events:\n    $e.metadata.event_type = "USER_LOGIN"\n  condition:\n    $e\n'
+        'deployment:\n  run_frequency: "live"\n'
+        "  enabled: true\n  alerting: true\n"
+        'runbook:\n  context: "Context"\n'
+        '  triage: "Triage"\n  response: "Response"\n'
+        "tests: []\n",
+        encoding="utf-8",
+    )
+    exit_code = main(["lint", str(rule_file), "--rules-dir", str(tmp_path / "rulesets")])
+    assert exit_code == 0
+
+
+def test_main_lint_and_export_discover_yml_files(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    custom_dir = tmp_path / "rulesets" / "secops" / "custom"
+    custom_dir.mkdir(parents=True)
+    rule_yml = custom_dir / "rule_one.yml"
+    rule_yaml = custom_dir / "rule_two.yaml"
+
+    shared_body = (
+        'metadata:\n  id: "11111111-2222-3333-4444-555555555555"\n  name: "dup_yml_rule"\n'
+        '  description: "Rule using yml extension"\n  owners: ["SOC"]\n'
+        '  mitre:\n    execution:\n      - "T1059"\n'
+        '  tags: ["test"]\n  references: ["Internal reference"]\n'
+        'logic: |\n  events:\n    $e.metadata.event_type = "USER_LOGIN"\n  condition:\n    $e\n'
+        'deployment:\n  run_frequency: "live"\n'
+        "  enabled: true\n  alerting: true\n"
+        'runbook:\n  context: "Context"\n'
+        '  triage: "Triage"\n  response: "Response"\n'
+        "tests: []\n"
+    )
+    rule_yml.write_text(shared_body, encoding="utf-8")
+
+    # Export should discover the .yml rule
+    exit_code_export = main(
+        ["export", "catalog", "--format", "json", "--rules-dir", str(tmp_path / "rulesets")]
+    )
+    assert exit_code_export == 0
+    exported = json.loads(capsys.readouterr().out)
+    assert len(exported) == 1
+    assert exported[0]["name"] == "dup_yml_rule"
+
+    # Linting a single .yaml file should pre-scan existing .yml files and catch duplicate IDs
+    rule_yaml.write_text(shared_body, encoding="utf-8")
+    exit_code_lint = main(["lint", str(rule_yaml), "--rules-dir", str(tmp_path / "rulesets")])
+    assert exit_code_lint == 1
+    assert "Duplicate rule metadata.id" in capsys.readouterr().err
+
+
+def test_main_secops_verify_explicit_managed_rule_or_index_skips_cleanly(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    exit_code = main(
+        [
+            "--json",
+            "secops",
+            "verify",
+            "rulesets/secops/managed/gcti_active_breach_network_indicators.yaml",
+            "rulesets/secops/managed/index.yaml",
+        ]
+    )
+    assert exit_code == 0
+    data = json.loads(capsys.readouterr().out)
+    assert data["success"] is True
+    assert data["total"] == 0
+
+
+def test_main_secops_test_explicit_managed_rule_skips_cleanly(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    managed_dir = tmp_path / "rulesets" / "secops" / "managed"
+    managed_dir.mkdir(parents=True)
+    managed_rule = managed_dir / "managed_with_tests.yaml"
+    managed_rule.write_text(
+        'metadata:\n  id: "11111111-2222-3333-4444-555555555555"\n  name: "managed_with_tests"\n'
+        '  description: "Registered managed rule with test vector"\n  owners: ["SOC"]\n'
+        '  mitre:\n    execution:\n      - "T1059"\n'
+        '  tags: ["test"]\n  references: ["Internal reference"]\n'
+        'managed:\n  id: "433faf9e-4d51-f284-c35b-009528ecff05"\n'
+        'runbook:\n  context: "Context"\n'
+        '  triage: "Triage"\n  response: "Response"\n'
+        'tests:\n  - id: "t1"\n    description: "test"\n    expect: 1\n    events:\n'
+        '      - timestamp: "2026-09-18T00:00:00Z"\n        payload:\n          k: "v"\n',
+        encoding="utf-8",
+    )
+    exit_code = main(["--json", "secops", "test", "--require-staging", str(managed_rule)])
+    assert exit_code == 0
+    data = json.loads(capsys.readouterr().out)
+    assert data["success"] is True
+    assert data["total"] == 0
+    assert "skipped" not in data

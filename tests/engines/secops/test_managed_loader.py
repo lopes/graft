@@ -90,7 +90,7 @@ def test_dump_managed_manifest_and_roundtrip(tmp_path: Path) -> None:
         ),
     )
 
-    out_file = tmp_path / "managed.yaml"
+    out_file = tmp_path / "index.yaml"
     dumped_str = dump_managed_manifest_to_yaml(original_state, path=out_file)
 
     assert "rs-test" in dumped_str

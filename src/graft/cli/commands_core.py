@@ -28,7 +28,19 @@ from graft.core.validation import RuleUniquenessValidator
 from graft.core.validation.mitre_validator import update_mitre_taxonomy
 from graft.core.validation.schema_validator import SchemaValidator
 
-_MANIFEST_FILENAMES = ("index.yaml", "index.yml", "managed.yaml", "managed.yml")
+_MANIFEST_FILENAMES = ("index.yaml", "index.yml")
+
+
+def _iter_yaml_files(directory: Path) -> list[Path]:
+    files = sorted(
+        f for f in directory.rglob("*.yaml") if not any(part.startswith("_") for part in f.parts)
+    )
+    files.extend(
+        sorted(
+            f for f in directory.rglob("*.yml") if not any(part.startswith("_") for part in f.parts)
+        )
+    )
+    return files
 
 
 def _infer_engine_from_path(file_path: Path) -> str:
@@ -70,20 +82,7 @@ def execute_lint(
         for p_str in paths:
             p = Path(p_str)
             if p.is_dir():
-                target_files.extend(
-                    sorted(
-                        f
-                        for f in p.rglob("*.yaml")
-                        if not any(part.startswith("_") for part in f.parts)
-                    )
-                )
-                target_files.extend(
-                    sorted(
-                        f
-                        for f in p.rglob("*.yml")
-                        if not any(part.startswith("_") for part in f.parts)
-                    )
-                )
+                target_files.extend(_iter_yaml_files(p))
             elif p.is_file():
                 target_files.append(p)
             else:
@@ -93,20 +92,7 @@ def execute_lint(
     else:
         root_rules = Path(rules_dir)
         if root_rules.is_dir():
-            target_files.extend(
-                sorted(
-                    f
-                    for f in root_rules.rglob("*.yaml")
-                    if not any(part.startswith("_") for part in f.parts)
-                )
-            )
-            target_files.extend(
-                sorted(
-                    f
-                    for f in root_rules.rglob("*.yml")
-                    if not any(part.startswith("_") for part in f.parts)
-                )
-            )
+            target_files.extend(_iter_yaml_files(root_rules))
 
     results: list[dict[str, Any]] = []
     has_errors = False
@@ -119,12 +105,8 @@ def execute_lint(
     target_set = {f.resolve() for f in target_files if f.exists()}
     root_rules = Path(rules_dir)
     if root_rules.is_dir():
-        for other_path in sorted(root_rules.rglob("*.yaml")):
-            if (
-                other_path.name in _MANIFEST_FILENAMES
-                or any(part.startswith("_") for part in other_path.parts)
-                or other_path.resolve() in target_set
-            ):
+        for other_path in _iter_yaml_files(root_rules):
+            if other_path.name in _MANIFEST_FILENAMES or other_path.resolve() in target_set:
                 continue
             try:
                 engine = _infer_engine_from_path(other_path)
@@ -291,10 +273,8 @@ def _load_all_rules(rules_dir: Path | str = "rulesets") -> list[tuple[RuleEnvelo
     if not root.is_dir():
         return loaded
 
-    for yaml_path in sorted(root.rglob("*.yaml")):
-        if yaml_path.name in _MANIFEST_FILENAMES or any(
-            part.startswith("_") for part in yaml_path.parts
-        ):
+    for yaml_path in _iter_yaml_files(root):
+        if yaml_path.name in _MANIFEST_FILENAMES:
             continue
         try:
             engine = _infer_engine_from_path(yaml_path)
@@ -323,7 +303,6 @@ def _load_engine_adapters_and_states(
             for candidate in (
                 Path(rules_dir) / eng / "managed" / "index.yaml",
                 Path(rules_dir) / eng / "managed" / "index.yml",
-                Path(rules_dir) / eng / "managed.yaml",
             ):
                 if candidate.is_file():
                     try:

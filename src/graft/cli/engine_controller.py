@@ -28,6 +28,29 @@ logger = logging.getLogger("graft.cli.engine_controller")
 _NO_CHANGES_MSG = "No detection rules or managed manifests modified in current change scope."
 
 
+_MANIFEST_FILENAMES = ("index.yaml", "index.yml")
+
+
+def _iter_custom_yaml_files(directory: Path) -> list[Path]:
+    files = sorted(
+        f
+        for f in directory.rglob("*.yaml")
+        if not any(part.startswith("_") for part in f.parts)
+        and "managed" not in f.parts
+        and f.name not in _MANIFEST_FILENAMES
+    )
+    files.extend(
+        sorted(
+            f
+            for f in directory.rglob("*.yml")
+            if not any(part.startswith("_") for part in f.parts)
+            and "managed" not in f.parts
+            and f.name not in _MANIFEST_FILENAMES
+        )
+    )
+    return files
+
+
 class EngineCommandController:
     def __init__(self, manifest: EngineManifest, registry: EngineRegistry) -> None:
         self.manifest = manifest
@@ -41,9 +64,7 @@ class EngineCommandController:
         target_dir = custom_dir or Path(f"rulesets/{self.manifest.name}/custom")
         rules: list[RuleEnvelope] = []
         if target_dir.is_dir():
-            for rule_path in sorted(target_dir.rglob("*.yaml")):
-                if any(part.startswith("_") for part in rule_path.parts):
-                    continue
+            for rule_path in _iter_custom_yaml_files(target_dir):
                 if filter_paths is not None and (
                     rule_path.resolve() not in filter_paths and rule_path not in filter_paths
                 ):
@@ -108,26 +129,18 @@ class EngineCommandController:
             for p_str in raw_paths:
                 p = Path(p_str)
                 if p.is_dir():
-                    verify_paths.extend(
-                        sorted(
-                            f
-                            for f in p.rglob("*.yaml")
-                            if not any(part.startswith("_") for part in f.parts)
-                            and "managed" not in f.parts
-                        )
-                    )
-                elif p.is_file():
+                    verify_paths.extend(_iter_custom_yaml_files(p))
+                elif (
+                    p.is_file()
+                    and p.name not in _MANIFEST_FILENAMES
+                    and "managed" not in p.parts
+                    and not any(part.startswith("_") for part in p.parts)
+                ):
                     verify_paths.append(p)
         elif all_rules:
             default_dir = Path(f"rulesets/{self.manifest.name}/custom")
             if default_dir.is_dir():
-                verify_paths.extend(
-                    sorted(
-                        f
-                        for f in default_dir.rglob("*.yaml")
-                        if not any(part.startswith("_") for part in f.parts)
-                    )
-                )
+                verify_paths.extend(_iter_custom_yaml_files(default_dir))
         else:
             changed = get_changed_files()
             custom_dir = Path(f"rulesets/{self.manifest.name}/custom").resolve()
@@ -176,6 +189,8 @@ class EngineCommandController:
         for path in verify_paths:
             try:
                 rule = load_rule_from_yaml(path)
+                if rule.is_managed:
+                    continue
                 result = (
                     compiler.verify_rule(rule)
                     if hasattr(compiler, "verify_rule")
@@ -225,26 +240,18 @@ class EngineCommandController:
             for p_str in raw_paths:
                 p = Path(p_str)
                 if p.is_dir():
-                    target_paths.extend(
-                        sorted(
-                            f
-                            for f in p.rglob("*.yaml")
-                            if not any(part.startswith("_") for part in f.parts)
-                            and "managed" not in f.parts
-                        )
-                    )
-                elif p.is_file():
+                    target_paths.extend(_iter_custom_yaml_files(p))
+                elif (
+                    p.is_file()
+                    and p.name not in _MANIFEST_FILENAMES
+                    and "managed" not in p.parts
+                    and not any(part.startswith("_") for part in p.parts)
+                ):
                     target_paths.append(p)
         else:
             default_dir = Path(f"rulesets/{self.manifest.name}/custom")
             if default_dir.is_dir():
-                target_paths.extend(
-                    sorted(
-                        f
-                        for f in default_dir.rglob("*.yaml")
-                        if not any(part.startswith("_") for part in f.parts)
-                    )
-                )
+                target_paths.extend(_iter_custom_yaml_files(default_dir))
 
         if getattr(args, "changed_only", False):
             changed = get_changed_files()
@@ -259,7 +266,7 @@ class EngineCommandController:
         for tp in target_paths:
             try:
                 rule = load_rule_from_yaml(tp)
-                if rule.tests:
+                if rule.tests and not rule.is_managed:
                     rules_with_tests.append(rule)
             except Exception as exc:
                 logger.debug("Failed loading %s during test discovery: %s", tp, exc)
