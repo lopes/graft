@@ -1,6 +1,8 @@
+import dataclasses
 import re
 import textwrap
 import uuid
+from pathlib import Path
 
 from graft.core.models.compiler import CompilationDiagnostic, CompilationResult
 from graft.core.models.rule import RuleEnvelope, RuleMetadata
@@ -12,6 +14,10 @@ _UUID_REGEX = re.compile(
 )
 _RULE_HEADER_REGEX = re.compile(r"^\s*rule\s+([a-zA-Z0-9_]+)\s*\{", re.MULTILINE)
 _SECTION_HEADER_REGEX = re.compile(r"^\s*(events|match|condition):", re.MULTILINE)
+_MISSING_DATATABLE_DIAG_RE = re.compile(
+    r"data\s+table\s+(?:\(\s*(?P<paren>[a-zA-Z0-9_]+)\s*\)|%(?P<pct>[a-zA-Z0-9_]+))",
+    re.IGNORECASE,
+)
 
 
 def _sanitize_slug(raw: str) -> str:
@@ -189,7 +195,47 @@ class SecOpsCompilerAdapter(RuleCompilerPort):
             ":verifyRuleText",
             body={"ruleText": rule_text},
         )
-        return self._parse_response(response, header_offset=header_offset, rule_text=rule_text)
+        result = self._parse_response(response, header_offset=header_offset, rule_text=rule_text)
+        if result.success or not result.diagnostics:
+            return result
+
+        missing_local_tables: set[str] = set()
+        for diag in result.diagnostics:
+            for match in _MISSING_DATATABLE_DIAG_RE.finditer(diag.message):
+                ds_name = match.group("paren") or match.group("pct")
+                if ds_name and (
+                    (Path("datasets") / f"{ds_name}.yaml").is_file()
+                    or (Path("datasets") / f"{ds_name}.yml").is_file()
+                ):
+                    missing_local_tables.add(ds_name)
+
+        if not missing_local_tables:
+            return result
+
+        substituted_logic = rule.logic
+        for ds_name in sorted(missing_local_tables):
+            substituted_logic = re.sub(
+                rf"\bin\s+%{re.escape(ds_name)}\.value\b",
+                '= "graft_verify_placeholder"',
+                substituted_logic,
+            )
+            substituted_logic = re.sub(
+                rf"%{re.escape(ds_name)}\.value\b",
+                '"graft_verify_placeholder"',
+                substituted_logic,
+            )
+
+        if substituted_logic == rule.logic:
+            return result
+
+        sub_rule = dataclasses.replace(rule, logic=substituted_logic)
+        sub_text, sub_offset = synthesize_yaral_rule(sub_rule)
+        sub_response = self._client.request(
+            "POST",
+            ":verifyRuleText",
+            body={"ruleText": sub_text},
+        )
+        return self._parse_response(sub_response, header_offset=sub_offset, rule_text=sub_text)
 
     def _parse_response(
         self,

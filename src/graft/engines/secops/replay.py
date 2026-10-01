@@ -1,6 +1,10 @@
 import logging
+import re
 import uuid
+from pathlib import Path
 
+from graft.core.loader import load_dataset_from_yaml
+from graft.core.models.dataset import DatasetEnvelope
 from graft.core.models.rule import (
     BaseDeploymentConfig,
     RuleEnvelope,
@@ -8,11 +12,14 @@ from graft.core.models.rule import (
     TestVector,
 )
 from graft.core.ports.replay import ReplayHarnessPort, ReplayResult
+from graft.core.reconciler import DatasetReconciler
 from graft.engines.secops.client import SecOpsClient
 from graft.engines.secops.config import SecOpsConfig
+from graft.engines.secops.datasets import SecOpsDatasetAdapter
 from graft.engines.secops.deployer import SecOpsDeployerAdapter
 
 logger = logging.getLogger("graft.secops.replay")
+_DATASET_REF_RE = re.compile(r"%(?P<name>[a-zA-Z0-9_]+)\.value\b")
 
 
 class SecOpsReplayAdapter(ReplayHarnessPort):
@@ -20,10 +27,12 @@ class SecOpsReplayAdapter(ReplayHarnessPort):
         self,
         client: SecOpsClient,
         deployer: SecOpsDeployerAdapter | None = None,
+        datasets: SecOpsDatasetAdapter | None = None,
         config: SecOpsConfig | None = None,
     ) -> None:
         self._client = client
         self._deployer = deployer or SecOpsDeployerAdapter(client=client)
+        self._datasets = datasets or SecOpsDatasetAdapter(client=client)
         self._config = config
 
     @property
@@ -54,6 +63,20 @@ class SecOpsReplayAdapter(ReplayHarnessPort):
             logger.debug("Failed checking prod config for replay coordinates: %s", exc)
         return True
 
+    def _sync_referenced_local_datasets(self, logic: str) -> None:
+        referenced_names = sorted({m.group("name") for m in _DATASET_REF_RE.finditer(logic)})
+        if not referenced_names:
+            return
+        local_datasets: list[DatasetEnvelope] = []
+        for ds_name in referenced_names:
+            for ext in (".yaml", ".yml"):
+                candidate = Path("datasets") / f"{ds_name}{ext}"
+                if candidate.is_file():
+                    local_datasets.append(load_dataset_from_yaml(candidate))
+                    break
+        if local_datasets:
+            DatasetReconciler().apply(desired=tuple(local_datasets), port=self._datasets)
+
     def run_test_vector(self, rule: RuleEnvelope, vector: TestVector) -> ReplayResult:
         rule_id: str | None = None
         quarantine_name = f"graft_test_{rule.metadata.name}_{uuid.uuid4().hex[:8]}"
@@ -73,6 +96,9 @@ class SecOpsReplayAdapter(ReplayHarnessPort):
         )
 
         try:
+            # 0. Pre-sync any local datasets referenced by the rule into Staging
+            self._sync_referenced_local_datasets(rule.logic)
+
             # 1. Ingest synthetic UDM test events
             if vector.events:
                 events_payload = [e.payload for e in vector.events]

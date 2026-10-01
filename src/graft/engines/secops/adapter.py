@@ -7,6 +7,7 @@ from typing import Literal
 from graft.core.models.managed import ManagedState
 from graft.core.models.rule import BaseDeploymentConfig, RuleEnvelope, Runbook
 from graft.core.ports.compiler import RuleCompilerPort
+from graft.core.ports.dataset import DatasetPort
 from graft.core.ports.deployer import RuleDeployerPort
 from graft.core.ports.engine import EngineAdapter
 from graft.core.ports.managed import ManagedEnginePort
@@ -18,6 +19,7 @@ from graft.engines.secops.compiler import (
     synthesize_yaral_rule,
 )
 from graft.engines.secops.config import SecOpsConfig
+from graft.engines.secops.datasets import SecOpsDatasetAdapter
 from graft.engines.secops.deployer import SecOpsDeployerAdapter
 from graft.engines.secops.managed import SecOpsManagedAdapter
 from graft.engines.secops.managed_loader import (
@@ -64,6 +66,7 @@ class SecOpsAdapter(EngineAdapter):
         self._client: SecOpsClient | None = client
         self._compiler: SecOpsCompilerAdapter | None = None
         self._deployer: SecOpsDeployerAdapter | None = None
+        self._datasets: SecOpsDatasetAdapter | None = None
         self._managed: SecOpsManagedAdapter | None = None
         self._replay: SecOpsReplayAdapter | None = None
 
@@ -86,8 +89,14 @@ class SecOpsAdapter(EngineAdapter):
     def _init_adapters(self, client: SecOpsClient, config: SecOpsConfig | None) -> None:
         self._compiler = SecOpsCompilerAdapter(client=client)
         self._deployer = SecOpsDeployerAdapter(client=client)
+        self._datasets = SecOpsDatasetAdapter(client=client)
         self._managed = SecOpsManagedAdapter(client=client)
-        self._replay = SecOpsReplayAdapter(client=client, deployer=self._deployer, config=config)
+        self._replay = SecOpsReplayAdapter(
+            client=client,
+            deployer=self._deployer,
+            datasets=self._datasets,
+            config=config,
+        )
 
     def get_compiler(self) -> RuleCompilerPort | None:
         return self._compiler
@@ -100,6 +109,9 @@ class SecOpsAdapter(EngineAdapter):
 
     def get_replay(self) -> ReplayHarnessPort | None:
         return self._replay
+
+    def get_dataset(self) -> DatasetPort | None:
+        return self._datasets
 
     def are_rules_equal(self, desired: RuleEnvelope, remote: RuleEnvelope) -> bool:
         return secops_rule_content_matches(desired, remote)
