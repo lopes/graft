@@ -11,10 +11,10 @@ name: PR Quality & Verification Gates
     paths:
       - "src/**"
       - "rulesets/**"
-      - "schemas/**"
       - "tests/**"
       - "pyproject.toml"
       - "uv.lock"
+      - ".github/dependabot.yml"
       - ".github/workflows/pr-validation.yml"
 
 permissions:
@@ -43,7 +43,7 @@ jobs:
         run: uv python install 3.13
 
       - name: Install dependencies
-        run: uv sync
+        run: uv sync --locked
 
       - name: Gate 1 - Code formatting (ruff)
         run: uv run ruff format --check .
@@ -93,7 +93,7 @@ jobs:
         run: uv python install 3.13
 
       - name: Install dependencies
-        run: uv sync
+        run: uv sync --locked
 
       - name: Authenticate to Google Cloud via Workload Identity Federation
         id: auth

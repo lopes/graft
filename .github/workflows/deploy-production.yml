@@ -7,7 +7,6 @@ name: Deploy Production & Publish Catalogs
     paths:
       - "src/**"
       - "rulesets/**"
-      - "schemas/**"
       - "tests/**"
       - "pyproject.toml"
       - "uv.lock"
@@ -46,7 +45,7 @@ jobs:
         run: uv python install 3.13
 
       - name: Install dependencies
-        run: uv sync
+        run: uv sync --locked
 
       - name: Sanity check - Validate rules and manifests
         run: uv run graft lint

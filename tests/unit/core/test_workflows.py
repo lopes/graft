@@ -33,6 +33,9 @@ def test_pr_validation_workflow_structure() -> None:
     triggers = data.get("on") or data.get("pull_request")
     assert triggers is not None, "Workflow must define triggers"
     assert "pull_request" in triggers, "Workflow must trigger on pull_request"
+    pr_paths = triggers["pull_request"].get("paths", [])
+    assert "schemas/**" not in pr_paths, "Stale top-level schemas/** path filter must be removed"
+    assert ".github/dependabot.yml" in pr_paths, "Must trigger on .github/dependabot.yml changes"
 
     # 2. Least-privilege permissions
     permissions = data.get("permissions", {})
@@ -66,6 +69,10 @@ def test_pr_validation_workflow_structure() -> None:
     step_runs = [s.get("run", "") for s in all_steps if "run" in s]
     step_uses = [s.get("uses", "") for s in all_steps if "uses" in s]
 
+    sync_runs = [r for r in step_runs if "uv sync" in r]
+    assert sync_runs and all("uv sync --locked" in r for r in sync_runs), (
+        "All uv sync steps in pr-validation.yml must use --locked"
+    )
     assert any("ruff check" in r for r in step_runs), "Must execute ruff check"
     assert any("ruff format" in r for r in step_runs), "Must execute ruff format check"
     assert any("mypy" in r for r in step_runs), "Must execute mypy strict"
@@ -93,6 +100,8 @@ def test_deploy_production_workflow_structure() -> None:
     triggers = data.get("on") or data.get("push")
     assert triggers is not None, "Workflow must define triggers"
     assert "push" in triggers, "Workflow must trigger on push to main"
+    push_paths = triggers["push"].get("paths", [])
+    assert "schemas/**" not in push_paths, "Stale top-level schemas/** path filter must be removed"
 
     # 2. Least-privilege permissions
     permissions = data.get("permissions", {})
@@ -113,6 +122,10 @@ def test_deploy_production_workflow_structure() -> None:
     step_runs = [s.get("run", "") for s in all_steps if "run" in s]
     step_uses = [s.get("uses", "") for s in all_steps if "uses" in s]
 
+    sync_runs = [r for r in step_runs if "uv sync" in r]
+    assert sync_runs and all("uv sync --locked" in r for r in sync_runs), (
+        "All uv sync steps in deploy-production.yml must use --locked"
+    )
     assert any("actions/checkout@v7" in u for u in step_uses), "Must use actions/checkout@v7"
     assert any("astral-sh/setup-uv@v7" in u for u in step_uses), "Must use astral-sh/setup-uv@v7"
     assert any("google-github-actions/auth@v3" in u for u in step_uses), (
@@ -126,6 +139,26 @@ def test_deploy_production_workflow_structure() -> None:
     )
 
 
+def test_dependabot_configuration() -> None:
+    dependabot_path = Path(".github/dependabot.yml")
+    assert dependabot_path.is_file(), ".github/dependabot.yml must exist"
+
+    with dependabot_path.open("r", encoding="utf-8") as f:
+        data: dict[str, Any] = yaml.safe_load(f)
+
+    assert data.get("version") == 2
+    updates: list[dict[str, Any]] = data.get("updates", [])
+    ecosystems = {u.get("package-ecosystem"): u for u in updates}
+
+    assert "pip" not in ecosystems, "Dependabot must use 'uv' ecosystem instead of 'pip'"
+    assert "uv" in ecosystems, "Dependabot must configure 'uv' package-ecosystem"
+    assert "github-actions" in ecosystems, (
+        "Dependabot must configure 'github-actions' package-ecosystem"
+    )
+    assert ecosystems["uv"].get("commit-message", {}).get("prefix") == "deps"
+    assert ecosystems["github-actions"].get("commit-message", {}).get("prefix") == "ci"
+
+
 def test_pre_commit_hook_exists_and_is_executable() -> None:
     hook_path = Path(".githooks/pre-commit")
     assert hook_path.is_file(), ".githooks/pre-commit hook must exist"
@@ -137,8 +170,16 @@ def test_pre_commit_hook_exists_and_is_executable() -> None:
     )
 
     content = hook_path.read_text(encoding="utf-8")
+    assert "uv lock --check" in content, "Pre-commit hook must verify uv.lock integrity"
+    assert "mypy --strict" in content, "Pre-commit hook must execute mypy --strict"
     assert "graft lint" in content, "Pre-commit hook must execute graft lint"
     assert "ruff" in content, "Pre-commit hook must execute ruff"
+
+
+def test_gitignore_covers_generated_exports_and_layers() -> None:
+    content = Path(".gitignore").read_text(encoding="utf-8")
+    assert "exports/*" in content
+    assert "layers/" in content
 
 
 def test_workflows_do_not_reference_secrets_in_if_conditionals() -> None:

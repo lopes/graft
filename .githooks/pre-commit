@@ -11,28 +11,42 @@ set -eo pipefail
 
 echo "==> [Graft Pre-Commit] Running fast offline quality gates..."
 
-# 1. Code Formatting
+# 1. Lockfile Integrity
+echo "--> Checking lockfile synchronization (uv lock --check)..."
+uv lock --check || {
+    echo "[ERROR] uv.lock is out of sync with pyproject.toml. Run: uv lock"
+    exit 1
+}
+
+# 2. Code Formatting
 echo "--> Checking code formatting (ruff format)..."
 uv run ruff format --check . || {
     echo "[ERROR] Code formatting checks failed. Run: uv run ruff format ."
     exit 1
 }
 
-# 2. Code Linting
+# 3. Code Linting
 echo "--> Checking code quality & imports (ruff check)..."
 uv run ruff check . || {
     echo "[ERROR] Ruff lint checks failed. Run: uv run ruff check --fix ."
     exit 1
 }
 
-# 3. Detection Rule & Manifest Schema Validation (Draft 2020-12 + MITRE STIX)
+# 4. Static Type Checking
+echo "--> Checking strict static types (mypy --strict)..."
+uv run mypy --strict src tests || {
+    echo "[ERROR] Mypy strict type checks failed."
+    exit 1
+}
+
+# 5. Detection Rule & Manifest Schema Validation (Draft 2020-12 + MITRE STIX)
 echo "--> Validating detection rules & managed manifests (graft lint)..."
 uv run graft lint || {
     echo "[ERROR] Graft rule linting failed. Check schema errors above."
     exit 1
 }
 
-# 4. Fast Unit Test Suite (<1s)
+# 6. Fast Unit Test Suite (<1s)
 echo "--> Executing mock-isolated unit tests (pytest tests/unit)..."
 uv run pytest tests/unit -q || {
     echo "[ERROR] Unit test suite failed."

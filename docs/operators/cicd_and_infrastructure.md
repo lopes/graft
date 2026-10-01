@@ -120,7 +120,6 @@ To optimize runner efficiency and prevent unnecessary cloud API calls, both work
 paths:
   - "src/**"
   - "rulesets/**"
-  - "schemas/**"
   - "tests/**"
   - "pyproject.toml"
   - "uv.lock"
@@ -128,7 +127,7 @@ paths:
 ```
 
 ### Path Filtering Directives
-- **Triggered:** Any commit modifying core platform code (`src/`), detection rules (`rulesets/`), validation schemas (`schemas/`), test fixtures (`tests/`), dependencies, or workflow definitions triggers full CI/CD execution.
+- **Triggered:** Any commit modifying core platform code (`src/`), detection rules (`rulesets/`), test fixtures (`tests/`), dependencies, or workflow definitions triggers full CI/CD execution.
 - **Skipped:** Commits modifying exclusively documentation (`docs/`, `*.md`) or static visual assets (`assets/`) intentionally skip workflow execution.
 
 ---
@@ -237,22 +236,24 @@ jobs:
     if: github.repository == 'lopes/graft'
     steps:
       - name: Checkout repository (full history)
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
       - name: Install uv
-        uses: astral-sh/setup-uv@v5
+        uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
 
       - name: Set up Python 3.13
         run: uv python install 3.13
 
       - name: Install dependencies
-        run: uv sync
+        run: uv sync --locked
 
       - name: Authenticate via WIF
         id: auth
-        uses: google-github-actions/auth@v2
+        uses: google-github-actions/auth@v3
         with:
           token_format: "access_token"
           workload_identity_provider: ${{ secrets.GRAFT_SECOPS_WIF_PROVIDER }}
