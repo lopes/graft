@@ -75,6 +75,7 @@ capabilities:
   syntax_verification: true
   managed_rules: false
   replay_testing: false
+  datasets: false
 
 environments:
   - staging

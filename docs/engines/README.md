@@ -10,10 +10,14 @@ Every engine in Graft is packaged as a self-contained, encapsulated module under
 
 ```text
 graft/
+├── datasets/
+│   ├── _archived/            # Decommissioned datasets preserved for audit history
+│   └── <name>.yaml           # 2-block reusable string datasets shared across engines
 ├── src/graft/engines/<engine>/
 │   ├── engine.yaml           # Declarative manifest (capabilities, envs, vars)
 │   ├── adapter.py            # Primary EngineAdapter protocol implementation
 │   ├── config.py             # Tenant coordinates & auth resolution
+│   ├── datasets.py           # Dataset synchronization (DatasetPort)
 │   ├── compiler.py           # Syntax verification (RuleCompilerPort)
 │   ├── deployer.py           # Remote rule CRUD (RuleDeployerPort)
 │   ├── managed.py            # Managed state sync (ManagedEnginePort)
@@ -44,10 +48,11 @@ graft <engine> [subcommands...]
 For example, the Google SecOps engine mounts:
 - `graft secops new <name>`: Bootstrap a new SecOps YARA-L rule envelope.
 - `graft secops verify [paths...]`: Lint locally and dry-run YARA-L syntax via Chronicle `:verifyRuleText`.
-- `graft secops test [paths...]`: Execute synthetic UDM replay tests in isolated staging quarantine.
-- `graft secops diff`: Compute delta between Git and SecOps tenant (supports `--target custom|managed|all` and `--all` for full catalog drift).
-- `graft secops apply`: Apply desired Git state to SecOps tenant (supports `--target custom|managed|all` and `--all` for full convergence).
-- `graft secops pull`: Pull detection rules and managed state from SecOps tenant to local repository.
+- `graft secops test [paths...]`: Execute synthetic UDM replay tests in isolated staging quarantine (pre-syncing referenced local datasets).
+- `graft secops diff`: Compute delta between Git and SecOps tenant (supports `--target datasets|custom|managed|all` and `--all` for full catalog drift).
+- `graft secops apply`: Apply desired Git state to SecOps tenant in order (`datasets` $\rightarrow$ `custom` $\rightarrow$ `managed`).
+- `graft secops pull`: Pull detection rules, managed state, or compatible datasets (`--target datasets`) from SecOps tenant to local repository.
+- `graft secops datasets {diff,apply,pull}`: Granular commands for Google SecOps Data Tables (`datasets/<name>.yaml`).
 - `graft secops managed {diff,apply,pull}`: Granular commands for Google Curated Rule Sets and exclusions.
 
 ---

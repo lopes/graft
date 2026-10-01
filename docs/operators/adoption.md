@@ -82,6 +82,9 @@ uv run graft secops pull --target custom --env production --out-dir rulesets/sec
 # Pull vendor-managed curated content manifest only
 uv run graft secops pull --target managed --env production --out-manifest rulesets/secops/managed/index.yaml
 
+# Opt-in: Pull compatible 1-column STRING Data Tables (originalColumn == "value") into datasets/
+uv run graft secops pull --target datasets --env production --out-datasets-dir datasets
+
 # Force overwrite existing local files without confirmation prompts
 uv run graft secops pull --env production --force
 ```
@@ -106,6 +109,14 @@ When pulling custom rules via `RuleDeployerPort.list_rules()` and `EngineAdapter
    - **Example (Google SecOps):** [`deconstruct_yaral_rule`](../../src/graft/engines/secops/compiler.py#L59) strips the outer `rule <name> { meta: ... }` wrapper, normalizes `ru_<uuid>` server IDs, and preserves clean YARA-L sections (`events:`, `match:`, `outcome:`, `condition:`).
 3. Graft populates default placeholder runbook sections (`context`, `triage`, `response`). Because Graft schemas strictly require non-empty `owners`, `mitre`, `tags`, and `references`, `graft lint` will intentionally flag freshly pulled rules until operators complete Epoch 2 enrichment.
 4. Each rule is saved to `rulesets/<engine>/custom/<rule_name>.yaml`. Existing files are protected against accidental overwrites unless `--force` is supplied.
+
+### 4. How Datasets Are Ingested (Opt-In: `--target datasets`)
+
+Because SIEM tenants frequently host large, multi-column CMDB exports or automated threat intelligence feeds that are not managed by Graft, `graft <engine> pull` (`--target all`) intentionally excludes datasets by default.
+
+When an operator explicitly runs `graft <engine> pull --target datasets` (or `graft <engine> datasets pull`):
+1. Graft calls `DatasetPort.list_datasets()`, which inspects remote tables and filters strictly for compatible Graft-shaped tables (in Google SecOps: 1-column `STRING` Data Tables whose column is named `value`, with a valid snake_case identifier and `1..1,000` non-empty rows). Incompatible multi-column or oversized tables are skipped with an informational log.
+2. Each compatible dataset is written to `datasets/<name>.yaml` with `owners: []`, `tags: []`, and `references: []` ready for Epoch 2 enrichment.
 
 ---
 

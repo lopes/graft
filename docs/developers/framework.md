@@ -26,6 +26,7 @@ flowchart TD
         
         subgraph Ports["Port Protocols (typing.Protocol)"]
             P_ADAPTER["EngineAdapter (Composite)"]
+            P_DATASET["DatasetPort"]
             P_COMPILER["RuleCompilerPort"]
             P_DEPLOYER["RuleDeployerPort"]
             P_MANAGED["ManagedEnginePort"]
@@ -33,23 +34,24 @@ flowchart TD
         end
 
         subgraph CoreServices["Core Services & Domain Models"]
-            MODELS["Domain Models<br/>(RuleEnvelope, ManagedState, etc.)"]
-            RECONCILER["GitOps & Custom Rule Reconcilers"]
-            VALIDATORS["SchemaValidator & MitreValidator"]
-            VCS["Git Blame & Change Detection"]
+            MODELS["Domain Models<br/>(DatasetEnvelope, RuleEnvelope, ManagedState, etc.)"]
+            RECONCILER["Dataset, GitOps &amp; Custom Rule Reconcilers"]
+            VALIDATORS["SchemaValidator &amp; MitreValidator"]
+            VCS["Git Blame &amp; Change Detection"]
         end
     end
 
     subgraph DrivenAdapters["Driven Adapters (src/graft/engines/)"]
         direction TB
-        SECOPS["Google SecOps Adapter<br/>• YARA-L Compiler<br/>• Chronicle REST Deployer<br/>• Curated RuleSet Reconciler<br/>• UDM Staging Replay"]
-        SENTINEL["Microsoft Sentinel Adapter<br/>• KQL Compiler<br/>• Azure ARM/REST Deployer<br/>• Analytics Templates"]
-        SPLUNK["Splunk Adapter<br/>• SPL Compiler<br/>• Saved Searches REST API"]
+        SECOPS["Google SecOps Adapter<br/>• Data Tables Dataset Adapter<br/>• YARA-L Compiler<br/>• Chronicle REST Deployer<br/>• Curated RuleSet Reconciler<br/>• UDM Staging Replay"]
+        SENTINEL["Microsoft Sentinel Adapter<br/>• Watchlists Dataset Adapter<br/>• KQL Compiler<br/>• Azure ARM/REST Deployer"]
+        SPLUNK["Splunk Adapter<br/>• KV/CSV Lookups Adapter<br/>• SPL Compiler<br/>• Saved Searches REST API"]
     end
 
     DrivingAdapters --> REGISTRY
     REGISTRY --> ENGINE_CTRL
     ENGINE_CTRL --> P_ADAPTER
+    P_ADAPTER --> P_DATASET
     P_ADAPTER --> P_COMPILER
     P_ADAPTER --> P_DEPLOYER
     P_ADAPTER --> P_MANAGED
@@ -65,13 +67,13 @@ flowchart TD
    - The CLI dispatcher initializes [`EngineRegistry`](../../src/graft/core/engine_registry.py), inspects all discovered engine manifests, and registers CLI subcommands dynamically.
    - Dispatches user requests to [`EngineCommandController`](../../src/graft/cli/engine_controller.py).
 2. **Driving Core (`src/graft/core/`):**
-   - 100% engine-agnostic domain models (`RuleEnvelope`, `ManagedState`, `TestVector`, `CompilationResult`, `ReconciliationDiff`).
+   - 100% engine-agnostic domain models (`DatasetEnvelope`, `RuleEnvelope`, `ManagedState`, `TestVector`, `CompilationResult`, `ReconciliationDiff`).
    - Declares the abstract port contracts using Python's `typing.Protocol` with `@runtime_checkable`.
-   - Provides reusable business logic: Draft 2020-12 schema validation, STIX MITRE ATT&CK taxonomy validation, Git diff/blame resolution, zero-cost state reconciliation, and report generation (ATT&CK Navigator layers, Markdown/CSV catalogs).
+   - Provides reusable business logic: Draft 2020-12 schema validation, STIX MITRE ATT&CK taxonomy validation, dataset cross-reference linting, Git diff/blame resolution, zero-cost state reconciliation, and report generation (ATT&CK Navigator layers, Markdown/CSV catalogs).
    - **Strict Constraint:** Core contains **zero imports** of cloud SDKs, SIEM client libraries, or HTTP clients.
 3. **Driven Adapters (`src/graft/engines/<engine>/`):**
    - Concrete implementations of the port protocols.
-   - Encapsulates all vendor-specific REST API calls, OAuth2 / Workload Identity Federation authentication, query compilation/deconstruction, and synthetic replay execution.
+   - Encapsulates all vendor-specific REST API calls, OAuth2 / Workload Identity Federation authentication, query compilation/deconstruction, dataset synchronization, and synthetic replay execution.
    - Lives in isolated, self-contained packages under `src/graft/engines/`.
 
 ---
@@ -83,13 +85,14 @@ To maintain strict architectural boundaries, responsibilities are cleanly divide
 | Capability / Concern | Handled by Driving Core | Handled by Driven Adapter |
 | :--- | :--- | :--- |
 | **Rule Representation** | Provides universal `RuleEnvelope` model (5-block custom rules and 4-block registered managed rules) and base JSON schemas (`base_custom.schema.json`, `base_managed.schema.json`). | Maps custom envelope fields (`metadata`, `logic`, `deployment`) to engine-native payload formats, and resolves registered managed rule status from `managed/index.yaml`. |
-| **Detection Rule Schema** | Loads and validates base envelope structures (`base_custom.schema.json` for `custom/*.yaml` and `base_managed.schema.json` for `managed/<rule>.yaml`). | Provides `schemas/custom.schema.json` (extending `base_custom.schema.json`) for custom rules and `schemas/managed.schema.json` for `managed/index.yaml`. |
-| **Reconciliation Logic** | Computes diffs, evaluates Scoped vs. Full Catalog scopes, and determines required mutations. | Executes atomic remote API calls (`create_rule`, `update_rule`, `set_rule_state`, `set_ruleset_deployment`). |
+| **Reusable Datasets** | Provides `DatasetEnvelope` model (`datasets/<name>.yaml`), `base_dataset.schema.json`, `%<name>.value` rule cross-validation, and additive `DatasetReconciler`. | Implements `DatasetPort` (`list_datasets`, `create_dataset`, `update_dataset`) mapping 1-D string lists to SIEM-native lookup tables (e.g., Google SecOps Data Tables with a single `STRING` column named `value`). |
+| **Detection Rule Schema** | Loads and validates base envelope structures (`base_custom.schema.json` for `custom/*.yaml`, `base_managed.schema.json` for `managed/<rule>.yaml`, and `base_dataset.schema.json` for `datasets/*.yaml`). | Provides `schemas/custom.schema.json` (extending `base_custom.schema.json`) for custom rules and `schemas/managed.schema.json` for `managed/index.yaml`. |
+| **Reconciliation Logic** | Computes diffs, evaluates Scoped vs. Full Catalog scopes, and enforces execution order (`Datasets` $\rightarrow$ `Custom Rules` $\rightarrow$ `Managed Content`). | Executes atomic remote API calls (`create_dataset`, `update_dataset`, `create_rule`, `update_rule`, `set_rule_state`, `set_ruleset_deployment`). |
 | **Authentication & HTTP** | Manages environment variable resolution and `.env` loading. | Establishes authenticated sessions (STS/WIF, OAuth2, API tokens) and issues HTTP requests via `urllib.request`. |
-| **Syntax Verification** | Orchestrates file discovery and aggregates compiler results. | Invokes the vendor's syntax validation API (e.g., Chronicle `:verifyRuleText` or Azure API syntax check). |
-| **Synthetic Replay** | Parses `tests:` block fixtures and evaluates expected match counts. | Transports synthetic events to staging infrastructure or non-alerting quarantine and executes detection evaluation. |
+| **Syntax Verification** | Orchestrates file discovery and aggregates compiler results. | Invokes the vendor's syntax validation API (e.g., Chronicle `:verifyRuleText` with local dataset placeholder fallback or Azure API syntax check). |
+| **Synthetic Replay** | Parses `tests:` block fixtures and evaluates expected match counts. | Pre-syncs referenced local datasets to staging, transports synthetic events to staging quarantine, and executes detection evaluation. |
 | **Vendor Managed Content** | Validates `managed/index.yaml` against `schemas/managed.schema.json`, computes exclusion/ruleset diffs, and enforces 1-to-1 `managed.id` uniqueness and existence against `index.yaml`. | Defines the engine-specific `managed/index.yaml` structure with a unique `id` per managed rule/ruleset, interacts with vendor curated rules APIs, and implements `has_managed_rule_id`. |
-| **Logging & Diagnostics** | Configures UTC ISO-8601 formatting (`graft.cli`), logs rule/exclusion CRUD lifecycle (`INFO`), logs failure context (`ERROR`), and emits partial-progress abort summaries (`graft.reconciler`). | Logs HTTP retry backoffs (`WARNING`), multi-step partial mutation warnings (`WARNING`), and low-level API sub-steps (`DEBUG`) under `graft.<engine>.*`; raises exceptions containing HTTP status, vendor status code, method, and endpoint path. |
+| **Logging & Diagnostics** | Configures UTC ISO-8601 formatting (`graft.cli`), logs dataset/rule/exclusion CRUD lifecycle (`INFO`), logs failure context (`ERROR`), and emits partial-progress abort summaries (`graft.reconciler`). | Logs HTTP retry backoffs (`WARNING`), multi-step partial mutation warnings (`WARNING`), and low-level API sub-steps (`DEBUG`) under `graft.<engine>.*`; raises exceptions containing HTTP status, vendor status code, method, and endpoint path. |
 
 ---
 
@@ -107,6 +110,7 @@ from typing import Protocol, runtime_checkable
 from graft.core.models.managed import ManagedState
 from graft.core.models.rule import RuleEnvelope
 from graft.core.ports.compiler import RuleCompilerPort
+from graft.core.ports.dataset import DatasetPort
 from graft.core.ports.deployer import RuleDeployerPort
 from graft.core.ports.managed import ManagedEnginePort
 from graft.core.ports.replay import ReplayHarnessPort
@@ -123,6 +127,8 @@ class EngineAdapter(Protocol):
     def get_managed(self) -> ManagedEnginePort | None: ...
 
     def get_replay(self) -> ReplayHarnessPort | None: ...
+
+    def get_datasets(self) -> DatasetPort | None: ...
 
     def resolve_deployment_status(
         self,
@@ -142,7 +148,7 @@ class EngineAdapter(Protocol):
 ```
 
 The composite adapter acts as a capabilities factory and lifecycle hook provider:
-- **Port Factories (`get_compiler`, `get_deployer`, `get_managed`, `get_replay`):** Return the concrete port implementation or `None` when a capability is unsupported.
+- **Port Factories (`get_compiler`, `get_deployer`, `get_managed`, `get_replay`, `get_datasets`):** Return the concrete port implementation or `None` when a capability is unsupported.
 - **`resolve_deployment_status(rule, managed_state)`:** Translates engine-specific deployment toggles into an engine-agnostic status (`enabled`, `silent`, `disabled`). For custom rules (`rule.is_managed == False`), it inspects `rule.deployment`; for registered managed rules (`rule.is_managed == True`), it resolves the live deployment status from `managed_state` (`rulesets/<engine>/managed/index.yaml`).
 - **`are_rules_equal(desired, remote)`:** Compares a desired Git `RuleEnvelope` against a remote tenant `RuleEnvelope` during `diff`/`apply` (defaults to trimmed `logic` comparison; engines that compile metadata into the query payload, such as `SecOpsAdapter`, override this to compare compiled payloads).
 - **`deconstruct_rule(remote_rule)`:** Extracts embedded metadata from a raw remote rule during `pull` (defaults to returning `remote_rule` unchanged).
@@ -151,7 +157,28 @@ The composite adapter acts as a capabilities factory and lifecycle hook provider
 
 ---
 
-### 2. Rule Compiler Port: `RuleCompilerPort`
+### 2. Dataset Port: `DatasetPort`
+Defined in [`src/graft/core/ports/dataset.py`](../../src/graft/core/ports/dataset.py):
+
+```python
+from typing import Protocol, runtime_checkable
+from graft.core.models.dataset import DatasetEnvelope
+
+
+@runtime_checkable
+class DatasetPort(Protocol):
+    def list_datasets(self) -> tuple[DatasetEnvelope, ...]: ...
+
+    def create_dataset(self, dataset: DatasetEnvelope) -> str: ...
+
+    def update_dataset(self, dataset: DatasetEnvelope) -> None: ...
+```
+
+Note that `DatasetPort` intentionally omits `delete_dataset`: Graft reconciles datasets under strict additive coexistence so unmanaged SIEM tables are never deleted.
+
+---
+
+### 3. Rule Compiler Port: `RuleCompilerPort`
 Defined in [`src/graft/core/ports/compiler.py`](../../src/graft/core/ports/compiler.py):
 
 ```python
@@ -177,7 +204,7 @@ class CompilationResult:
 
 ---
 
-### 3. Rule Deployer Port: `RuleDeployerPort`
+### 4. Rule Deployer Port: `RuleDeployerPort`
 Defined in [`src/graft/core/ports/deployer.py`](../../src/graft/core/ports/deployer.py):
 
 ```python
@@ -199,7 +226,7 @@ class RuleDeployerPort(Protocol):
 
 ---
 
-### 4. Managed Content Port: `ManagedEnginePort`
+### 5. Managed Content Port: `ManagedEnginePort`
 Defined in [`src/graft/core/ports/managed.py`](../../src/graft/core/ports/managed.py):
 
 ```python
@@ -230,7 +257,7 @@ class ManagedEnginePort(Protocol):
 
 ---
 
-### 5. Replay Harness Port: `ReplayHarnessPort`
+### 6. Replay Harness Port: `ReplayHarnessPort`
 Defined in [`src/graft/core/ports/replay.py`](../../src/graft/core/ports/replay.py):
 
 ```python
@@ -262,10 +289,10 @@ In modern SIEM architectures, detection content falls into two fundamentally dis
 
 ### 2. Strict Optionality via `capabilities`
 
-Graft recognizes that **not all engines support both types of content**:
+Graft recognizes that **not all engines support all capabilities**:
 - A traditional log SIEM (e.g., Elasticsearch or Splunk) may only have custom detection queries and no vendor-managed curated rule subscription.
 - A managed detection service or posture manager might only expose curated rule packages and customer exclusions without arbitrary query execution.
-- Some platforms support both (e.g., Google SecOps with YARA-L custom rules and Google Cloud Curated Rule Sets).
+- Some platforms support reusable lookup datasets, custom rules, and vendor-managed curated content simultaneously (e.g., Google SecOps with Data Tables, YARA-L custom rules, and Google Cloud Curated Rule Sets).
 
 Graft enforces strict optionality. Engines declare their supported feature set in their `engine.yaml` manifest:
 
@@ -275,6 +302,7 @@ capabilities:
   syntax_verification: true   # Engine supports pre-merge syntax dry-runs
   managed_rules: false        # Engine DOES NOT have vendor-curated content
   replay_testing: false       # Engine DOES NOT have synthetic replay APIs
+  datasets: false             # Engine DOES NOT synchronize reusable string datasets
 ```
 
 ### 3. Managed Content Index (`managed/index.yaml`) & Registered Rule Contract (For Engine Programmers)
@@ -333,28 +361,30 @@ flowchart TD
         R_TEST["Provision 'graft &lt;engine&gt; test'"]
     end
 
-    subgraph ManagedBranch["managed_rules: true"]
-        M_CMD["Provision 'graft &lt;engine&gt; managed'<br/>(diff, apply, pull)"]
-        M_TARGET["Extend --target options:<br/>['custom', 'managed', 'all']"]
+    subgraph DatasetsBranch["datasets: true"]
+        D_CMD["Provision 'graft &lt;engine&gt; datasets'<br/>(diff, apply, pull)"]
+        D_TARGET["Include 'datasets' in --target options"]
     end
 
-    subgraph ManagedDisabled["managed_rules: false"]
-        M_RESTRICT["Restrict --target options strictly to:<br/>['custom']"]
+    subgraph ManagedBranch["managed_rules: true"]
+        M_CMD["Provision 'graft &lt;engine&gt; managed'<br/>(diff, apply, pull)"]
+        M_TARGET["Include 'managed' in --target options"]
     end
 
     CAPS -- "custom_rules = true" --> CustomBranch
     CAPS -- "syntax_verification = true" --> SyntaxBranch
     CAPS -- "replay_testing = true" --> ReplayBranch
+    CAPS -- "datasets = true" --> DatasetsBranch
     CAPS -- "managed_rules = true" --> ManagedBranch
-    CAPS -- "managed_rules = false" --> ManagedDisabled
 ```
 
 ### CLI Dynamic Adaptation Rules:
 1. If `custom_rules: true`: Core registers `new`, `diff`, `apply`, and `pull`.
-2. If `managed_rules: true`: Core registers the `managed` subcommand (`managed diff`, `managed apply`, `managed pull`) and enables `--target all|custom|managed` on `diff`, `apply`, and `pull`.
-3. If `managed_rules: false`: The `managed` subcommand is completely omitted from the CLI help text, and `--target` on `diff/apply/pull` is locked strictly to `["custom"]`.
-4. If `syntax_verification: true`: Core registers the `verify` command.
-5. If `replay_testing: true`: Core registers the `test` command.
+2. If `datasets: true`: Core registers the `datasets` subcommand (`datasets diff`, `datasets apply`, `datasets pull`) and adds `datasets` to `--target` on `diff`, `apply`, and `pull`.
+3. If `managed_rules: true`: Core registers the `managed` subcommand (`managed diff`, `managed apply`, `managed pull`) and adds `managed` to `--target` on `diff`, `apply`, and `pull`.
+4. If both `datasets: false` and `managed_rules: false`: The `datasets` and `managed` subcommands are omitted from CLI help text, and `--target` on `diff/apply/pull` is locked strictly to `["custom"]`.
+5. If `syntax_verification: true`: Core registers the `verify` command.
+6. If `replay_testing: true`: Core registers the `test` command.
 
 ---
 
@@ -364,14 +394,15 @@ Graft dynamically discovers engines without requiring hardcoded imports in Core:
 
 1. **Manifest Discovery:** At startup, `EngineRegistry._discover()` scans all subdirectories under `src/graft/engines/` for `engine.yaml`.
 2. **Manifest Validation:** Every manifest is validated against [`src/graft/core/schemas/engine_manifest.schema.json`](../../src/graft/core/schemas/engine_manifest.schema.json).
-3. **Rule & Manifest Schema Discovery:** When `graft lint` validates a rule or manifest for an engine, [`SchemaValidator`](../../src/graft/core/validation/schema_validator.py) resolves schemas using a consistent `custom` / `managed` naming convention:
+3. **Dataset, Rule & Manifest Schema Discovery:** When `graft lint` validates datasets, rules, or manifests, [`SchemaValidator`](../../src/graft/core/validation/schema_validator.py) resolves schemas using a consistent naming convention:
    ```text
+   src/graft/core/schemas/base_dataset.schema.json      # Base 2-block reusable string dataset envelope
    src/graft/core/schemas/base_custom.schema.json       # Base 5-block custom rule envelope
    src/graft/core/schemas/base_managed.schema.json      # Base 4-block registered managed rule envelope
    src/graft/engines/<engine>/schemas/custom.schema.json  # Engine custom rule schema (extends base_custom.schema.json)
    src/graft/engines/<engine>/schemas/managed.schema.json # Engine managed/index.yaml schema
    ```
-   Core validates `rulesets/<engine>/custom/*.yaml` against `<engine>/schemas/custom.schema.json`, `rulesets/<engine>/managed/<rule>.yaml` against `base_managed.schema.json`, and `rulesets/<engine>/managed/index.yaml` against `<engine>/schemas/managed.schema.json` without leaking vendor specifics into Core.
+   Core validates `datasets/*.yaml` against `base_dataset.schema.json`, `rulesets/<engine>/custom/*.yaml` against `<engine>/schemas/custom.schema.json`, `rulesets/<engine>/managed/<rule>.yaml` against `base_managed.schema.json`, and `rulesets/<engine>/managed/index.yaml` against `<engine>/schemas/managed.schema.json` without leaking vendor specifics into Core.
 4. **Adapter Instantiation:** When an engine command is executed, Core dynamically imports the `adapter_class` declared in the manifest (e.g., `graft.engines.sentinel.adapter:SentinelAdapter`), instantiates it with the target environment (`env="production"`), and verifies that it implements [`EngineAdapter`](../../src/graft/core/ports/engine.py).
 
 ---

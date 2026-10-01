@@ -16,6 +16,7 @@ This cookbook provides practical, copy-pasteable recipes for everyday detection 
 8. [Recipe 8: Safely Disabling or Deprecating a Rule](#recipe-8-safely-disabling-or-deprecating-a-rule)
 9. [Recipe 9: Generating MITRE ATT&CK Matrices & Catalogs](#recipe-9-generating-mitre-attck-matrices--catalogs)
 10. [Recipe 10: Registering & Mapping a Vendor-Managed Rule](#recipe-10-registering--mapping-a-vendor-managed-rule)
+11. [Recipe 11: Creating & Referencing Reusable Datasets (`datasets/<name>.yaml`)](#recipe-11-creating--referencing-reusable-datasets-datasetsnameyaml)
 
 ---
 
@@ -404,4 +405,73 @@ graft lint
 # View the registered managed rule alongside custom rules (rule_type: managed)
 graft export catalog
 graft export matrix --format table
+```
+
+---
+
+## Recipe 11: Creating & Referencing Reusable Datasets (`datasets/<name>.yaml`)
+
+### Objective
+Create a reusable, engine-agnostic string dataset (`datasets/<name>.yaml`) for authorized scanner or assessment IP addresses, reference it inside a YARA-L 2.0 detection rule (`%<name>.value`), validate offline via `graft lint`, and synchronize both to Google SecOps Data Tables.
+
+### Step 1: Scaffold the Dataset
+Use a plural noun phrase (`<context>_<entity_plural>`) for the dataset name:
+```bash
+graft new dataset known_scanner_ips
+```
+
+### Step 2: Populate `metadata` and `values`
+Edit [`datasets/known_scanner_ips.yaml`](../../datasets/known_scanner_ips.yaml) (validated against [`base_dataset.schema.json`](../../src/graft/core/schemas/base_dataset.schema.json)):
+```yaml
+metadata:
+  name: "known_scanner_ips"
+  description: "Internal vulnerability management scanner IP addresses excluded from scan detections."
+  owners:
+    - "Detection Engineering"
+  tags:
+    - "network"
+    - "scanners"
+  references:
+    - "https://lopes.id/log/detection-rules-netscan-portscan/"
+
+values:
+  - "10.240.10.15"  # Primary US-East vulnerability scanner
+  - "10.240.10.16"  # Secondary US-West vulnerability scanner
+  - "172.16.100.50" # Internal DMZ compliance scanner
+```
+
+### Step 3: Reference `%<name>.value` in Detection Logic
+In [`rulesets/secops/custom/multiple_hosts_scanned.yaml`](../../rulesets/secops/custom/multiple_hosts_scanned.yaml), reference the dataset's canonical `.value` column:
+```yaml
+logic: |
+  events:
+    $net.metadata.event_type = "NETWORK_CONNECTION"
+    $net.principal.ip != ""
+    $net.target.ip != ""
+    not $net.principal.ip in %known_scanner_ips.value
+    not $net.principal.ip in %security_assessment_ips.value
+    $src_ip = $net.principal.ip
+    $dst_ip = $net.target.ip
+
+  match:
+    $src_ip over 5m
+
+  outcome:
+    $unique_target_ip_count = count_distinct($dst_ip)
+
+  condition:
+    $net and $unique_target_ip_count > 10
+```
+
+### Step 4: Validate, Verify & Synchronize
+```bash
+# 1. Offline schema and dataset cross-reference validation (<100ms)
+graft lint
+
+# 2. Dry-run YARA-L syntax (substitutes placeholder if dataset is not yet in SecOps)
+graft secops verify rulesets/secops/custom/multiple_hosts_scanned.yaml
+
+# 3. Preview and apply (synchronizes Datasets first, then Custom Rules)
+graft secops diff --env production
+graft secops apply --env production
 ```

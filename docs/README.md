@@ -44,18 +44,19 @@ flowchart TD
 Regardless of your persona, three foundational principles govern the platform:
 
 ### 1. Hexagonal Architecture (Ports & Adapters)
-- **Driving Core (`src/graft/core/`):** 100% engine-agnostic domain logic. Implements rule parsing, schema validation, STIX MITRE matrices, Git blame extraction, and catalog export. **Zero imports of cloud SDKs or SIEM clients.**
-- **Engine Ports (`src/graft/core/ports/`):** Strict `typing.Protocol` interfaces defining granular capabilities ([`RuleCompilerPort`](../src/graft/core/ports/compiler.py), [`RuleDeployerPort`](../src/graft/core/ports/deployer.py), [`ManagedEnginePort`](../src/graft/core/ports/managed.py), [`ReplayHarnessPort`](../src/graft/core/ports/replay.py)) and the composite [`EngineAdapter`](../src/graft/core/ports/engine.py).
+- **Driving Core (`src/graft/core/`):** 100% engine-agnostic domain logic. Implements rule and dataset parsing, schema validation, STIX MITRE matrices, Git blame extraction, and catalog export. **Zero imports of cloud SDKs or SIEM clients.**
+- **Engine Ports (`src/graft/core/ports/`):** Strict `typing.Protocol` interfaces defining granular capabilities ([`DatasetPort`](../src/graft/core/ports/dataset.py), [`RuleCompilerPort`](../src/graft/core/ports/compiler.py), [`RuleDeployerPort`](../src/graft/core/ports/deployer.py), [`ManagedEnginePort`](../src/graft/core/ports/managed.py), [`ReplayHarnessPort`](../src/graft/core/ports/replay.py)) and the composite [`EngineAdapter`](../src/graft/core/ports/engine.py).
 - **Driven Engines (`src/graft/engines/`):** Self-contained, encapsulated packages (e.g., `secops`) carrying the full burden of translating external vendor APIs and query syntaxes. Core never adapts to an engine; engines adapt to Core.
 
-### 2. Dual-Track Content Governance
-Graft organizes detection content into two separate, version-controlled tracks:
+### 2. Multi-Track Content Governance
+Graft organizes detection content into three version-controlled tracks:
+- **Engine-Agnostic Datasets (`datasets/<name>.yaml`):** Reusable 2-block string lists (`metadata`, `values`) shared across engines and synchronized to SIEM-native lookup tables (e.g., Google SecOps Data Tables) via additive coexistence.
 - **Custom Rules (`rulesets/<engine>/custom/*.yaml`):** Bespoke organizational detections authored in a standardized 5-block envelope (`metadata`, `logic`, `deployment`, `runbook`, `tests`).
 - **Managed Vendor Content (`rulesets/<engine>/managed/`):** Consolidated manifest (`managed/index.yaml`) managing deployment state (`PRECISE` vs. `BROAD`, `enabled`, `alerting`) and active exclusions for vendor-provided rulesets, paired with optional 4-block registered managed rule envelopes (`managed/<rule_name>.yaml`) for MITRE ATT&CK coverage and SOC runbooks.
 
 ### 3. GitOps Reconciliation Lifecycle
-Git is declared the single authoritative Source of Truth for detection state:
-- **Scoped Reconciliation (Default):** Restricts diffs and deployments strictly to rules touched in the current Git branch or working tree (`graft <engine> diff / apply`). Keeps PR reviews focused and minimizes blast radius.
+Git is declared the single authoritative Source of Truth for detection state, synchronized in strict dependency order (**1. Datasets $\rightarrow$ 2. Custom Rules $\rightarrow$ 3. Managed Content**):
+- **Scoped Reconciliation (Default):** Restricts diffs and deployments strictly to datasets and rules touched in the current Git branch or working tree (`graft <engine> diff / apply`). Keeps PR reviews focused and minimizes blast radius.
 - **Full Catalog Reconciliation (`--all`):** Evaluates the entire repository catalog against the live tenant (`graft <engine> diff --all / apply --all`). Automatically detects and heals out-of-band console drift.
 
 ---

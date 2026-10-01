@@ -114,7 +114,7 @@ def test_core_and_cli_have_no_hardcoded_secops_coupled_branches() -> None:
 
 
 def test_agent_skills_frontmatter_and_structure() -> None:
-    expected_skills = ("scaffold-rule", "scaffold-tests", "review-rule")
+    expected_skills = ("scaffold-dataset", "scaffold-rule", "scaffold-tests", "review-rule")
     skills_root = Path(".agents/skills")
     assert skills_root.is_dir(), "Missing .agents/skills directory"
 

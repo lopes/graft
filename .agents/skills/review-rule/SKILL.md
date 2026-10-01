@@ -75,6 +75,7 @@ Evaluate each rule across all blocks and classify every check as `PASS`, `WARN`,
   - Are multi-event joins selective and bounded by an explicit, justified `match:` time window?
   - Are magic numbers (such as `604800` seconds or numeric `product_event_type` codes) explained with inline comments?
   - Are unanchored regexes or overly broad predicates likely to cause high false-positive volume?
+  - If `logic` references a local dataset in `datasets/<name>.yaml`, verify it uses `%<name>.value` and literal string membership (`in %<name>.value`, never `in cidr` or `in regex`).
   - Verify `logic` does **not** include an outer `rule <name> { meta: ... }` wrapper (Graft synthesizes the wrapper automatically for SecOps).
 
 ### Block 3: `deployment` / `managed`
