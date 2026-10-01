@@ -129,7 +129,7 @@ Before declaring any work complete, the following checks must return 0 errors:
   - Commit frequently during the phase as logical increments pass tests.
   - Banned prefixes: `feat:`, `fix:`, `chore:`, `update:`.
 - **CI Workflow Path Filtering:**
-  - Mainline deployment (`deploy-production.yml`) and PR validation (`pr-validation.yml`) enforce strict path filters (`src/**`, `rulesets/**`, `schemas/**`, `tests/**`, `pyproject.toml`, `uv.lock`, `.github/workflows/**`).
+  - Mainline deployment (`deploy-production.yml`) and PR validation (`pr-validation.yml`) enforce strict path filters (`src/**`, `rulesets/**`, `tests/**`, `pyproject.toml`, `uv.lock`, `.github/dependabot.yml`, `.github/workflows/**`).
   - Changes touching exclusively documentation (`.md`, `docs/`) or visual assets (`assets/`) intentionally skip CI execution to prevent redundant runner executions.
 - **Workflow Push Permission Requirements:**
   - GitHub OAuth tokens (`gh auth token`) reject pushing changes to `.github/workflows/` unless the token possesses the `workflow` scope (`gh auth refresh -s workflow`).
