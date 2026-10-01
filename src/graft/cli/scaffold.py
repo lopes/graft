@@ -1,4 +1,6 @@
 import re
+import shutil
+import subprocess
 import uuid
 from pathlib import Path
 
@@ -8,10 +10,28 @@ from graft.core.validation.schema_validator import SchemaValidator
 
 IDENTIFIER_PATTERN = re.compile(r"^[a-z0-9]+(?:_[a-z0-9]+)*$")
 MAX_IDENTIFIER_LEN = 64
+DEFAULT_FALLBACK_OWNER = "Detection Engineer"
 
 
 class ScaffoldError(Exception):
     pass
+
+
+def _resolve_default_owner(cwd: Path | None = None) -> str:
+    git_bin = shutil.which("git") or "git"
+    try:
+        proc = subprocess.run(  # noqa: S603
+            [git_bin, "config", "user.name"],
+            cwd=cwd,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if proc.returncode == 0 and proc.stdout.strip():
+            return proc.stdout.strip()
+    except (subprocess.SubprocessError, OSError):
+        pass
+    return DEFAULT_FALLBACK_OWNER
 
 
 def _validate_identifier(name: str, kind: str) -> None:
@@ -450,6 +470,8 @@ def scaffold_rule(
     if dest.exists():
         raise ScaffoldError(f"Rule file already exists at {dest}")
 
+    default_owner = _resolve_default_owner(cwd=root)
+
     if managed:
         if not managed_id or not managed_id.strip():
             raise ScaffoldError(
@@ -462,7 +484,7 @@ def scaffold_rule(
                 "id": rule_uuid,
                 "name": rule_name,
                 "description": f"Registered managed rule for {rule_name.replace('_', ' ')}",
-                "owners": ["Detection Engineering <detection@company.com>"],
+                "owners": [default_owner],
                 "mitre": {
                     "execution": ["T1059.001"],
                 },
@@ -496,7 +518,7 @@ condition:
                 "id": rule_uuid,
                 "name": rule_name,
                 "description": f"Detection rule for {rule_name.replace('_', ' ')}",
-                "owners": ["Detection Engineering <detection@company.com>"],
+                "owners": [default_owner],
                 "mitre": {
                     "execution": ["T1059.001"],
                 },
