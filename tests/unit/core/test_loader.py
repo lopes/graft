@@ -163,9 +163,9 @@ tests:
 
 
 def test_load_reference_example_rule() -> None:
-    example_path = Path("rulesets/secops/custom/workspace_nrd_possible_phishing.yaml")
+    example_path = Path("rulesets/secops/custom/workspace_nrd_email_opened.yaml")
     envelope = load_rule_from_yaml(example_path)
-    assert envelope.metadata.name == "workspace_nrd_possible_phishing"
+    assert envelope.metadata.name == "workspace_nrd_email_opened"
     assert envelope.deployment.run_frequency == "live"
     assert len(envelope.tests) == 2
 
@@ -358,3 +358,38 @@ tests: []
 
     with pytest.raises(RuleLoadError, match="Schema validation failed"):
         load_rule_from_yaml(bad_file)
+
+
+@pytest.mark.parametrize(
+    "bad_filename",
+    [
+        "_leading_underscore.yaml",
+        "trailing_underscore_.yaml",
+        "double__underscore.yaml",
+        "hyphen-name.yaml",
+        "Uppercase_Rule.yaml",
+        f"{'a' * 65}.yaml",
+        "index.yaml",
+        "index.yml",
+    ],
+)
+def test_load_rule_from_yaml_rejects_invalid_filename_stem(
+    valid_yaml_content: str,
+    tmp_path: Path,
+    bad_filename: str,
+) -> None:
+    bad_file = tmp_path / bad_filename
+    bad_file.write_text(valid_yaml_content, encoding="utf-8")
+    with pytest.raises(RuleLoadError, match="Invalid rule filename"):
+        load_rule_from_yaml(bad_file)
+
+
+def test_load_rule_from_yaml_allows_valid_64_char_filename_different_from_metadata_name(
+    valid_yaml_content: str,
+    tmp_path: Path,
+) -> None:
+    stem_64 = "a" * 64
+    rule_file = tmp_path / f"{stem_64}.yaml"
+    rule_file.write_text(valid_yaml_content, encoding="utf-8")
+    envelope = load_rule_from_yaml(rule_file)
+    assert envelope.metadata.name == "powershell_encoded_launch"

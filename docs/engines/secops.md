@@ -395,7 +395,7 @@ exclusions:
 To include an enabled Curated Rule Set in MITRE ATT&CK Navigator heatmaps (`graft export matrix`) and governance catalogs (`graft export catalog`), copy its `id` UUID from `rulesets/secops/managed/index.yaml` and scaffold a 4-block registered managed rule envelope:
 
 ```bash
-graft secops new gcti_active_breach_network_indicators --managed 433faf9e-4d51-f284-c35b-009528ecff05
+graft secops new gcti_breach_network_indicator_matched --managed 433faf9e-4d51-f284-c35b-009528ecff05
 ```
 
 `graft lint` verifies that `managed.id` exists in `rulesets/secops/managed/index.yaml` and that no two registered YAML files reference the same ruleset UUID. Live deployment status (`enabled | silent | disabled`) is resolved automatically from the ruleset's `PRECISE`/`BROAD` deployments in `index.yaml`.
@@ -597,7 +597,7 @@ When an operator, security analyst, or external integration modifies a detection
    ```text
    === Google SecOps Custom Rules Diff ===
    ~ Custom rules to update (1):
-     [~] workspace_nrd_possible_phishing (id=b1d72370-5fa3-4cb8-a579-22a468d6f101)
+     [~] workspace_nrd_email_opened (id=b1d72370-5fa3-4cb8-a579-22a468d6f101)
    ```
    *(Note: Running `graft secops diff` without `--all` operates in Mode B, scoping reconciliation only to locally modified detection files).*
 

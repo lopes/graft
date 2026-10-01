@@ -1,126 +1,92 @@
 import shutil
 import subprocess
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from pathlib import Path
 
 
 @dataclass(frozen=True)
 class RuleGitMetadata:
     path: Path
+    author: str
     created_at: str
     last_modified_at: str
     commit_count: int
     contributor_count: int
 
 
+def _normalize_utc_date(raw_ts: str) -> str:
+    cleaned = raw_ts.strip()
+    if not cleaned:
+        return "Unknown"
+    try:
+        dt = datetime.fromisoformat(cleaned)
+        if dt.tzinfo is not None:
+            dt = dt.astimezone(UTC)
+        return dt.strftime("%Y-%m-%d")
+    except ValueError:
+        return cleaned[:10] if len(cleaned) >= 10 else "Unknown"
+
+
 def extract_git_metadata(path: Path | str, cwd: Path | None = None) -> RuleGitMetadata:
     file_path = Path(path)
     git_bin = shutil.which("git") or "git"
 
+    author = "Unknown"
     created_at = "Unknown"
     last_modified_at = "Unknown"
     commit_count = 0
     contributor_count = 0
 
+    if cwd is not None:
+        effective_cwd: Path | None = cwd
+        target_arg = str(file_path)
+    elif str(file_path.parent) not in ("", "."):
+        effective_cwd = file_path.parent
+        target_arg = file_path.name
+    else:
+        effective_cwd = None
+        target_arg = str(file_path)
+
     try:
-        creation_proc = subprocess.run(  # noqa: S603
+        proc = subprocess.run(  # noqa: S603
             [
                 git_bin,
                 "log",
-                "--diff-filter=A",
                 "--follow",
-                "--format=%aI",
-                "-n",
-                "1",
+                "--format=%aI%x00%aN%x00%aE",
                 "--",
-                str(file_path),
+                target_arg,
             ],
-            cwd=cwd,
+            cwd=effective_cwd,
             capture_output=True,
             text=True,
             check=False,
         )
-        out_creation = creation_proc.stdout.strip()
-        if not out_creation:
-            fallback_proc = subprocess.run(  # noqa: S603
-                [
-                    git_bin,
-                    "log",
-                    "--reverse",
-                    "--format=%aI",
-                    "--",
-                    str(file_path),
-                ],
-                cwd=cwd,
-                capture_output=True,
-                text=True,
-                check=False,
-            )
-            lines = fallback_proc.stdout.strip().splitlines()
-            if lines:
-                out_creation = lines[0]
+        lines = [line.strip() for line in proc.stdout.splitlines() if line.strip()]
+        if lines:
+            records: list[tuple[str, str, str]] = []
+            for line in lines:
+                parts = line.split("\x00")
+                iso_ts = parts[0].strip() if len(parts) > 0 else ""
+                commit_author = parts[1].strip() if len(parts) > 1 else ""
+                commit_email = parts[2].strip() if len(parts) > 2 else ""
+                records.append((iso_ts, commit_author, commit_email))
 
-        if out_creation:
-            created_at = out_creation
-
-        last_proc = subprocess.run(  # noqa: S603
-            [
-                git_bin,
-                "log",
-                "-n",
-                "1",
-                "--format=%aI",
-                "--",
-                str(file_path),
-            ],
-            cwd=cwd,
-            capture_output=True,
-            text=True,
-            check=False,
-        )
-        out_last = last_proc.stdout.strip()
-        if out_last:
-            last_modified_at = out_last
-
-        count_proc = subprocess.run(  # noqa: S603
-            [
-                git_bin,
-                "rev-list",
-                "--count",
-                "HEAD",
-                "--",
-                str(file_path),
-            ],
-            cwd=cwd,
-            capture_output=True,
-            text=True,
-            check=False,
-        )
-        count_str = count_proc.stdout.strip()
-        if count_str.isdigit():
-            commit_count = int(count_str)
-
-        authors_proc = subprocess.run(  # noqa: S603
-            [
-                git_bin,
-                "log",
-                "--format=%ae",
-                "--",
-                str(file_path),
-            ],
-            cwd=cwd,
-            capture_output=True,
-            text=True,
-            check=False,
-        )
-        emails = {line.strip() for line in authors_proc.stdout.splitlines() if line.strip()}
-        contributor_count = len(emails)
+            commit_count = len(records)
+            last_modified_at = _normalize_utc_date(records[0][0])
+            created_at = _normalize_utc_date(records[-1][0])
+            if records[-1][1]:
+                author = records[-1][1]
+            emails = {rec[2].lower() for rec in records if rec[2]}
+            contributor_count = len(emails)
 
     except (subprocess.SubprocessError, OSError):
         pass
 
     return RuleGitMetadata(
         path=file_path,
+        author=author,
         created_at=created_at,
         last_modified_at=last_modified_at,
         commit_count=commit_count,

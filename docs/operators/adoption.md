@@ -12,7 +12,7 @@ When adopting Detection-as-Code (DaC) in an enterprise, the detection engineerin
 - **Vendor-Managed Content:** Curated rule sets (e.g., Google Cloud Curated Rule Sets) with operational precision levels (`PRECISE` vs `BROAD`), alert routing, and production tuning exclusions.
 - **Custom Detection Rules:** Bespoke organizational detection rules authored directly in the SIEM web console or deployed via legacy scripts.
 
-If an engineering team adopts Graft with an empty repository and immediately declares Git as the authoritative Source of Truth (SoT), running forward synchronization (`graft secops apply --all`) would either fail to discover existing rules or risk destructive deletion if automated pruning were enabled.
+If an engineering team adopts Graft with an empty repository and immediately declares Git as the authoritative Source of Truth (SoT), running forward synchronization (`graft <engine> apply --all`) would either fail to discover existing rules or risk destructive deletion if automated pruning were enabled.
 
 To solve this, Graft treats an engine's lifecycle not as a static assumption, but as a formal **three-epoch progression**.
 
@@ -24,17 +24,17 @@ To solve this, Graft treats an engine's lifecycle not as a static assumption, bu
 flowchart TD
     subgraph E1["Epoch 1: Discovery & Reverse Sync (SIEM = Temporary SoT)"]
         direction TB
-        SIEM["<b>Live SecOps Tenant</b><br/>• Active Curated Rule Sets & Exclusions<br/>• Active Custom YARA-L Rules & Deployments"]
-        PULL["<code>graft secops pull --env production</code><br/><i>(Reverse Synchronization)</i>"]
+        SIEM["<b>Live SIEM Tenant</b><br/>• Active Vendor-Managed Rulesets & Exclusions<br/>• Active Custom Rules & Deployments"]
+        PULL["<code>graft &lt;engine&gt; pull --env production</code><br/><i>(Reverse Synchronization)</i>"]
         SIEM --> PULL
-        PULL --> MAN["<code>rulesets/secops/managed/index.yaml</code>"]
-        PULL --> CUST["<code>rulesets/secops/custom/*.yaml</code>"]
+        PULL --> MAN["<code>rulesets/&lt;engine&gt;/managed/index.yaml</code>"]
+        PULL --> CUST["<code>rulesets/&lt;engine&gt;/custom/*.yaml</code>"]
     end
 
     subgraph E2["Epoch 2: Baseline Enrichment & Cutover"]
         direction TB
-        ENRICH["<b>Operator Review & Enrichment</b><br/>• Assign Accountable Owners, Tags & References<br/>• Document Incident Response Runbooks<br/>• Map MITRE ATT&CK Techniques<br/>• Add Synthetic UDM Test Vectors<br/>• Verify via <code>graft lint</code>"]
-        COMMIT["<b>Baseline Cutover Commit</b><br/><code>git commit -m 'secops: import detection baseline'</code><br/><code>git push origin main</code>"]
+        ENRICH["<b>Operator Review & Enrichment</b><br/>• Assign Accountable Owners, Tags & References<br/>• Document Incident Response Runbooks<br/>• Map MITRE ATT&CK Techniques<br/>• Add Synthetic Test Vectors<br/>• Verify via <code>graft lint</code>"]
+        COMMIT["<b>Baseline Cutover Commit</b><br/><code>git commit -m '&lt;engine&gt;: import detection baseline'</code><br/><code>git push origin main</code>"]
         MAN --> ENRICH
         CUST --> ENRICH
         ENRICH --> COMMIT
@@ -42,9 +42,9 @@ flowchart TD
 
     subgraph E3["Epoch 3: Steady-State GitOps (Git = Sole Authoritative SoT)"]
         direction TB
-        PR["PR Validation Gates<br/>(Ruff, Mypy, Pytest, verifyRuleText, Replay)"]
+        PR["PR Validation Gates<br/>(Ruff, Mypy, Pytest, Syntax Dry-Run, Replay)"]
         MERGE["Merge to Mainline<br/>(Automated Deploy to Production)"]
-        DRIFT["Scheduled Drift Reconciliation<br/><code>graft secops diff/apply --all</code>"]
+        DRIFT["Scheduled Drift Reconciliation<br/><code>graft &lt;engine&gt; diff/apply --all</code>"]
         OVERWRITE["<b>Authoritative Healing</b><br/>Out-of-band console edits overwritten"]
         AUDIT["<b>Tamper-Evident Audit Trail</b><br/>Git blame + CI run execution logs"]
 
@@ -66,7 +66,7 @@ In Epoch 1, the live SIEM instance is recognized as the **temporary initial Sour
 
 ### 1. Reverse Synchronization Command
 
-Running `graft <engine> pull` extracts the complete live detection posture from the target tenant:
+Running `graft <engine> pull` extracts the complete live detection posture from the target tenant (shown below using `secops` as an example):
 
 ```bash
 # Pull both custom rules and vendor-managed content from production
@@ -76,7 +76,7 @@ uv run graft secops pull --env production
 Alternatively, you can target individual subsystems:
 
 ```bash
-# Pull custom YARA-L detection rules only
+# Pull custom detection rules only
 uv run graft secops pull --target custom --env production --out-dir rulesets/secops/custom
 
 # Pull vendor-managed curated content manifest only
@@ -88,24 +88,24 @@ uv run graft secops pull --env production --force
 
 ### 2. How Managed Content Is Ingested
 
-When pulling managed content:
-1. Graft queries the Chronicle Curated Rule Sets API (`curatedRuleSets`, `curatedRuleSetDeployments`, and `ruleExclusions`).
-2. It resolves category UUIDs to display names (e.g., `Cloud Threats`, `Linux Threats`).
-3. It captures deployment precision (`PRECISE` or `BROAD`), enabled/alerting toggles, and all active UDM exclusion filters (`findingsRefinements`).
-4. It serializes this unified posture into [`rulesets/secops/managed/index.yaml`](../../rulesets/secops/managed/index.yaml), conforming to [`src/graft/engines/secops/schemas/managed.schema.json`](../../src/graft/engines/secops/schemas/managed.schema.json).
+When pulling managed content via `ManagedEnginePort.fetch_managed_state()`:
+1. Graft queries the engine's vendor-managed ruleset and exclusion APIs.
+2. It normalizes category identifiers, deployment states (`enabled`, `alerting`, and engine-specific tiers), and active exclusion filters into a `ManagedState` domain model.
+3. It serializes this unified posture into `rulesets/<engine>/managed/index.yaml`, validated against `src/graft/engines/<engine>/schemas/managed.schema.json`.
+- **Example (Google SecOps):** Queries Chronicle `curatedRuleSets`, `curatedRuleSetDeployments` (`PRECISE` vs `BROAD`), and `ruleExclusions` (`findingsRefinements`), resolving category UUIDs to display names (e.g., `Cloud Threats`, `Linux Threats`).
 
 ### 3. How Custom Rules Are Ingested
 
-When pulling custom rules:
-1. Graft invokes `SecOpsDeployerAdapter.list_rules()` to fetch rule inventory (`GET rules?view=FULL`) and deployment states (`GET rules/-/deployments`).
-2. The deconstruction compiler ([`deconstruct_yaral_rule`](../../src/graft/engines/secops/compiler.py#L59)):
-   - Sanitizes rule display names into valid snake_case identifiers matching `^[a-z0-9_]+$`.
-   - Normalizes server identifiers (`ru_<uuid>`) into valid RFC 4122 UUIDs for `metadata.id`.
-   - Extracts embedded `id` and `description` from the rule's `meta:` block.
-   - Leaves `owners: []`, `mitre: {}`, `tags: []`, and `references: []` empty—Graft never guesses operational ownership from legacy YARA-L `meta: author` strings.
-   - Preserves clean YARA-L logic (`events:`, `match:`, `condition:`) in the envelope's `logic` block.
+When pulling custom rules via `RuleDeployerPort.list_rules()` and `EngineAdapter.deconstruct_rule()`:
+1. Graft fetches the active custom rule inventory and deployment states (`enabled`, `alerting`, schedule) from the tenant.
+2. The engine adapter's rule deconstructor:
+   - Sanitizes rule display names into valid snake_case identifiers matching `^[a-z0-9]+(?:_[a-z0-9]+)*$` (max 64 characters).
+   - Normalizes or preserves UUIDs for `metadata.id`.
+   - Extracts embedded `id` and `description` metadata while stripping engine-specific wrapper boilerplate so only clean query logic remains in the `logic` block.
+   - Leaves `owners: []`, `mitre: {}`, `tags: []`, and `references: []` empty—Graft never guesses operational ownership from legacy inline author strings.
+   - **Example (Google SecOps):** [`deconstruct_yaral_rule`](../../src/graft/engines/secops/compiler.py#L59) strips the outer `rule <name> { meta: ... }` wrapper, normalizes `ru_<uuid>` server IDs, and preserves clean YARA-L sections (`events:`, `match:`, `outcome:`, `condition:`).
 3. Graft populates default placeholder runbook sections (`context`, `triage`, `response`). Because Graft schemas strictly require non-empty `owners`, `mitre`, `tags`, and `references`, `graft lint` will intentionally flag freshly pulled rules until operators complete Epoch 2 enrichment.
-4. Each rule is saved to `rulesets/secops/custom/<rule_name>.yaml`. Existing files are protected against accidental overwrites unless `--force` is supplied.
+4. Each rule is saved to `rulesets/<engine>/custom/<rule_name>.yaml`. Existing files are protected against accidental overwrites unless `--force` is supplied.
 
 ---
 
@@ -147,7 +147,7 @@ Before committing the baseline to version control, detection engineers review an
     privilege-escalation:
       - "T1078.004"
   ```
-- **Synthetic Test Vectors:** Add deterministic UDM events and expected match counts:
+- **Synthetic Test Vectors (Example: Google SecOps UDM):** Add deterministic test events and expected match counts:
   ```yaml
   tests:
     - id: "match_service_account_key_create"
@@ -195,28 +195,28 @@ sequenceDiagram
     actor Analyst as Detection Engineer
     participant PR as GitHub PR
     participant CI as GitHub Actions
-    participant SIEM as Google SecOps Tenant
+    participant SIEM as Target SIEM Tenant
 
     Note over Analyst,SIEM: Normal Day-to-Day Change
     Analyst->>PR: Propose rule edit or exclusion in branch
     PR->>CI: Trigger pr-validation.yml
     CI->>CI: Ruff, Mypy, Pytest, Graft Lint
-    CI->>SIEM: Dry-run syntax (verifyRuleText)
+    CI->>SIEM: Syntax dry-run (graft <engine> verify)
     CI->>SIEM: Staging quarantine replay test
     CI-->>PR: Green verification check
     Analyst->>PR: Merge PR to main
 
     Note over CI,SIEM: Authoritative Production Apply
     PR->>CI: Trigger deploy-production.yml
-    CI->>SIEM: graft secops apply
+    CI->>SIEM: graft <engine> apply
     SIEM-->>CI: Custom rules updated in-place (new revision)
     SIEM-->>CI: Managed deployments & exclusions synchronized
 
     Note over Analyst,SIEM: Out-of-Band Console Drift Occurs
     Analyst->>SIEM: Console user disables rule directly in UI
-    CI->>SIEM: Periodic drift scan (graft secops diff --all)
+    CI->>SIEM: Periodic drift scan (graft <engine> diff --all)
     SIEM-->>CI: Drift detected (exit code 2)
-    CI->>SIEM: Authoritative reconciliation (graft secops apply --all)
+    CI->>SIEM: Authoritative reconciliation (graft <engine> apply --all)
     SIEM-->>CI: Rule re-enabled in-place to match Git
     CI->>CI: Structured audit log emitted
 ```
@@ -226,11 +226,12 @@ sequenceDiagram
 Graft provides two operating modes to manage out-of-band modifications made directly in the SIEM web console:
 
 - **Scoped Reconciliation (Default):**
-  Commands like `graft secops diff` and `graft secops apply` inspect Git diffs (`HEAD~1` or branch diff) and evaluate only rules modified in the current change scope. This keeps daily CI/CD operations fast and lightweight.
+  Commands like `graft <engine> diff` and `graft <engine> apply` inspect Git diffs (`HEAD~1` or branch diff) and evaluate only rules modified in the current change scope. This keeps daily CI/CD operations fast and lightweight.
 - **Full Catalog Reconciliation (`--all`):**
-  Running `graft secops diff --all` or `graft secops apply --all` ignores Git change history and evaluates every single rule and managed deployment against the live tenant:
-  - **Drift Discovery:** `graft secops diff --all --env production` detects discrepancies and exits with code `2`.
-  - **Authoritative Healing:** `graft secops apply --all --env production` overwrites any console edits, reconciling the tenant back to the exact version declared in Git.
+  Running `graft <engine> diff --all` or `graft <engine> apply --all` ignores Git change history and evaluates every single rule and managed deployment against the live tenant:
+  - **Drift Discovery:** `graft <engine> diff --all --env production` detects discrepancies and exits with code `2`.
+  - **Authoritative Healing:** `graft <engine> apply --all --env production` overwrites any console edits, reconciling the tenant back to the exact version declared in Git.
+
 
 ### 2. Tamper-Evident Audit Trail
 

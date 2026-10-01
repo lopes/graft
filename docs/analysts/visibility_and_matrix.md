@@ -28,14 +28,15 @@ graft export matrix --format table --engine secops
 
 **Example Output:**
 ```text
-MITRE ATT&CK Detection Matrix (Total Rules: 3 | Covered Techniques: 4)
+MITRE ATT&CK Detection Matrix (Total Rules: 4 | Covered Techniques: 5)
 ==========================================================================================
 Technique ID    Technique Name                   Rules   Rules / Detections
 ------------------------------------------------------------------------------------------
-T1078.004       Cloud Accounts                   1       gcp_storage_iam_public_access...
-T1098.001       Additional Cloud Credentials     1       gcp_iam_service_account_key_c...
-T1685           Disable or Modify Tools          1       gcp_storage_iam_public_access...
-T1566.002       Spearphishing Link               1       workspace_nrd_possible_phishing
+T1071.001       Web Protocols                    1       gcti_breach_network_indicator...
+T1078.004       Cloud Accounts                   1       gcp_storage_bucket_public_acc...
+T1098.001       Additional Cloud Credentials     1       gcp_service_account_key_created
+T1566.002       Spearphishing Link               1       workspace_nrd_email_opened
+T1685           Disable or Modify Tools          1       gcp_storage_bucket_public_acc...
 ------------------------------------------------------------------------------------------
 ```
 
@@ -67,14 +68,15 @@ Each technique in the exported layer is scoped strictly to its tactic shortname 
 
 ## 2. Operational Ownership & Git Lifecycle Provenance
 
-Graft separates operational accountability (`metadata.owners` in the rule YAML) from historical revision provenance extracted from Git via Python's standard library `subprocess`:
+Graft separates operational accountability (`metadata.owners` in the rule YAML) from historical revision provenance extracted from Git in a single pass (`git log --follow --format=%aI%x00%aN%x00%aE`) via Python's standard library `subprocess`:
 
-- **Accountable Owners (`owners`):** Sourced directly from `metadata.owners` in the rule envelope to identify the teams or individuals responsible for maintaining the rule today.
-- **Creation Timestamp (`created_at`):** Determined via `git log --diff-filter=A --follow --format=%aI -n 1`.
-- **Last Modified Timestamp (`last_modified_at`):** Extracted via `git log -n 1 --format=%aI`.
-- **Commit Revision Count (`review_count`):** Extracted via `git rev-list --count HEAD`.
-- **Contributor Breadth (`contributor_count`):** Count of distinct Git author emails (`git log --format=%ae`) touching the file. To inspect individual commit authors, use `git log --follow <path>`, and credit external research authors in `metadata.references`.
-- **Offline / Untracked Fallback:** Automatically falls back to `"Unknown"` timestamps and `0` counts if files are uncommitted or executed in environments lacking Git history (e.g. container builds).
+- **Initial Committer (`author`):** Author name (`%aN`) of the earliest commit in the file's history across renames.
+- **Accountable Owners (`owners` & `owner_count`):** Sourced directly from `metadata.owners` in the rule envelope to identify the teams or individuals responsible for maintaining the rule today, paired with `owner_count` (`len(metadata.owners)`) to surface single-owner bus-factor risk.
+- **Creation Date (`created_at`):** Earliest commit timestamp across file history, normalized to UTC `YYYY-MM-DD` for native date parsing in Polars and Google Sheets.
+- **Last Modified Date (`last_modified_at`):** Most recent commit timestamp across file history, normalized to UTC `YYYY-MM-DD`.
+- **Commit Revision Count (`review_count`):** Total number of commits touching the file across renames (`--follow`).
+- **Contributor Breadth (`contributor_count`):** Count of distinct, case-insensitively normalized Git author emails (`%aE`) touching the file. Credit external research authors in `metadata.references`.
+- **Offline / Untracked Fallback:** Automatically falls back to `"Unknown"` strings and `0` counts if files are uncommitted or executed in environments lacking Git history (e.g. container builds).
 
 ---
 
@@ -96,21 +98,22 @@ Ideal for automated documentation generation and repository wiki tracking:
 graft export catalog --format=markdown --out docs/RULE_CATALOG.md
 ```
 
-| Rule Name | Engine | Status | MITRE ATT&CK | Owners | Created | Last Updated | Reviews | Contributors | Runbook |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| `gcp_iam_service_account_key_create` | secops | enabled | TA0003:T1098, TA0003:T1098.001, TA0004:T1078.004 | Cloud Security Operations | 2026-09-17 | 2026-09-22 | 3 | 1 | yes |
-| `gcp_storage_iam_public_access_granted` | secops | enabled | TA0004:T1078.004, TA0112:T1685 | Cloud Security Operations | 2026-09-17 | 2026-09-22 | 2 | 1 | yes |
-| `workspace_nrd_possible_phishing` | secops | enabled | TA0001:T1566.002 | Joe Lopes <lopes.id>, Detection Engineering | 2026-09-17 | 2026-09-22 | 4 | 1 | yes |
+| Rule Name | Engine | Type | Status | MITRE ATT&CK | Author | Owners | Owner Count | Created | Last Updated | Reviews | Contributors |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `gcp_service_account_key_created` | secops | custom | enabled | TA0003:T1098.001, TA0004:T1098.001 | Joe Lopes | Joe Lopes | 1 | 2026-09-17 | 2026-10-01 | 13 | 1 |
+| `gcp_storage_bucket_public_access_granted` | secops | custom | enabled | TA0001:T1078.004, TA0112:T1685 | Joe Lopes | Joe Lopes | 1 | 2026-09-17 | 2026-10-01 | 11 | 1 |
+| `workspace_nrd_email_opened` | secops | custom | enabled | TA0001:T1566.002 | Joe Lopes | Joe Lopes | 1 | 2026-09-17 | 2026-10-01 | 9 | 1 |
+| `gcti_breach_network_indicator_matched` | secops | managed | silent | TA0011:T1071.001 | Joe Lopes | Joe Lopes | 1 | 2026-09-30 | 2026-10-01 | 2 | 1 |
 
 ### CSV Catalog (`--format=csv`)
-Generate spreadsheet-ready exports for security audits and reporting pipelines:
+Generate spreadsheet-ready exports for Polars, Google Sheets, security audits, and reporting pipelines:
 
 ```bash
 graft export catalog --format=csv --out exports/detection_catalog.csv
 ```
 
-CSV exports contain 14 normalized fields:
-`id, name, engine, rule_type, status, description, mitre_attack, tags, owners, created_at, last_modified_at, review_count, contributor_count, has_runbook`.
+CSV exports contain 15 normalized fields:
+`id, name, engine, rule_type, status, description, mitre_attack, tags, author, owners, owner_count, created_at, last_modified_at, review_count, contributor_count`.
 
 ### JSON Catalog (`--format=json`)
 Structured JSON for feeding security data lakes, BigQuery, or internal developer portals:
@@ -118,3 +121,4 @@ Structured JSON for feeding security data lakes, BigQuery, or internal developer
 ```bash
 graft export catalog --format=json
 ```
+

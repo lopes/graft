@@ -1,7 +1,7 @@
 import importlib.resources
 import json
 from collections.abc import Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
@@ -26,9 +26,8 @@ class TechniqueTacticCoverage:
     rule_names: list[str]
     engines: list[str]
     statuses: list[str]
-    has_runbook: bool
     links: list[dict[str, str]]
-    rule_types: list[str] = ()  # type: ignore[assignment]
+    rule_types: list[str] = field(default_factory=list)
 
 
 @dataclass(frozen=True)
@@ -82,17 +81,12 @@ def calculate_mitre_coverage(
         rule_name = rule.metadata.name
         if explicit_status is not None:
             status = explicit_status
-        elif not rule.deployment.enabled:
+        elif rule.is_managed or not rule.deployment.enabled:
             status = "disabled"
         elif not rule.deployment.alerting:
             status = "silent"
         else:
             status = "enabled"
-        has_runbook = bool(
-            rule.runbook.context.strip()
-            or rule.runbook.triage.strip()
-            or rule.runbook.response.strip()
-        )
 
         for tactic, tech_list in rule.metadata.mitre.items():
             for tech_id in tech_list:
@@ -106,7 +100,6 @@ def calculate_mitre_coverage(
                         "engines": set(),
                         "rule_types": set(),
                         "statuses": set(),
-                        "has_runbook": False,
                         "links": [],
                     }
                 if rule_name not in pair_map[pair_key]["rules"]:
@@ -114,8 +107,6 @@ def calculate_mitre_coverage(
                 pair_map[pair_key]["engines"].add(engine)
                 pair_map[pair_key]["rule_types"].add(rule.rule_type)
                 pair_map[pair_key]["statuses"].add(status)
-                if has_runbook:
-                    pair_map[pair_key]["has_runbook"] = True
                 if path:
                     link_obj = {"label": f"Source: {rule_name}", "url": path}
                     if link_obj not in pair_map[pair_key]["links"]:
@@ -155,7 +146,6 @@ def calculate_mitre_coverage(
                 rule_names=details["rules"],
                 engines=sorted(details["engines"]),
                 statuses=sorted(details["statuses"]),
-                has_runbook=details["has_runbook"],
                 links=details["links"],
                 rule_types=sorted(details["rule_types"]),
             )
@@ -197,8 +187,8 @@ def export_navigator_layer(
                 {"name": "type", "value": types_val},
                 {"name": "rules", "value": ", ".join(t.rule_names)},
                 {"name": "status", "value": ", ".join(t.statuses)},
-                {"name": "runbook", "value": "yes" if t.has_runbook else "no"},
             ]
+
             techniques_payload.append(
                 {
                     "techniqueID": t.technique_id,

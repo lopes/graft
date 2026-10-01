@@ -1,17 +1,15 @@
 metadata:
   id: "b1d72370-5fa3-4cb8-a579-22a468d6f101"
-  name: "workspace_nrd_possible_phishing"
+  name: "workspace_nrd_email_opened"
   description: "Google Workspace email opened from a newly registered domain."
   owners:
-    - "Joe Lopes <lopes.id>"
+    - "Joe Lopes"
   mitre:
     initial-access:
       - "T1566.002"
   tags:
-    - "google_workspace"
+    - "workspace"
     - "email"
-    - "nrd"
-    - "phishing"
     - "whois"
   references:
     - "https://lopes.id/log/high-fidelity-nrd-detections/"
@@ -20,9 +18,14 @@ metadata:
 
 logic: |
   events:
+    $mail.metadata.log_type = "WORKSPACE_ACTIVITY"
     $mail.metadata.event_type = "EMAIL_TRANSACTION"
-    $mail.metadata.product_event_type = "2"
-    strings.extract_domain($mail.network.email.from) = $domain
+    (
+      $mail.metadata.product_event_type = "7" or // message opened for the first time
+      $mail.metadata.product_event_type = "31"   // message viewed (first and subsequent readings)
+    )
+    $domain = strings.to_lower(strings.extract_domain($mail.network.email.from))
+    $domain != ""
 
     $whois.graph.entity.domain.name = $domain
     $whois.graph.metadata.entity_type = "DOMAIN_NAME"
@@ -31,8 +34,8 @@ logic: |
     $whois.graph.metadata.source_type = "GLOBAL_CONTEXT"
     $whois.graph.entity.domain.creation_time.seconds > 0
 
-    // domain was created in the last 7 days: 7 * 24 * 60 * 60 = 604800 seconds
-    604800 > timestamp.current_seconds() - $whois.graph.entity.domain.creation_time.seconds
+    // domain was created within 7 days (604800 seconds) prior to the email event
+    604800 > $mail.metadata.event_timestamp.seconds - $whois.graph.entity.domain.creation_time.seconds
 
   match:
     $domain over 1h
@@ -42,7 +45,11 @@ logic: |
     $created_at = array_distinct(timestamp.get_date($whois.graph.entity.domain.creation_time.seconds))
     $sender = array_distinct($mail.network.email.from)
     $recipients = array_distinct($mail.network.email.to)
-    $num_messages = count($mail.network.email.mail_id)
+    $subjects = array_distinct($mail.network.email.subject)
+    $num_messages = count_distinct($mail.network.email.mail_id)
+    $num_attachments = array_distinct($mail.additional.fields["num_message_attachments"])
+    $dkim = array_distinct($mail.additional.fields["dkim_pass"])
+    $spf = array_distinct($mail.additional.fields["spf_pass"])
 
   condition:
     $mail and $whois
@@ -56,7 +63,7 @@ runbook:
   context: "Adversaries frequently register new domains and immediately weaponize them in spear-phishing campaigns before reputation feeds and web categorization tools index them. Correlating Google Workspace message open events with domain registration timestamps isolates zero-day phishing infrastructure."
   triage: |
     1. Identify recipient user account and workstation coordinates.
-    2. Review email subject, sender domain WHOIS registrar, and message attachments.
+    2. Review email subject, sender domain WHOIS registrar, SPF/DKIM authentication results, and message attachments.
     3. Check if recipient clicked any hyperlinks or submitted credentials.
     4. Search email transaction logs across the organization for other recipients of the same domain.
   response: |
@@ -73,13 +80,15 @@ tests:
       - timestamp: "2026-09-17T14:00:00Z"
         payload:
           metadata:
+            log_type: "WORKSPACE_ACTIVITY"
             event_type: "EMAIL_TRANSACTION"
-            product_event_type: "2"
+            product_event_type: "7"
           network:
             email:
               from: "security-update@login-verify-account.top"
               to:
                 - "employee@corp.example.com"
+              subject: "Action Required: Verify Your Workspace Account"
               mail_id: "msg-workspace-98214"
       - timestamp: "2026-09-17T14:00:05Z"
         payload:
@@ -93,20 +102,22 @@ tests:
               domain:
                 name: "login-verify-account.top"
                 creation_time:
-                  seconds: 1773700000
+                  seconds: 1789500000
 
   - id: "ignore_standard_unopened_email"
-    description: "Verifies no alert triggers when email is received but not opened"
+    description: "Verifies no alert triggers when email is received (product_event_type 2) but not opened"
     expect: 0
     events:
       - timestamp: "2026-09-17T14:10:00Z"
         payload:
           metadata:
+            log_type: "WORKSPACE_ACTIVITY"
             event_type: "EMAIL_TRANSACTION"
-            product_event_type: "1"
+            product_event_type: "2"
           network:
             email:
               from: "newsletter@trusted-vendor.com"
               to:
                 - "employee@corp.example.com"
+              subject: "Monthly Product Newsletter"
               mail_id: "msg-workspace-98215"

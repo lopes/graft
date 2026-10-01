@@ -27,17 +27,17 @@ Create a new detection rule file with an auto-generated UUID, valid schema defau
 ### Command
 ```bash
 # Custom rule — Using the engine-specific command:
-graft secops new gcp_iam_service_account_key_create
+graft secops new gcp_service_account_key_created
 
 # Custom rule — Or using the root command router:
-graft new rule gcp_iam_service_account_key_create --engine secops
+graft new rule gcp_service_account_key_created --engine secops
 
 # Registered managed rule — Link to a vendor ID in rulesets/secops/managed/index.yaml:
-graft secops new gcti_active_breach_network_indicators --managed 433faf9e-4d51-f284-c35b-009528ecff05
+graft secops new gcti_breach_network_indicator_matched --managed 433faf9e-4d51-f284-c35b-009528ecff05
 ```
 
 ### Result
-For custom rules, Graft creates `rulesets/secops/custom/gcp_iam_service_account_key_create.yaml` with pre-populated `metadata`, `logic`, `deployment`, `runbook`, and `tests` blocks. When `--managed <id>` is supplied, Graft creates `rulesets/secops/managed/<rule_name>.yaml` with `metadata`, `managed`, `runbook`, and `tests: []`.
+For custom rules, Graft creates `rulesets/secops/custom/gcp_service_account_key_created.yaml` with pre-populated `metadata`, `logic`, `deployment`, `runbook`, and `tests` blocks. When `--managed <id>` is supplied, Graft creates `rulesets/secops/managed/<rule_name>.yaml` with `metadata`, `managed`, `runbook`, and `tests: []`.
 
 ---
 
@@ -50,10 +50,10 @@ Fill out the scaffolded rule with realistic detection logic, operational control
 ```yaml
 metadata:
   id: "b1d72370-5fa3-4cb8-a579-22a468d6f101"
-  name: "gcp_iam_service_account_key_create"
+  name: "gcp_service_account_key_created"
   description: "Long-lived user-managed GCP service account keys created."
   owners:
-    - "Detection Engineering <detection@company.com>"
+    - "Joe Lopes"
   mitre:
     persistence:
       - "T1098"
@@ -63,7 +63,6 @@ metadata:
   tags:
     - "gcp"
     - "iam"
-    - "service_account"
   references:
     - "https://cloud.google.com/iam/docs/creating-managing-service-account-keys"
 
@@ -124,10 +123,10 @@ Verify that rule YAML files conform to Draft 2020-12 JSON Schema, contain valid 
 graft lint
 
 # Lint only your modified rule file
-graft lint rulesets/secops/custom/gcp_iam_service_account_key_create.yaml
+graft lint rulesets/secops/custom/gcp_service_account_key_created.yaml
 
 # Output structured JSON for automation or pre-commit hooks
-graft --json lint rulesets/secops/custom/gcp_iam_service_account_key_create.yaml
+graft --json lint rulesets/secops/custom/gcp_service_account_key_created.yaml
 ```
 
 ### Exit Codes
@@ -144,7 +143,7 @@ Verify that your YARA-L logic compiles cleanly against the real Google SecOps en
 ### Commands
 ```bash
 # Dry-run syntax compilation against staging SecOps tenant
-graft secops verify rulesets/secops/custom/gcp_iam_service_account_key_create.yaml
+graft secops verify rulesets/secops/custom/gcp_service_account_key_created.yaml
 
 # Dry-run syntax across all custom rules in the engine
 graft secops verify
@@ -163,7 +162,7 @@ Test your detection logic against synthetic event fixtures in an isolated stagin
 ### Commands
 ```bash
 # Run replay tests for a specific rule
-graft secops test rulesets/secops/custom/gcp_iam_service_account_key_create.yaml
+graft secops test rulesets/secops/custom/gcp_service_account_key_created.yaml
 
 # Run tests only for rules modified in your current Git branch
 graft secops test --changed-only
@@ -317,8 +316,8 @@ Graft stays current with modern adversary tactics and techniques, pinning to ATT
 - **Defense Impairment Tactic (`TA0112`):** Introduced in v19.2 to capture actions that disable, corrupt, or modify defenses. The corresponding YAML tactic name is `defense-impairment`.
 - **Technique Revocations & Replacements:** Techniques revoked by MITRE are rejected by `graft lint`. For example, `T1562.001` (Disable or Modify Tools) was revoked in v19.2 and replaced by `T1685` under `defense-impairment`. Graft adopts the latest taxonomy forward.
 
-### Objective Catalog Schema (14 Fields)
-Every catalog export (`table`, `csv`, `json`, `markdown`) normalizes to 14 objective indicators:
+### Objective Catalog Schema (15 Fields)
+Every catalog export (`table`, `csv`, `json`, `markdown`) normalizes to 15 objective indicators:
 
 | Field | Description | Source |
 | :--- | :--- | :--- |
@@ -330,18 +329,21 @@ Every catalog export (`table`, `csv`, `json`, `markdown`) normalizes to 14 objec
 | `description` | Summary of threat behavior detected | Rule YAML `metadata.description` |
 | `mitre_attack` | Semicolon-delimited `TAxxxx:Tyyyy.zzz` pairs | Rule YAML `metadata.mitre` |
 | `tags` | Semicolon-delimited operational tags | Rule YAML `metadata.tags` |
-| `owners` | Accountable rule owners (`;` in CSV, `, ` in Markdown, list in JSON) | Rule YAML `metadata.owners` |
-| `created_at` | Initial commit timestamp (ISO 8601) | Git commit history |
-| `last_modified_at` | Most recent commit timestamp (ISO 8601) | Git commit history |
-| `review_count` | Total number of revision commits | Git revision count |
-| `contributor_count` | Number of distinct Git authors | Git commit history |
-| `has_runbook` | Whether triage and response runbook is documented | Rule YAML `runbook` block |
+| `author` | Initial creator (author name of the earliest Git commit) | Git commit history (`--follow`) |
+| `owners` | Accountable rule owners (`;` in CSV, `, ` in Table/Markdown, list in JSON) | Rule YAML `metadata.owners` |
+| `owner_count` | Number of assigned accountable owners (`len(metadata.owners)`) | Rule YAML `metadata.owners` |
+| `created_at` | Initial commit date normalized to UTC `YYYY-MM-DD` | Git commit history (`--follow`) |
+| `last_modified_at` | Most recent commit date normalized to UTC `YYYY-MM-DD` | Git commit history (`--follow`) |
+| `review_count` | Total number of revision commits across file renames | Git commit history (`--follow`) |
+| `contributor_count` | Number of distinct Git author emails (case-insensitive) | Git commit history (`--follow`) |
 
 > [!NOTE]
-> **Why `priority`, `severity`, `alerting`, and `maturity` Are Omitted:**
+> **Why `priority`, `severity`, `alerting`, `has_runbook`, and `maturity` Are Omitted:**
 > - **`priority` and `severity`** do not belong at detection authoring time: **Priority** belongs at **Triage time** (where queue ordering depends on live asset criticality and identity context), and **Severity** belongs at **Response time** (where incident impact is determined after triage).
+> - **`has_runbook`** is omitted because the `runbook` block (`context`, `triage`, `response`) is strictly required and non-blank in all custom and registered managed rule schemas.
 > - Raw deployment fields (`alerting`, `enabled`, `run_frequency`) vary broadly by engine; Graft abstracts them into an engine-evaluated tri-state `status` (`enabled`, `silent`, `disabled`).
 > - Static `maturity` labels rot into administrative toil and false security. Objective VCS lifecycle and review metrics provide verifiable indicators without synthetic score inflation.
+
 
 ---
 
@@ -355,41 +357,41 @@ Open [`rulesets/secops/managed/index.yaml`](../../rulesets/secops/managed/index.
 
 ### Step 2: Scaffold the Registered Managed Rule
 ```bash
-graft secops new gcti_active_breach_network_indicators --managed 433faf9e-4d51-f284-c35b-009528ecff05
+graft secops new gcti_breach_network_indicator_matched --managed 433faf9e-4d51-f284-c35b-009528ecff05
 ```
 
 ### Step 3: Populate Metadata, MITRE & Runbook
-Edit `rulesets/secops/managed/gcti_active_breach_network_indicators.yaml` (validated against `base_managed.schema.json`):
+Edit `rulesets/secops/managed/gcti_breach_network_indicator_matched.yaml` (validated against `base_managed.schema.json`):
 ```yaml
 metadata:
-  id: "a4d89e12-3b77-4f08-9c61-82d47e910b3a"
-  name: "gcti_active_breach_network_indicators"
-  description: "Google Cloud Threat Intelligence network indicators from active breach investigations."
+  id: "e8a1b7c3-4f92-41d0-9e65-28f19c047110"
+  name: "gcti_breach_network_indicator_matched"
+  description: "GCTI curated ruleset matching active breach priority network indicators."
   owners:
-    - "Cloud Security Operations"
+    - "Joe Lopes"
   mitre:
     command-and-control:
-      - "T1071"
       - "T1071.001"
   tags:
     - "gcti"
-    - "curated"
     - "network"
   references:
-    - "https://cloud.google.com/chronicle/docs/detection/cloud-threats-category"
+    - "https://docs.cloud.google.com/chronicle/docs/detection/curated-detections"
 
 managed:
   id: "433faf9e-4d51-f284-c35b-009528ecff05"
 
 runbook:
-  context: |
-    Matches network telemetry against curated indicators of compromise (IoCs) maintained by GCTI.
+  context: "Google Cloud Threat Intelligence (GCTI) Active Breach Priority Network Indicators detects outbound and inbound network telemetry matching high-confidence command-and-control (C2) domains and IP addresses observed in active intrusion campaigns."
   triage: |
-    1. Inspect the matched indicator (domain, IP, or URI) and principal asset.
-    2. Pivot on the principal asset across DNS, proxy, and process telemetry.
+    1. Identify the internal host or workload initiating or receiving the network connection.
+    2. Inspect the matched GCTI indicator (domain or IP address), port, protocol, and process lineage.
+    3. Correlate endpoint and DNS telemetry on the affected asset over the preceding 24 hours.
+    4. Check if any other internal assets communicated with the same external infrastructure.
   response: |
-    1. Isolate the affected host or workload if active C2 is confirmed.
-    2. Block the indicator across perimeter firewall and DNS controls.
+    1. Isolate the affected host or workload if unauthorized C2 communication is confirmed.
+    2. Block the malicious domain and IP address at perimeter firewalls and DNS resolvers.
+    3. Capture volatile memory or disk artifacts and escalate to Incident Response.
 
 tests: []
 ```

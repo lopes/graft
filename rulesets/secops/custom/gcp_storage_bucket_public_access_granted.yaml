@@ -1,9 +1,9 @@
 metadata:
   id: "f84a1e93-61bc-4382-90ab-38f12a819003"
-  name: "gcp_storage_iam_public_access_granted"
+  name: "gcp_storage_bucket_public_access_granted"
   description: "Google Cloud Storage bucket IAM policy modified to grant public access."
   owners:
-    - "Cloud Security Operations"
+    - "Joe Lopes"
   mitre:
     initial-access:
       - "T1078.004"
@@ -11,20 +11,28 @@ metadata:
       - "T1685"
   tags:
     - "gcp"
-    - "gcs"
-    - "cloud_storage"
-    - "public_exposure"
     - "iam"
+    - "storage"
   references:
-    - "https://cloud.google.com/storage/docs/access-control/iam"
+    - "https://github.com/chronicle/detection-rules/blob/main/rules/community/gcp/gcp_storage_bucket_opened_to_public.yaral"
 
 logic: |
   events:
     $e.metadata.event_type = "USER_RESOURCE_UPDATE_PERMISSIONS"
-    $e.metadata.product_name = "GCP Cloud Audit"
+    $e.metadata.log_type = "GCP_CLOUDAUDIT"
     $e.metadata.product_event_type = "storage.setIamPermissions"
     $e.security_result.action = "ALLOW"
-    re.regex($e.target.resource.attribute.labels["members"], `(?i)(allUsers|allAuthenticatedUsers)`)
+    $e.target.resource.attribute.labels["ser_binding_deltas_action"] = "ADD"
+    (
+      $e.target.resource.attribute.labels["ser_binding_deltas_member"] = "allUsers" nocase or
+      $e.target.resource.attribute.labels["ser_binding_deltas_member"] = "allAuthenticatedUsers" nocase
+    )
+
+  outcome:
+    $principal_user = $e.principal.user.userid
+    $principal_ip = array_distinct($e.principal.ip)
+    $target_bucket = $e.target.resource.name
+
   condition:
     $e
 
@@ -38,7 +46,7 @@ runbook:
   triage: |
     1. Identify the targeted Cloud Storage bucket resource name.
     2. Determine the calling principal and authorization context.
-    3. Verify the specific roles granted (e.g., roles/storage.objectViewer, roles/storage.admin).
+    3. Verify the specific roles granted (e.g., roles/storage.objectViewer, roles/storage.admin, or custom roles).
     4. Check if public access prevention is enforced on the project or bucket level.
   response: |
     1. Immediately revoke the public member binding using gcloud storage.
@@ -55,14 +63,17 @@ tests:
         payload:
           metadata:
             event_type: "USER_RESOURCE_UPDATE_PERMISSIONS"
-            product_name: "GCP Cloud Audit"
+            log_type: "GCP_CLOUDAUDIT"
+            product_name: "Google Cloud Storage"
             product_event_type: "storage.setIamPermissions"
           target:
             resource:
               name: "projects/_/buckets/corp-confidential-data"
               attribute:
                 labels:
-                  members: "allUsers"
+                  ser_binding_deltas_action: "ADD"
+                  ser_binding_deltas_member: "allUsers"
+                  ser_binding_deltas_role: "roles/storage.objectViewer"
           security_result:
             action: "ALLOW"
 
@@ -74,13 +85,17 @@ tests:
         payload:
           metadata:
             event_type: "USER_RESOURCE_UPDATE_PERMISSIONS"
-            product_name: "GCP Cloud Audit"
+            log_type: "GCP_CLOUDAUDIT"
+            product_name: "Google Cloud Storage"
             product_event_type: "storage.setIamPermissions"
           target:
             resource:
               name: "projects/_/buckets/corp-confidential-data"
               attribute:
                 labels:
-                  members: "user:analyst@corp.example.com"
+                  ser_binding_deltas_action: "ADD"
+                  ser_binding_deltas_member: "user:analyst@corp.example.com"
+                  ser_binding_deltas_role: "roles/storage.objectViewer"
           security_result:
             action: "ALLOW"
+

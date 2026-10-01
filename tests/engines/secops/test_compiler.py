@@ -290,3 +290,20 @@ def test_extract_meta_id() -> None:
     # Meta block without id
     text4 = 'rule foo {\n  meta:\n    author = "SecOps"\n  events:\n    $e\n}'
     assert extract_meta_id(text4) is None
+
+
+def test_deconstruct_sanitizes_and_truncates_rule_slug() -> None:
+    long_header_rule = (
+        "rule __GCP__Cloud__Storage__Bucket__Public__Access__Granted"
+        "__Via__IAM__Policy__Change__Extra__ {"
+        "\n  events:\n    $e\n  condition:\n    $e\n}"
+    )
+    metadata, _ = deconstruct_yaral_rule(long_header_rule)
+    assert len(metadata.name) <= 64
+    assert not metadata.name.startswith("_")
+    assert not metadata.name.endswith("_")
+    assert "__" not in metadata.name
+
+    index_rule = "rule __index__ {\n  events:\n    $e\n  condition:\n    $e\n}"
+    index_meta, _ = deconstruct_yaral_rule(index_rule)
+    assert index_meta.name == "index_rule"

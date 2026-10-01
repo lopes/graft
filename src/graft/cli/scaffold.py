@@ -6,7 +6,8 @@ import yaml
 
 from graft.core.validation.schema_validator import SchemaValidator
 
-IDENTIFIER_PATTERN = re.compile(r"^[a-z0-9_]+$")
+IDENTIFIER_PATTERN = re.compile(r"^[a-z0-9]+(?:_[a-z0-9]+)*$")
+MAX_IDENTIFIER_LEN = 64
 
 
 class ScaffoldError(Exception):
@@ -14,8 +15,12 @@ class ScaffoldError(Exception):
 
 
 def _validate_identifier(name: str, kind: str) -> None:
-    if not IDENTIFIER_PATTERN.match(name):
-        raise ScaffoldError(f"Invalid {kind} name '{name}'. Must match lowercase slug ^[a-z0-9_]+$")
+    if not (1 <= len(name) <= MAX_IDENTIFIER_LEN) or not IDENTIFIER_PATTERN.match(name):
+        raise ScaffoldError(
+            f"Invalid {kind} name '{name}'. Must be 1..{MAX_IDENTIFIER_LEN} chars matching "
+            f"{IDENTIFIER_PATTERN.pattern} (lowercase alphanumeric and single underscores, "
+            "never starting or ending with underscores)"
+        )
 
 
 def scaffold_engine(name: str, project_root: Path | None = None) -> dict[str, Path]:
@@ -437,6 +442,11 @@ def scaffold_rule(
     dest = (
         Path(out_path) if out_path else (root / "rulesets" / engine / subdir / f"{rule_name}.yaml")
     )
+    if dest.stem == "index":
+        raise ScaffoldError(
+            "Invalid rule filename 'index'. 'index' is reserved for managed/index.yaml"
+        )
+    _validate_identifier(dest.stem, "rule filename")
     if dest.exists():
         raise ScaffoldError(f"Rule file already exists at {dest}")
 

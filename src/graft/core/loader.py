@@ -1,3 +1,4 @@
+import re
 from pathlib import Path
 from typing import Any
 
@@ -15,9 +16,23 @@ from graft.core.models.rule import (
 from graft.core.validation.mitre_validator import MitreValidator
 from graft.core.validation.schema_validator import SchemaValidator
 
+RULE_IDENTIFIER_PATTERN = re.compile(r"^[a-z0-9]+(?:_[a-z0-9]+)*$")
+MAX_RULE_IDENTIFIER_LEN = 64
+
 
 class RuleLoadError(Exception):
     pass
+
+
+def validate_rule_identifier(name: str, kind: str = "rule filename") -> None:
+    if name == "index":
+        raise RuleLoadError(f"Invalid {kind} '{name}': 'index' is reserved for managed/index.yaml")
+    if not (1 <= len(name) <= MAX_RULE_IDENTIFIER_LEN) or not RULE_IDENTIFIER_PATTERN.match(name):
+        raise RuleLoadError(
+            f"Invalid {kind} '{name}': must be 1..{MAX_RULE_IDENTIFIER_LEN} chars matching "
+            f"{RULE_IDENTIFIER_PATTERN.pattern} (lowercase alphanumeric and single underscores, "
+            "never starting or ending with underscores)"
+        )
 
 
 def load_rule_from_str(
@@ -135,6 +150,7 @@ def load_rule_from_yaml(
     file_path = Path(path)
     if not file_path.is_file():
         raise RuleLoadError(f"Rule file not found: {file_path}")
+    validate_rule_identifier(file_path.stem, kind="rule filename")
     content = file_path.read_text(encoding="utf-8")
 
     if schema_name is None:

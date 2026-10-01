@@ -24,12 +24,13 @@ class CatalogEntry:
     description: str
     mitre_attack: tuple[str, ...]
     tags: tuple[str, ...]
+    author: str
     owners: tuple[str, ...]
+    owner_count: int
     created_at: str
     last_modified_at: str
     review_count: int
     contributor_count: int
-    has_runbook: bool
 
 
 @functools.cache
@@ -60,9 +61,11 @@ def resolve_rule_deployment_status(
 ) -> str:
     if adapter is not None and hasattr(adapter, "resolve_deployment_status"):
         return adapter.resolve_deployment_status(rule, managed_state=managed_state)
-    if rule.is_managed:
+    if rule.is_managed or not rule.deployment.enabled:
         return "disabled"
-    return "enabled" if rule.deployment.enabled else "disabled"
+    if not rule.deployment.alerting:
+        return "silent"
+    return "enabled"
 
 
 def build_catalog_entry_from_rule(
@@ -73,6 +76,7 @@ def build_catalog_entry_from_rule(
     status: str | None = None,
     managed_state: ManagedState | None = None,
 ) -> CatalogEntry:
+    author = "Unknown"
     created_at = "Unknown"
     last_modified_at = "Unknown"
     review_count = 0
@@ -82,6 +86,7 @@ def build_catalog_entry_from_rule(
         p = Path(path)
         if p.is_file():
             git_meta = extract_git_metadata(p)
+            author = git_meta.author
             created_at = git_meta.created_at
             last_modified_at = git_meta.last_modified_at
             review_count = git_meta.commit_count
@@ -91,9 +96,6 @@ def build_catalog_entry_from_rule(
         rule, engine, adapter, managed_state=managed_state
     )
     mitre_attack = resolve_mitre_attack_pairs(rule.metadata.mitre)
-    has_runbook = bool(
-        rule.runbook.context.strip() or rule.runbook.triage.strip() or rule.runbook.response.strip()
-    )
 
     return CatalogEntry(
         id=rule.metadata.id,
@@ -104,12 +106,13 @@ def build_catalog_entry_from_rule(
         description=rule.metadata.description,
         mitre_attack=mitre_attack,
         tags=rule.metadata.tags,
+        author=author,
         owners=rule.metadata.owners,
+        owner_count=len(rule.metadata.owners),
         created_at=created_at,
         last_modified_at=last_modified_at,
         review_count=review_count,
         contributor_count=contributor_count,
-        has_runbook=has_runbook,
     )
 
 
@@ -123,13 +126,14 @@ def render_catalog_table(entries: Sequence[CatalogEntry]) -> str:
         "Type",
         "Status",
         "MITRE ATT&CK",
+        "Owners",
         "Reviews",
-        "Runbook",
         "Updated",
     ]
     rows: list[list[str]] = []
     for e in entries:
         mitre_str = ", ".join(e.mitre_attack) if e.mitre_attack else "-"
+        owners_str = ", ".join(e.owners) if e.owners else "-"
         rows.append(
             [
                 e.name,
@@ -137,8 +141,8 @@ def render_catalog_table(entries: Sequence[CatalogEntry]) -> str:
                 e.rule_type,
                 e.status,
                 mitre_str,
+                owners_str,
                 str(e.review_count),
-                "yes" if e.has_runbook else "no",
                 e.last_modified_at if e.last_modified_at != "Unknown" else "-",
             ]
         )
@@ -166,12 +170,13 @@ def export_catalog_markdown(entries: Sequence[CatalogEntry]) -> str:
         "Type",
         "Status",
         "MITRE ATT&CK",
+        "Author",
         "Owners",
+        "Owner Count",
         "Created",
         "Last Updated",
         "Reviews",
         "Contributors",
-        "Runbook",
     ]
     lines: list[str] = [
         f"| {' | '.join(headers)} |",
@@ -187,12 +192,13 @@ def export_catalog_markdown(entries: Sequence[CatalogEntry]) -> str:
             e.rule_type,
             e.status,
             mitre_str,
+            e.author if e.author != "Unknown" else "-",
             owners_str,
+            str(e.owner_count),
             e.created_at if e.created_at != "Unknown" else "-",
             e.last_modified_at if e.last_modified_at != "Unknown" else "-",
             str(e.review_count),
             str(e.contributor_count),
-            "yes" if e.has_runbook else "no",
         ]
         lines.append(f"| {' | '.join(row)} |")
 
@@ -209,12 +215,13 @@ def export_catalog_csv(entries: Sequence[CatalogEntry]) -> str:
         "description",
         "mitre_attack",
         "tags",
+        "author",
         "owners",
+        "owner_count",
         "created_at",
         "last_modified_at",
         "review_count",
         "contributor_count",
-        "has_runbook",
     ]
 
     output = io.StringIO()

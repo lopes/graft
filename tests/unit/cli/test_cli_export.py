@@ -58,8 +58,10 @@ def test_export_catalog_table_default_stdout(capsys: pytest.CaptureFixture[str])
     captured = capsys.readouterr()
     assert "Rule Name" in captured.out
     assert "Type" in captured.out
-    assert "workspace_nrd_possible_phishing" in captured.out
-    assert "gcti_active_breach_network_indicators" in captured.out
+    assert "Owners" in captured.out
+    assert "Runbook" not in captured.out
+    assert "workspace_nrd_email_opened" in captured.out
+    assert "gcti_breach_network_indicator_matched" in captured.out
     assert "secops" in captured.out
     assert "custom" in captured.out
     assert "managed" in captured.out
@@ -71,20 +73,28 @@ def test_export_catalog_markdown_stdout(capsys: pytest.CaptureFixture[str]) -> N
     exit_code = main(["export", "catalog", "--format", "markdown"])
     assert exit_code == 0
     captured = capsys.readouterr()
-    assert "| Rule Name | Engine | Type | Status | MITRE ATT&CK | Owners |" in captured.out
-    assert "`workspace_nrd_possible_phishing`" in captured.out
-    assert "`gcp_iam_service_account_key_create`" in captured.out
-    assert "`gcti_active_breach_network_indicators`" in captured.out
-    assert "Cloud Security Operations" in captured.out
+    assert (
+        "| Rule Name | Engine | Type | Status | MITRE ATT&CK | Author | Owners | Owner Count |"
+        in captured.out
+    )
+    assert "Runbook" not in captured.out
+    assert "`workspace_nrd_email_opened`" in captured.out
+    assert "`gcp_service_account_key_created`" in captured.out
+    assert "`gcti_breach_network_indicator_matched`" in captured.out
+    assert "Joe Lopes" in captured.out
 
 
 def test_export_catalog_csv_stdout(capsys: pytest.CaptureFixture[str]) -> None:
     exit_code = main(["export", "catalog", "--format", "csv"])
     assert exit_code == 0
     captured = capsys.readouterr()
-    assert "id,name,engine,rule_type,status,description,mitre_attack,tags,owners," in captured.out
-    assert "workspace_nrd_possible_phishing" in captured.out
-    assert "gcti_active_breach_network_indicators" in captured.out
+    assert (
+        "id,name,engine,rule_type,status,description,mitre_attack,tags,author,owners,owner_count,"
+        in captured.out
+    )
+    assert "has_runbook" not in captured.out
+    assert "workspace_nrd_email_opened" in captured.out
+    assert "gcti_breach_network_indicator_matched" in captured.out
     assert "TA0001:T1566.002" in captured.out
 
 
@@ -95,18 +105,21 @@ def test_export_catalog_json_stdout(capsys: pytest.CaptureFixture[str]) -> None:
     data = json.loads(captured.out)
     assert isinstance(data, list)
     rule_names = [r["name"] for r in data]
-    assert "workspace_nrd_possible_phishing" in rule_names
-    assert "gcp_iam_service_account_key_create" in rule_names
-    assert "gcti_active_breach_network_indicators" in rule_names
+    assert "workspace_nrd_email_opened" in rule_names
+    assert "gcp_service_account_key_created" in rule_names
+    assert "gcti_breach_network_indicator_matched" in rule_names
     rule_types = {r["name"]: r["rule_type"] for r in data}
-    assert rule_types["workspace_nrd_possible_phishing"] == "custom"
-    assert rule_types["gcti_active_breach_network_indicators"] == "managed"
+    assert rule_types["workspace_nrd_email_opened"] == "custom"
+    assert rule_types["gcti_breach_network_indicator_matched"] == "managed"
     for r in data:
         assert "status" in r
         assert "mitre_attack" in r
+        assert "author" in r
         assert "owners" in r
         assert isinstance(r["owners"], list)
-        assert "author" not in r
+        assert "owner_count" in r
+        assert r["owner_count"] == len(r["owners"])
+        assert "has_runbook" not in r
         assert "severity" not in r
 
 
@@ -116,4 +129,4 @@ def test_export_catalog_out_file(tmp_path: Path) -> None:
     assert exit_code == 0
     assert out_file.is_file()
     content = out_file.read_text(encoding="utf-8")
-    assert "workspace_nrd_possible_phishing" in content
+    assert "workspace_nrd_email_opened" in content

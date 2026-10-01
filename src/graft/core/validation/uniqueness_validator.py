@@ -20,6 +20,7 @@ class RuleUniquenessValidator:
     def __init__(self) -> None:
         self._seen_ids: dict[str, tuple[str, str]] = {}
         self._seen_names: dict[tuple[str, str], str] = {}
+        self._seen_file_stems: dict[tuple[str, str], str] = {}
         self._seen_managed_ids: dict[tuple[str, str], str] = {}
 
     def add_and_validate(
@@ -29,7 +30,9 @@ class RuleUniquenessValidator:
         path: Path | str,
     ) -> list[RuleUniquenessViolation]:
         violations: list[RuleUniquenessViolation] = []
+        path_obj = Path(path)
         path_str = str(path)
+        file_stem = path_obj.stem
         rule_id = rule.metadata.id
         rule_name = rule.metadata.name
 
@@ -77,6 +80,30 @@ class RuleUniquenessValidator:
         else:
             self._seen_names[engine_name_key] = path_str
 
+        if file_stem:
+            engine_stem_key = (engine, file_stem)
+            if engine_stem_key in self._seen_file_stems:
+                conflicting_path = self._seen_file_stems[engine_stem_key]
+                if conflicting_path != path_str:
+                    violations.append(
+                        RuleUniquenessViolation(
+                            rule_id=rule_id,
+                            rule_name=rule_name,
+                            engine=engine,
+                            path=path_str,
+                            conflicting_path=conflicting_path,
+                            conflicting_engine=engine,
+                            violation_type="file_stem",
+                            message=(
+                                f"Duplicate rule filename stem '{file_stem}' in engine '{engine}' "
+                                f"in '{path_str}' conflicts with '{conflicting_path}'. "
+                                "Rule filenames must be unique within their engine."
+                            ),
+                        )
+                    )
+            else:
+                self._seen_file_stems[engine_stem_key] = path_str
+
         if rule.managed is not None:
             managed_key = (engine, rule.managed.id)
             if managed_key in self._seen_managed_ids:
@@ -105,4 +132,5 @@ class RuleUniquenessValidator:
     def reset(self) -> None:
         self._seen_ids.clear()
         self._seen_names.clear()
+        self._seen_file_stems.clear()
         self._seen_managed_ids.clear()

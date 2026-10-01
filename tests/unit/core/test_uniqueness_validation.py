@@ -174,3 +174,45 @@ def test_same_managed_id_across_different_engines_allowed() -> None:
 
     assert len(v1) == 0
     assert len(v2) == 0
+
+
+def test_duplicate_file_stem_within_same_engine_rejected() -> None:
+    validator = RuleUniquenessValidator()
+    rule1 = _make_rule("id-1", "first_internal_name")
+    rule2 = _make_rule("id-2", "second_internal_name")
+    rule3 = _make_rule("id-3", "third_internal_name")
+
+    v1 = validator.add_and_validate(
+        rule1, engine="secops", path=Path("rulesets/secops/custom/shared_stem.yaml")
+    )
+    # Same directory, .yml vs .yaml collision with different metadata.name
+    v2 = validator.add_and_validate(
+        rule2, engine="secops", path=Path("rulesets/secops/custom/shared_stem.yml")
+    )
+    # custom/ vs managed/ stem collision within the same engine
+    v3 = validator.add_and_validate(
+        rule3, engine="secops", path=Path("rulesets/secops/managed/shared_stem.yaml")
+    )
+
+    assert len(v1) == 0
+    assert len(v2) == 1
+    assert v2[0].violation_type == "file_stem"
+    assert "shared_stem" in v2[0].message
+    assert len(v3) == 1
+    assert v3[0].violation_type == "file_stem"
+
+
+def test_same_file_stem_across_different_engines_allowed() -> None:
+    validator = RuleUniquenessValidator()
+    rule1 = _make_rule("id-1", "first_name")
+    rule2 = _make_rule("id-2", "second_name")
+
+    v1 = validator.add_and_validate(
+        rule1, engine="secops", path=Path("rulesets/secops/custom/shared_stem.yaml")
+    )
+    v2 = validator.add_and_validate(
+        rule2, engine="crowdstrike", path=Path("rulesets/crowdstrike/custom/shared_stem.yaml")
+    )
+
+    assert len(v1) == 0
+    assert len(v2) == 0

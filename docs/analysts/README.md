@@ -10,11 +10,11 @@ As a detection engineer using Graft, you interact with detections as first-class
 
 ```mermaid
 flowchart LR
-    SCAFFOLD["1. Scaffold<br/><code>graft secops new</code>"] --> AUTHOR["2. Author<br/>Logic, Runbook, Tests"]
+    SCAFFOLD["1. Scaffold<br/><code>graft &lt;engine&gt; new</code>"] --> AUTHOR["2. Author<br/>Logic, Runbook, Tests"]
     AUTHOR --> LINT["3. Offline Lint<br/><code>graft lint</code>"]
-    LINT --> VERIFY["4. Dry-Run Syntax<br/><code>graft secops verify</code>"]
-    VERIFY --> TEST["5. Replay Test<br/><code>graft secops test</code>"]
-    TEST --> DIFF["6. Scoped Diff<br/><code>graft secops diff</code>"]
+    LINT --> VERIFY["4. Dry-Run Syntax<br/><code>graft &lt;engine&gt; verify</code>"]
+    VERIFY --> TEST["5. Replay Test<br/><code>graft &lt;engine&gt; test</code>"]
+    TEST --> DIFF["6. Scoped Diff<br/><code>graft &lt;engine&gt; diff</code>"]
     DIFF --> PR["7. Pull Request<br/>Review & Merge"]
 ```
 
@@ -31,6 +31,7 @@ flowchart LR
 ## Analyst Documentation Index
 
 - **📖 [Detection Recipes Cookbook](recipes.md):** Step-by-step practical recipes for everyday rule management tasks using Google SecOps as the reference implementation.
-- **📝 [Rule Authoring Specification](rule_authoring.md):** Complete specification of the 5-block custom rule envelope (`metadata`, `logic`, `deployment`, `runbook`, `tests`), the 4-block registered managed rule envelope (`metadata`, `managed`, `runbook`, `tests`), uniqueness constraints, and YARA-L patterns.
-- **🧪 [Synthetic Replay Testing](replay_testing.md):** Guide to crafting synthetic UDM event fixtures, running quarantined tests, and asserting detection outcomes without alert pollution.
-- **📊 [Threat Coverage & Catalogs](visibility_and_matrix.md):** Mapping detections to the MITRE ATT&CK matrix, generating ATT&CK Navigator v4.5 heatmaps, and exporting Git blame-attributed rule catalogs.
+- **📝 [Rule Authoring Specification](rule_authoring.md):** Complete specification of the 5-block custom rule envelope (`metadata`, `logic`, `deployment`, `runbook`, `tests`), the 4-block registered managed rule envelope (`metadata`, `managed`, `runbook`, `tests`), uniqueness constraints, and engine-native query patterns.
+- **🧪 [Synthetic Replay Testing](replay_testing.md):** Guide to crafting synthetic event fixtures, running quarantined tests, and asserting detection outcomes without alert pollution.
+- **📊 [Threat Coverage & Catalogs](visibility_and_matrix.md):** Mapping detections to the MITRE ATT&CK matrix, generating ATT&CK Navigator v4.5 heatmaps, and exporting Git provenance-enriched rule catalogs.
+
