@@ -97,6 +97,7 @@ class EngineRegistry:
         caps_raw = raw_data.get("capabilities", {})
         capabilities = EngineCapabilities(
             custom_rules=bool(caps_raw.get("custom_rules", True)),
+            datasets=bool(caps_raw.get("datasets", False)),
             syntax_verification=bool(caps_raw.get("syntax_verification", False)),
             managed_rules=bool(caps_raw.get("managed_rules", False)),
             replay_testing=bool(caps_raw.get("replay_testing", False)),

@@ -11,7 +11,13 @@ from typing import Any
 from graft.cli.scaffold import scaffold_rule
 from graft.core.engine_registry import EngineRegistry
 from graft.core.git import get_changed_files
-from graft.core.loader import dump_rule_to_yaml, load_rule_from_yaml
+from graft.core.loader import (
+    dump_dataset_to_yaml,
+    dump_rule_to_yaml,
+    load_dataset_from_yaml,
+    load_rule_from_yaml,
+)
+from graft.core.models.dataset import DatasetEnvelope
 from graft.core.models.engine import EngineManifest
 from graft.core.models.managed import ManagedState
 from graft.core.models.rule import RuleEnvelope
@@ -19,6 +25,7 @@ from graft.core.ports.engine import EngineAdapter
 from graft.core.ports.managed import ManagedEnginePort
 from graft.core.reconciler import (
     CustomRuleReconciler,
+    DatasetReconciler,
     GitOpsReconciler,
     ReconciliationDiff,
 )
@@ -51,10 +58,49 @@ def _iter_custom_yaml_files(directory: Path) -> list[Path]:
     return files
 
 
+def _iter_dataset_yaml_files(directory: Path) -> list[Path]:
+    files = sorted(
+        f
+        for f in directory.rglob("*.yaml")
+        if not any(part.startswith("_") for part in f.relative_to(directory).parts)
+    )
+    files.extend(
+        sorted(
+            f
+            for f in directory.rglob("*.yml")
+            if not any(part.startswith("_") for part in f.relative_to(directory).parts)
+        )
+    )
+    return files
+
+
 class EngineCommandController:
     def __init__(self, manifest: EngineManifest, registry: EngineRegistry) -> None:
         self.manifest = manifest
         self.registry = registry
+
+    def _load_datasets(
+        self,
+        datasets_dir: Path | None = None,
+        filter_paths: set[Path] | None = None,
+    ) -> tuple[DatasetEnvelope, ...]:
+        target_dir = datasets_dir or Path("datasets")
+        datasets: list[DatasetEnvelope] = []
+        if target_dir.is_dir():
+            for ds_path in _iter_dataset_yaml_files(target_dir):
+                if filter_paths is not None and (
+                    ds_path.resolve() not in filter_paths and ds_path not in filter_paths
+                ):
+                    continue
+                try:
+                    ds = load_dataset_from_yaml(ds_path)
+                    datasets.append(ds)
+                except Exception as exc:
+                    logger.error("Failed loading dataset %s: %s", ds_path, exc)
+                    err = RuntimeError(f"Failed loading dataset '{ds_path}': {exc}")
+                    err._graft_logged = True  # type: ignore[attr-defined]
+                    raise err from exc
+        return tuple(datasets)
 
     def _load_custom_rules(
         self,
@@ -390,6 +436,7 @@ class EngineCommandController:
         all_rules = getattr(args, "all_rules", False)
         adapter = self.registry.load_adapter(self.manifest.name, env=env)
 
+        run_datasets = target in ("datasets", "all") and self.manifest.capabilities.datasets
         run_custom = target in ("custom", "all")
         run_managed = target in ("managed", "all") and self.manifest.capabilities.managed_rules
 
@@ -403,6 +450,13 @@ class EngineCommandController:
             ):
                 run_managed = False
 
+            if run_datasets:
+                datasets = self._load_datasets(filter_paths=changed)
+                if not datasets:
+                    run_datasets = False
+            else:
+                datasets = ()
+
             if run_custom:
                 custom_rules = self._load_custom_rules(filter_paths=changed)
                 if not custom_rules:
@@ -410,7 +464,7 @@ class EngineCommandController:
             else:
                 custom_rules = ()
 
-            if not run_custom and not run_managed:
+            if not run_datasets and not run_custom and not run_managed:
                 if json_output:
                     sys.stdout.write(
                         json.dumps(
@@ -430,12 +484,32 @@ class EngineCommandController:
                     )
                 return 0
         else:
+            datasets = self._load_datasets() if run_datasets else ()
             custom_rules = self._load_custom_rules() if run_custom else ()
 
         has_drift = False
         payload: dict[str, Any] = {}
 
-        # Custom rules diff
+        # 1. Datasets diff
+        if run_datasets and datasets:
+            dataset_port = adapter.get_dataset()
+            if dataset_port is not None:
+                ds_names = tuple(d.metadata.name for d in datasets)
+                remote_ds = dataset_port.list_datasets(names=ds_names)
+                ds_reconciler = DatasetReconciler()
+                ds_diff = ds_reconciler.diff(current=remote_ds, desired=datasets)
+                if ds_diff.has_changes:
+                    has_drift = True
+                payload["datasets"] = {
+                    "has_changes": ds_diff.has_changes,
+                    "datasets_to_create": [d.metadata.name for d in ds_diff.datasets_to_create],
+                    "datasets_to_update": [d.metadata.name for d in ds_diff.datasets_to_update],
+                }
+                if not json_output:
+                    sys.stdout.write("=== Datasets Diff ===\n")
+                    sys.stdout.write(ds_diff.render_summary() + "\n\n")
+
+        # 2. Custom rules diff
         if run_custom:
             deployer = adapter.get_deployer()
             if deployer is not None:
@@ -471,7 +545,7 @@ class EngineCommandController:
                     sys.stdout.write("=== Custom Rules Diff ===\n")
                     sys.stdout.write(diff.render_summary() + "\n\n")
 
-        # Managed diff
+        # 3. Managed diff
         if run_managed:
             managed_port = adapter.get_managed()
             if managed_port is not None:
@@ -495,6 +569,7 @@ class EngineCommandController:
         all_rules = getattr(args, "all_rules", False)
         adapter = self.registry.load_adapter(self.manifest.name, env=env)
 
+        run_datasets = target in ("datasets", "all") and self.manifest.capabilities.datasets
         run_custom = target in ("custom", "all")
         run_managed = target in ("managed", "all") and self.manifest.capabilities.managed_rules
 
@@ -508,6 +583,13 @@ class EngineCommandController:
             ):
                 run_managed = False
 
+            if run_datasets:
+                datasets = self._load_datasets(filter_paths=changed)
+                if not datasets:
+                    run_datasets = False
+            else:
+                datasets = ()
+
             if run_custom:
                 custom_rules = self._load_custom_rules(filter_paths=changed)
                 if not custom_rules:
@@ -515,7 +597,7 @@ class EngineCommandController:
             else:
                 custom_rules = ()
 
-            if not run_custom and not run_managed:
+            if not run_datasets and not run_custom and not run_managed:
                 if json_output:
                     sys.stdout.write(
                         json.dumps(
@@ -535,10 +617,39 @@ class EngineCommandController:
                     )
                 return 0
         else:
+            datasets = self._load_datasets() if run_datasets else ()
             custom_rules = self._load_custom_rules() if run_custom else ()
 
         payload: dict[str, Any] = {}
 
+        # 1. Datasets apply (always before custom rules and managed content)
+        if run_datasets and datasets:
+            dataset_port = adapter.get_dataset()
+            if dataset_port is not None:
+                ds_reconciler = DatasetReconciler()
+                try:
+                    ds_diff = ds_reconciler.apply(desired=datasets, port=dataset_port)
+                except Exception:
+                    if run_custom or run_managed:
+                        logger.warning(
+                            "Skipping custom rules and managed state reconciliation "
+                            "due to datasets failure"
+                        )
+                    raise
+                payload["datasets"] = {
+                    "applied": True,
+                    "has_changes": ds_diff.has_changes,
+                    "created": len(ds_diff.datasets_to_create),
+                    "updated": len(ds_diff.datasets_to_update),
+                }
+                if not json_output:
+                    sys.stdout.write(
+                        f"Applied datasets: {len(ds_diff.datasets_to_create)} created, "
+                        f"{len(ds_diff.datasets_to_update)} updated.\n"
+                    )
+                    sys.stdout.flush()
+
+        # 2. Custom rules apply
         if run_custom:
             deployer = adapter.get_deployer()
             if deployer is not None:
@@ -578,6 +689,7 @@ class EngineCommandController:
                     )
                     sys.stdout.flush()
 
+        # 3. Managed state apply
         if run_managed:
             managed_port = adapter.get_managed()
             if managed_port is not None:
@@ -657,13 +769,32 @@ class EngineCommandController:
         out_manifest = Path(
             getattr(args, "out_manifest", f"rulesets/{self.manifest.name}/managed/index.yaml")
         )
+        out_datasets_dir = Path(getattr(args, "out_datasets_dir", "datasets"))
 
         adapter = self.registry.load_adapter(self.manifest.name, env=env)
         imported_files: list[str] = []
+        imported_datasets: list[str] = []
         skipped_count = 0
+        skipped_datasets_count = 0
         pulled_state: ManagedState | None = None
         deployer = adapter.get_deployer()
         managed_port = adapter.get_managed()
+        dataset_port = adapter.get_dataset()
+
+        if (
+            target == "datasets"
+            and self.manifest.capabilities.datasets
+            and dataset_port is not None
+        ):
+            out_datasets_dir.mkdir(parents=True, exist_ok=True)
+            remote_datasets = dataset_port.list_datasets(names=None)
+            for ds in remote_datasets:
+                dest_file = out_datasets_dir / f"{ds.metadata.name}.yaml"
+                if dest_file.exists() and not force:
+                    skipped_datasets_count += 1
+                    continue
+                dump_dataset_to_yaml(ds, dest_file)
+                imported_datasets.append(ds.metadata.name)
 
         if (
             target in ("all", "managed")
@@ -690,6 +821,12 @@ class EngineCommandController:
 
         if json_output:
             payload: dict[str, Any] = {}
+            if target == "datasets":
+                payload["datasets"] = {
+                    "pulled": True,
+                    "count": len(imported_datasets),
+                    "datasets": imported_datasets,
+                }
             if target in ("all", "managed") and pulled_state is not None:
                 payload["managed"] = {
                     "pulled": True,
@@ -705,6 +842,16 @@ class EngineCommandController:
                 }
             sys.stdout.write(json.dumps(payload, indent=2) + "\n")
         else:
+            if target == "datasets":
+                skip_ds_msg = (
+                    f" (Skipped {skipped_datasets_count} existing files. Use --force to overwrite)"
+                    if skipped_datasets_count > 0
+                    else ""
+                )
+                sys.stdout.write(
+                    f"Pulled {len(imported_datasets)} datasets into "
+                    f"{out_datasets_dir}{skip_ds_msg}\n"
+                )
             if target in ("all", "managed") and pulled_state is not None:
                 sys.stdout.write(
                     f"Pulled managed state: {len(pulled_state.rulesets)} rulesets, "
@@ -785,7 +932,13 @@ def register_engine_commands(
             help="Scaffold a registered managed rule in rulesets/<engine>/managed/",
         )
 
-        targets = ["custom", "managed", "all"] if caps.managed_rules else ["custom"]
+        targets: list[str] = ["custom"]
+        if caps.datasets:
+            targets.append("datasets")
+        if caps.managed_rules:
+            targets.append("managed")
+        if len(targets) > 1:
+            targets.append("all")
 
         # diff
         diff_p = cmd_subparsers.add_parser(
@@ -804,7 +957,9 @@ def register_engine_commands(
         apply_p.add_argument("--all", "--full", action="store_true", dest="all_rules")
 
         # pull
-        pull_targets = ["all", "custom", "managed"] if caps.managed_rules else ["custom"]
+        pull_targets: list[str] = ["all", "custom", "managed"] if caps.managed_rules else ["custom"]
+        if caps.datasets:
+            pull_targets.append("datasets")
         pull_p = cmd_subparsers.add_parser("pull", help="Pull rules and state from remote tenant")
         pull_p.add_argument("--env", choices=envs, default=envs[-1] if envs else "production")
         pull_p.add_argument("--target", choices=pull_targets, default=pull_targets[0])
@@ -812,6 +967,7 @@ def register_engine_commands(
         pull_p.add_argument(
             "--out-manifest", default=f"rulesets/{manifest.name}/managed/index.yaml"
         )
+        pull_p.add_argument("--out-datasets-dir", default="datasets")
         pull_p.add_argument("--force", action="store_true")
 
     if caps.syntax_verification:

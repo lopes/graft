@@ -3,12 +3,14 @@ import logging
 from collections.abc import Callable
 from dataclasses import dataclass
 
+from graft.core.models.dataset import DatasetEnvelope
 from graft.core.models.managed import (
     ManagedExclusion,
     ManagedRuleSet,
     ManagedState,
 )
 from graft.core.models.rule import RuleEnvelope
+from graft.core.ports.dataset import DatasetPort
 from graft.core.ports.deployer import RuleDeployerPort
 from graft.core.ports.managed import ManagedEnginePort
 
@@ -17,6 +19,8 @@ logger = logging.getLogger("graft.reconciler")
 __all__ = [
     "CustomRuleReconciler",
     "CustomRulesReconciliationDiff",
+    "DatasetReconciler",
+    "DatasetsReconciliationDiff",
     "DeploymentDiff",
     "ExclusionDiff",
     "GitOpsReconciler",
@@ -511,5 +515,117 @@ class CustomRuleReconciler:
             "Custom rules reconciliation complete. %d creations, %d updates.",
             len(reconcile_diff.rules_to_create),
             len(reconcile_diff.rules_to_update),
+        )
+        return reconcile_diff
+
+
+@dataclass(frozen=True)
+class DatasetsReconciliationDiff:
+    datasets_to_create: tuple[DatasetEnvelope, ...] = ()
+    datasets_to_update: tuple[DatasetEnvelope, ...] = ()
+
+    @property
+    def has_changes(self) -> bool:
+        return bool(self.datasets_to_create or self.datasets_to_update)
+
+    def render_summary(self) -> str:
+        lines: list[str] = []
+        for ds in self.datasets_to_create:
+            lines.append(f"[+] Dataset to create: {ds.metadata.name} ({len(ds.values)} values)")
+        for ds in self.datasets_to_update:
+            lines.append(f"[~] Dataset to update: {ds.metadata.name} ({len(ds.values)} values)")
+        if not lines:
+            return "No dataset changes detected. Datasets are synchronized with tenant."
+        return "\n".join(lines)
+
+
+class DatasetReconciler:
+    def diff(
+        self,
+        current: tuple[DatasetEnvelope, ...],
+        desired: tuple[DatasetEnvelope, ...],
+    ) -> DatasetsReconciliationDiff:
+        current_by_name = {ds.metadata.name: ds for ds in current}
+        datasets_to_create: list[DatasetEnvelope] = []
+        datasets_to_update: list[DatasetEnvelope] = []
+
+        for des_ds in desired:
+            curr_ds = current_by_name.get(des_ds.metadata.name)
+            if curr_ds is None:
+                datasets_to_create.append(des_ds)
+                continue
+
+            values_equal = set(des_ds.values) == set(curr_ds.values)
+            description_equal = (
+                des_ds.metadata.description.strip() == curr_ds.metadata.description.strip()
+            )
+            if not values_equal or not description_equal:
+                datasets_to_update.append(des_ds)
+
+        return DatasetsReconciliationDiff(
+            datasets_to_create=tuple(datasets_to_create),
+            datasets_to_update=tuple(datasets_to_update),
+        )
+
+    def apply(
+        self,
+        desired: tuple[DatasetEnvelope, ...],
+        port: DatasetPort,
+    ) -> DatasetsReconciliationDiff:
+        logger.info("Starting datasets reconciliation against target tenant")
+        desired_names = tuple(ds.metadata.name for ds in desired)
+        current = port.list_datasets(names=desired_names) if desired_names else ()
+        reconcile_diff = self.diff(current=current, desired=desired)
+
+        if not reconcile_diff.has_changes:
+            logger.info("Target tenant is already aligned with desired datasets. No actions taken.")
+            return reconcile_diff
+
+        planned_names: list[str] = [
+            *(ds.metadata.name for ds in reconcile_diff.datasets_to_create),
+            *(ds.metadata.name for ds in reconcile_diff.datasets_to_update),
+        ]
+        total_actions = len(planned_names)
+        applied_names: list[str] = []
+
+        def _log_dataset_abort(failed_name: str, exc: Exception) -> None:
+            pending_names = planned_names[len(applied_names) + 1 :]
+            logger.error(
+                "Datasets reconciliation aborted: %d/%d applied %s, 1 failed [%s], %d pending %s",
+                len(applied_names),
+                total_actions,
+                applied_names,
+                failed_name,
+                len(pending_names),
+                pending_names,
+            )
+            exc._graft_logged = True  # type: ignore[attr-defined]
+
+        for ds in reconcile_diff.datasets_to_create:
+            logger.info("Creating dataset '%s' in tenant", ds.metadata.name)
+            try:
+                port.create_dataset(ds)
+            except Exception as exc:
+                logger.error("Failed creating dataset '%s': %s", ds.metadata.name, exc)
+                _log_dataset_abort(ds.metadata.name, exc)
+                raise
+            applied_names.append(ds.metadata.name)
+            logger.info("Created dataset '%s' in tenant", ds.metadata.name)
+
+        for ds in reconcile_diff.datasets_to_update:
+            logger.info("Updating dataset '%s' in tenant", ds.metadata.name)
+            try:
+                port.update_dataset(ds)
+            except Exception as exc:
+                logger.error("Failed updating dataset '%s': %s", ds.metadata.name, exc)
+                _log_dataset_abort(ds.metadata.name, exc)
+                raise
+            applied_names.append(ds.metadata.name)
+            logger.info("Updated dataset '%s' in tenant", ds.metadata.name)
+
+        logger.info(
+            "Datasets reconciliation complete. %d creations, %d updates.",
+            len(reconcile_diff.datasets_to_create),
+            len(reconcile_diff.datasets_to_update),
         )
         return reconcile_diff
