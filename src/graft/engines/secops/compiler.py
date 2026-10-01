@@ -15,9 +15,17 @@ _UUID_REGEX = re.compile(
 _RULE_HEADER_REGEX = re.compile(r"^\s*rule\s+([a-zA-Z0-9_]+)\s*\{", re.MULTILINE)
 _SECTION_HEADER_REGEX = re.compile(r"^\s*(events|match|condition):", re.MULTILINE)
 _MISSING_DATATABLE_DIAG_RE = re.compile(
-    r"data\s+table\s+(?:\(\s*(?P<paren>[a-zA-Z0-9_]+)\s*\)|%(?P<pct>[a-zA-Z0-9_]+))",
+    r"(?:data\s+table\s+name:\s*|for\s+data\s+table\s+|data\s+table\s*\(\s*|data\s+table\s+%)"
+    r"(?P<name>[a-zA-Z0-9_]+)",
     re.IGNORECASE,
 )
+_LOCAL_DATASET_REF_RE = re.compile(r"%(?P<name>[a-zA-Z0-9_]+)\.value\b")
+
+
+def _has_local_dataset(name: str) -> bool:
+    return (Path("datasets") / f"{name}.yaml").is_file() or (
+        Path("datasets") / f"{name}.yml"
+    ).is_file()
 
 
 def _sanitize_slug(raw: str) -> str:
@@ -202,15 +210,17 @@ class SecOpsCompilerAdapter(RuleCompilerPort):
         missing_local_tables: set[str] = set()
         for diag in result.diagnostics:
             for match in _MISSING_DATATABLE_DIAG_RE.finditer(diag.message):
-                ds_name = match.group("paren") or match.group("pct")
-                if ds_name and (
-                    (Path("datasets") / f"{ds_name}.yaml").is_file()
-                    or (Path("datasets") / f"{ds_name}.yml").is_file()
-                ):
+                ds_name = match.group("name")
+                if ds_name and _has_local_dataset(ds_name):
                     missing_local_tables.add(ds_name)
 
         if not missing_local_tables:
             return result
+
+        for ref_match in _LOCAL_DATASET_REF_RE.finditer(rule.logic):
+            ref_name = ref_match.group("name")
+            if _has_local_dataset(ref_name):
+                missing_local_tables.add(ref_name)
 
         substituted_logic = rule.logic
         for ds_name in sorted(missing_local_tables):

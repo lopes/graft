@@ -254,38 +254,58 @@ values:
 """,
         encoding="utf-8",
     )
+    (ds_dir / "security_assessment_ips.yaml").write_text(
+        """metadata:
+  name: "security_assessment_ips"
+  description: "Temporary security assessment source IPs."
+  owners: ["SOC"]
+  tags: ["network"]
+  references: ["https://lopes.id/log/detection-rules-netscan-portscan/"]
+values:
+  - "192.0.2.10"
+""",
+        encoding="utf-8",
+    )
 
     client = MockSecOpsClient()
-    # First :verifyRuleText fails because known_scanner_ips is not yet deployed on tenant
+    # First :verifyRuleText fails on the first missing table with Chronicle's exact error format
     client.queue_response(
         {
             "success": False,
             "compilationDiagnostics": [
                 {
-                    "message": "compilation error: data table (known_scanner_ips) does not exist",
-                    "startLine": 7,
-                    "startColumn": 5,
+                    "message": (
+                        "compilation error compiling query: data table version and metadata "
+                        "fetching: metadata unavailable for data table known_scanner_ips, got "
+                        "error: generic::not_found: Could not find Data Table for Customer Id: "
+                        "24ccd1ccc4364c5c8b292769a2ec1634 and Data Table Name: known_scanner_ips\n"
+                        "line: 10 \ncolumn: 9-44 : invalid argument"
+                    ),
+                    "startLine": 1,
+                    "startColumn": 1,
                     "severity": "ERROR",
                 }
             ],
         }
     )
-    # Second :verifyRuleText (with placeholder substituted for %known_scanner_ips.value) succeeds
+    # Second :verifyRuleText (with placeholders substituted for all local datasets) succeeds
     client.queue_response({"success": True})
 
     compiler = SecOpsCompilerAdapter(client=client)
     rule = RuleEnvelope(
         metadata=RuleMetadata(
             id="11111111-2222-3333-4444-555555555555",
-            name="multiple_hosts_scanned",
-            description="Detects host scanning.",
+            name="multiple_ports_scanned",
+            description="Detects port scanning.",
             owners=("SOC",),
-            mitre={"discovery": ("T1018",)},
+            mitre={"discovery": ("T1046",)},
         ),
         logic=(
             "events:\n"
             '  $e.metadata.event_type = "NETWORK_CONNECTION"\n'
-            "  not $e.principal.ip in %known_scanner_ips.value\n"
+            "  $e.principal.ip = $src_ip\n"
+            "  not $src_ip in %known_scanner_ips.value\n"
+            "  not $src_ip in %security_assessment_ips.value\n"
             "condition:\n"
             "  $e"
         ),
@@ -299,6 +319,7 @@ values:
     assert len(client.calls) == 2
     second_rule_text = str(client.calls[1]["body"]["ruleText"])
     assert "%known_scanner_ips.value" not in second_rule_text
+    assert "%security_assessment_ips.value" not in second_rule_text
 
 
 def test_replay_pre_syncs_referenced_local_datasets_to_staging(
