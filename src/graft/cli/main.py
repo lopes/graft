@@ -47,7 +47,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     lint_p.add_argument(
         "--datasets-dir",
-        default="datasets",
+        default=None,
         dest="datasets_dir",
         help="Root directory of datasets (default: datasets)",
     )
@@ -147,7 +147,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             return execute_lint(
                 paths=args.paths if args.paths else None,
                 rules_dir=args.rules_dir,
-                datasets_dir=getattr(args, "datasets_dir", "datasets"),
+                datasets_dir=getattr(args, "datasets_dir", None),
                 fail_fast=args.fail_fast,
                 json_output=args.json,
             )

@@ -130,10 +130,15 @@ def _resolve_index_manifest_path(rule_path: Path, engine: str, rules_dir: str) -
 def execute_lint(
     paths: list[str] | None = None,
     rules_dir: str = "rulesets",
-    datasets_dir: str = "datasets",
+    datasets_dir: str | None = None,
     fail_fast: bool = False,
     json_output: bool = False,
 ) -> int:
+    resolved_datasets_dir = (
+        datasets_dir
+        if datasets_dir is not None
+        else (str(Path(rules_dir).parent / "datasets") if rules_dir != "rulesets" else "datasets")
+    )
     target_files: list[Path] = []
     if paths:
         for p_str in paths:
@@ -147,7 +152,7 @@ def execute_lint(
                     sys.stderr.write(f"Error: Path not found: {p}\n")
                 return 1
     else:
-        root_datasets = Path(datasets_dir)
+        root_datasets = Path(resolved_datasets_dir)
         if root_datasets.is_dir():
             target_files.extend(_iter_yaml_files(root_datasets))
         root_rules = Path(rules_dir)
@@ -164,14 +169,14 @@ def execute_lint(
     seen_datasets: dict[str, Path] = {}
     local_dataset_names: set[str] = set()
 
-    root_datasets = Path(datasets_dir)
-    if root_datasets.is_dir():
-        for ds_path in _iter_yaml_files(root_datasets):
-            try:
-                ds = load_dataset_from_yaml(ds_path)
-                local_dataset_names.add(ds.metadata.name)
-            except (DatasetLoadError, ValueError, OSError):
-                local_dataset_names.add(ds_path.stem)
+    for candidate_ds_dir in {Path(resolved_datasets_dir), Path("datasets")}:
+        if candidate_ds_dir.is_dir():
+            for ds_path in _iter_yaml_files(candidate_ds_dir):
+                try:
+                    ds = load_dataset_from_yaml(ds_path)
+                    local_dataset_names.add(ds.metadata.name)
+                except (DatasetLoadError, ValueError, OSError):
+                    local_dataset_names.add(ds_path.stem)
 
     target_set = {f.resolve() for f in target_files if f.exists()}
     root_rules = Path(rules_dir)
@@ -187,7 +192,7 @@ def execute_lint(
                 continue
 
     for file_path in target_files:
-        is_dataset = _is_dataset_path(file_path, datasets_dir)
+        is_dataset = _is_dataset_path(file_path, resolved_datasets_dir)
         is_manifest = not is_dataset and file_path.name in _MANIFEST_FILENAMES
         is_managed_rule = not is_dataset and not is_manifest and "managed" in file_path.parts
         file_type = (

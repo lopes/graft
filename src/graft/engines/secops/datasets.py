@@ -76,8 +76,10 @@ class SecOpsDatasetAdapter(DatasetPort):
         table_obj: dict[str, Any],
         strict_compatibility: bool,
     ) -> DatasetEnvelope | None:
-        raw_name = str(table_obj.get("name", ""))
-        table_name = _extract_table_name(raw_name)
+        raw_name_val = table_obj.get("name")
+        if not isinstance(raw_name_val, str) or not raw_name_val.strip():
+            return None
+        table_name = _extract_table_name(raw_name_val)
         if not table_name:
             return None
 

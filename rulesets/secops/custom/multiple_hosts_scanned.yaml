@@ -1,0 +1,73 @@
+metadata:
+  id: "a4f8b910-3c72-4e15-9a61-7d2f0c841001"
+  name: "multiple_hosts_scanned"
+  description: "Single source IP connecting to more than 128 distinct hosts within 1 minute."
+  owners:
+    - "Joe Lopes"
+  mitre:
+    discovery:
+      - "T1018"
+    reconnaissance:
+      - "T1595.001"
+  tags:
+    - "network"
+    - "netscan"
+    - "reconnaissance"
+  references:
+    - "https://lopes.id/log/detection-rules-netscan-portscan/"
+    - "https://attack.mitre.org/techniques/T1018/"
+    - "https://attack.mitre.org/techniques/T1595/001/"
+
+logic: |
+  events:
+    $e.metadata.event_type = "NETWORK_CONNECTION"
+    $e.target.port < 1024
+    $e.principal.ip = $src_ip
+    $e.target.ip = $dst_ip
+    not $src_ip in %known_scanner_ips.value
+    not $src_ip in %security_assessment_ips.value
+
+  match:
+    $src_ip over 1m
+
+  outcome:
+    $target_host_count = count_distinct($dst_ip)
+    $target_ports = array_distinct($e.target.port)
+
+  condition:
+    $e and $target_host_count > 128
+
+deployment:
+  enabled: true
+  alerting: true
+  run_frequency: "live"
+
+runbook:
+  context: "Horizontal network sweeps (netscans) probe privileged ports (< 1024) across large blocks of hosts (more than half a /24 subnet within 1 minute) to map live systems and exposed services during active reconnaissance or lateral movement."
+  triage: |
+    1. Identify the source IP ($src_ip) and resolve asset ownership or user session context.
+    2. Inspect the targeted ports ($target_ports) and destination subnet range.
+    3. Verify whether the activity corresponds to an uncataloged scanner or approved change window.
+    4. Check for subsequent successful authentication or exploitation from the same source IP.
+  response: |
+    1. If the source host is compromised or unauthorized, isolate the endpoint or block the source IP at the firewall.
+    2. If the source is a newly commissioned legitimate scanner, add its IP to datasets/known_scanner_ips.yaml via pull request.
+    3. Review logs on any target hosts that accepted connections from the scanning source.
+
+# EXPERIMENTAL - NOT WORKING
+tests:
+  - id: "ignore_authorized_scanner_host_sweep"
+    description: "Verifies no alert triggers when source IP belongs to known_scanner_ips"
+    expect: 0
+    events:
+      - timestamp: "2026-10-01T12:00:00Z"
+        payload:
+          metadata:
+            event_type: "NETWORK_CONNECTION"
+          principal:
+            ip:
+              - "10.10.0.50"
+          target:
+            ip:
+              - "10.50.1.10"
+            port: 22
