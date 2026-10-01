@@ -9,6 +9,7 @@ import yaml
 from graft.core.validation.schema_validator import SchemaValidator
 
 IDENTIFIER_PATTERN = re.compile(r"^[a-z0-9]+(?:_[a-z0-9]+)*$")
+DATASET_IDENTIFIER_PATTERN = re.compile(r"^[a-z][a-z0-9]*(?:_[a-z0-9]+)*$")
 MAX_IDENTIFIER_LEN = 64
 DEFAULT_FALLBACK_OWNER = "Detection Engineer"
 
@@ -40,6 +41,17 @@ def _validate_identifier(name: str, kind: str) -> None:
             f"Invalid {kind} name '{name}'. Must be 1..{MAX_IDENTIFIER_LEN} chars matching "
             f"{IDENTIFIER_PATTERN.pattern} (lowercase alphanumeric and single underscores, "
             "never starting or ending with underscores)"
+        )
+
+
+def _validate_dataset_identifier(name: str, kind: str = "dataset") -> None:
+    if name == "index":
+        raise ScaffoldError(f"Invalid {kind} name 'index'. 'index' is reserved.")
+    if not (1 <= len(name) <= MAX_IDENTIFIER_LEN) or not DATASET_IDENTIFIER_PATTERN.match(name):
+        raise ScaffoldError(
+            f"Invalid {kind} name '{name}'. Must be 1..{MAX_IDENTIFIER_LEN} chars matching "
+            f"{DATASET_IDENTIFIER_PATTERN.pattern} (must start with a lowercase letter, "
+            "lowercase alphanumeric and single underscores, never ending with underscores)"
         )
 
 
@@ -578,6 +590,59 @@ condition:
             if errors:
                 err_msg = "; ".join(f"{e.path}: {e.message}" for e in errors)
                 raise ScaffoldError(f"Scaffolded rule template failed schema validation: {err_msg}")
+    except (FileNotFoundError, KeyError):
+        pass
+
+    dumped = yaml.safe_dump(doc, sort_keys=False, indent=2)
+    dest.write_text(dumped, encoding="utf-8")
+    return dest
+
+
+def scaffold_dataset(
+    dataset_name: str,
+    project_root: Path | None = None,
+    out_path: Path | str | None = None,
+) -> Path:
+    _validate_dataset_identifier(dataset_name, "dataset")
+    root = Path(project_root) if project_root else Path.cwd()
+    dest = Path(out_path) if out_path else (root / "datasets" / f"{dataset_name}.yaml")
+    _validate_dataset_identifier(dest.stem, "dataset filename")
+    if dest.stem != dataset_name:
+        raise ScaffoldError(
+            f"Dataset filename stem '{dest.stem}' must match dataset name '{dataset_name}'"
+        )
+    if dest.exists():
+        raise ScaffoldError(f"Dataset file already exists at {dest}")
+
+    default_owner = _resolve_default_owner(cwd=root)
+    dest.parent.mkdir(parents=True, exist_ok=True)
+
+    human_desc = f"Reusable dataset for {dataset_name.replace('_', ' ')}"
+    doc: dict[str, object] = {
+        "metadata": {
+            "name": dataset_name,
+            "description": human_desc[:128],
+            "owners": [default_owner],
+            "tags": ["dataset"],
+            "references": ["https://attack.mitre.org/"],
+        },
+        "values": [
+            "example_value_1",
+        ],
+    }
+
+    schema_dir = root / "src" / "graft" / "core" / "schemas"
+    if not schema_dir.is_dir():
+        schema_dir = root / "schemas"
+    try:
+        validator = SchemaValidator(schemas_dir=schema_dir if schema_dir.is_dir() else None)
+        if "base_dataset" in validator.available_schemas():
+            errors = validator.validate(doc, schema_name="base_dataset")
+            if errors:
+                err_msg = "; ".join(f"{e.path}: {e.message}" for e in errors)
+                raise ScaffoldError(
+                    f"Scaffolded dataset template failed schema validation: {err_msg}"
+                )
     except (FileNotFoundError, KeyError):
         pass
 
