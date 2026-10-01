@@ -197,6 +197,11 @@ graft secops new gcti_breach_network_indicator_matched --managed 433faf9e-4d51-f
 graft new engine sentinel
 ```
 
+Graft also includes repository-native AI agent skills under [`.agents/skills/`](.agents/skills/) for composable rule engineering (see [Rule Authoring Guide](docs/analysts/rule_authoring.md#ai-assisted-rule-authoring--review-agentsskills)):
+- `/scaffold-rule <context_or_path>`: Runs `graft new rule` and populates `metadata` and `runbook` while leaving `logic`, `deployment`, and `tests` untouched.
+- `/scaffold-tests <rule_path>`: Parses authored `logic` predicates to generate positive (`match_*`) and negative (`ignore_*`) synthetic event vectors in `tests`.
+- `/review-rule [path_or_dir]`: Runs `graft lint` and performs a read-only 5-block engineering audit.
+
 #### 3. Pre-Merge Verification & Staging Replay Testing
 ```bash
 # Dry-run YARA-L syntax against Google SecOps verifyRuleText (non-destructive)

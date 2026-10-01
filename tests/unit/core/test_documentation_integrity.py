@@ -1,6 +1,8 @@
 import re
 from pathlib import Path
 
+import yaml
+
 FORBIDDEN_PATTERNS = (
     "/usr/local/google",
     "joelopes",
@@ -109,3 +111,26 @@ def test_core_and_cli_have_no_hardcoded_secops_coupled_branches() -> None:
     assert "adapter: Any" not in engine_controller, (
         "engine_controller.py must type adapter as EngineAdapter, not Any"
     )
+
+
+def test_agent_skills_frontmatter_and_structure() -> None:
+    expected_skills = ("scaffold-rule", "scaffold-tests", "review-rule")
+    skills_root = Path(".agents/skills")
+    assert skills_root.is_dir(), "Missing .agents/skills directory"
+
+    for skill_name in expected_skills:
+        skill_file = skills_root / skill_name / "SKILL.md"
+        assert skill_file.is_file(), f"Missing skill file: {skill_file}"
+
+        text = skill_file.read_text(encoding="utf-8")
+        assert text.startswith("---\n"), f"{skill_file}: missing YAML frontmatter start"
+        parts = text.split("---\n", 2)
+        assert len(parts) == 3, f"{skill_file}: malformed YAML frontmatter"
+
+        frontmatter = yaml.safe_load(parts[1])
+        assert isinstance(frontmatter, dict), f"{skill_file}: frontmatter is not a mapping"
+        assert frontmatter.get("name") == skill_name
+        assert (
+            isinstance(frontmatter.get("description"), str) and frontmatter["description"].strip()
+        )
+        assert frontmatter.get("disable-model-invocation") is True

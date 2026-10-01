@@ -311,7 +311,25 @@ graft secops new gcti_breach_network_indicator_matched --managed 433faf9e-4d51-f
 graft secops new gcp_storage_bucket_public_access_granted --out rulesets/secops/custom/tier1/gcp_storage_bucket_public_access_granted.yaml
 ```
 
-For custom rules, the generated file includes pre-populated runbook sections, deployment defaults (`enabled: false`, `alerting: false`, `run_frequency: "live"`), and a template test fixture.
+For custom rules, the generated file includes pre-populated runbook sections, deterministic owner attribution from `git config user.name` (falling back to `"Detection Engineer"`), deployment defaults (`enabled: false`, `alerting: false`, `run_frequency: "live"`), and a template test fixture.
+
+### AI-Assisted Rule Authoring & Review (`.agents/skills/`)
+
+Graft ships three composable, single-responsibility AI agent skills under [`.agents/skills/`](../../.agents/skills/) that pair LLM reasoning with deterministic CLI guardrails (`graft new rule` and `graft lint`):
+
+```mermaid
+flowchart LR
+    S1["<b>1. /scaffold-rule</b><br/>Runs <code>graft new rule</code> &amp; populates<br/>ONLY <code>metadata</code> + <code>runbook</code>"]
+    LOGIC["<b>2. Analyst Authors Logic</b><br/>Write &amp; tune engine query<br/>in <code>logic</code> block"]
+    S2["<b>3. /scaffold-tests</b><br/>Parses <code>logic</code> predicates to generate<br/><code>match_*</code> &amp; <code>ignore_*</code> in <code>tests</code>"]
+    S3["<b>4. /review-rule</b><br/>Read-only 5-block audit + <code>graft lint</code><br/>with concrete remediation snippets"]
+
+    S1 --> LOGIC --> S2 --> S3
+```
+
+- **[`/scaffold-rule`](../../.agents/skills/scaffold-rule/SKILL.md)**: Accepts a natural-language detection concept (or an existing `.yaml` rule path), derives a `<subject>_<fact>` identifier, runs `uv run graft new rule <name> --engine <engine>` (or `--managed <id>`), and populates **only `metadata` and `runbook`** (preserving the generated UUIDv4, Git owner, `logic`, `deployment`, and `tests`), followed by `uv run graft lint`.
+- **[`/scaffold-tests`](../../.agents/skills/scaffold-tests/SKILL.md)**: Reads the authored `logic` block of a custom rule and populates **only the `tests` block** with positive (`id: "match_*"`, `expect: 1`) and negative (`id: "ignore_*"`, `expect: 0`) synthetic event vectors matching the query's predicates, joins, and time windows, followed by `uv run graft lint`.
+- **[`/review-rule`](../../.agents/skills/review-rule/SKILL.md)**: Performs a read-only audit of one or more rule files across all 5 blocks against this guide's structural and semantic guardrails, running `uv run graft lint` and outputting a `PASS / WARN / FAIL` table with suggested fixes.
 
 ### Validating Rules Offline
 
