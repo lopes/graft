@@ -1,9 +1,12 @@
+import subprocess
 from pathlib import Path
 
 import pytest
 
 from graft.cli.scaffold import (
+    DEFAULT_FALLBACK_OWNER,
     ScaffoldError,
+    _resolve_default_owner,
     scaffold_engine,
     scaffold_rule,
 )
@@ -222,3 +225,76 @@ def test_scaffold_rule_rejects_invalid_out_path_stem(
             project_root=tmp_path,
             out_path=bad_out,
         )
+
+
+def test_resolve_default_owner_uses_git_config_user_name(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def fake_run(
+        args: list[str],
+        **kwargs: object,
+    ) -> subprocess.CompletedProcess[str]:
+        assert args[-2:] == ["config", "user.name"]
+        return subprocess.CompletedProcess(
+            args=args, returncode=0, stdout="Alice Security\n", stderr=""
+        )
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+    assert _resolve_default_owner(cwd=tmp_path) == "Alice Security"
+
+
+def test_resolve_default_owner_falls_back_when_git_config_empty_or_fails(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def fake_run_empty(
+        args: list[str],
+        **kwargs: object,
+    ) -> subprocess.CompletedProcess[str]:
+        return subprocess.CompletedProcess(args=args, returncode=0, stdout="   \n", stderr="")
+
+    monkeypatch.setattr(subprocess, "run", fake_run_empty)
+    assert _resolve_default_owner(cwd=tmp_path) == DEFAULT_FALLBACK_OWNER
+
+    def fake_run_nonzero(
+        args: list[str],
+        **kwargs: object,
+    ) -> subprocess.CompletedProcess[str]:
+        return subprocess.CompletedProcess(args=args, returncode=1, stdout="", stderr="error")
+
+    monkeypatch.setattr(subprocess, "run", fake_run_nonzero)
+    assert _resolve_default_owner(cwd=tmp_path) == DEFAULT_FALLBACK_OWNER
+
+    def fake_run_oserror(
+        args: list[str],
+        **kwargs: object,
+    ) -> subprocess.CompletedProcess[str]:
+        raise OSError("git not found")
+
+    monkeypatch.setattr(subprocess, "run", fake_run_oserror)
+    assert _resolve_default_owner(cwd=tmp_path) == DEFAULT_FALLBACK_OWNER
+
+
+def test_scaffold_rule_populates_resolved_owner_for_custom_and_managed(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        "graft.cli.scaffold._resolve_default_owner",
+        lambda cwd=None: "Alice Security",
+    )
+
+    custom_path = scaffold_rule("secops", "workspace_nrd_email_opened", project_root=tmp_path)
+    custom_env = load_rule_from_yaml(custom_path, schema_name="secops_custom")
+    assert custom_env.metadata.owners == ("Alice Security",)
+
+    managed_path = scaffold_rule(
+        "secops",
+        "gcti_breach_network_indicator_matched",
+        project_root=tmp_path,
+        managed=True,
+        managed_id="433faf9e-4d51-f284-c35b-009528ecff05",
+    )
+    managed_env = load_rule_from_yaml(managed_path)
+    assert managed_env.metadata.owners == ("Alice Security",)
