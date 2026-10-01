@@ -129,9 +129,9 @@ graft secops diff --target managed --env production
 
 === Google SecOps Custom Rules Diff ===
 + Custom rules to create (1):
-  [+] gcp_storage_iam_public_access_granted (id=d8a19c42-7f10-4b22-9e55-0192837465ab)
+  [+] gcp_storage_bucket_public_access_granted (id=d8a19c42-7f10-4b22-9e55-0192837465ab)
 ~ Custom rules to update (1):
-  [~] workspace_nrd_possible_phishing (id=b1d72370-5fa3-4cb8-a579-22a468d6f101)
+  [~] workspace_nrd_email_opened (id=b1d72370-5fa3-4cb8-a579-22a468d6f101)
 ? Untracked custom rules in tenant (1):
   [?] legacy_console_rule (id=89a74bc1-1111-2222-3333-444455556666)
 ```

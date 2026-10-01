@@ -81,7 +81,7 @@ def test_export_catalog_markdown_stdout(capsys: pytest.CaptureFixture[str]) -> N
     assert "`workspace_nrd_email_opened`" in captured.out
     assert "`gcp_service_account_key_created`" in captured.out
     assert "`gcti_breach_network_indicator_matched`" in captured.out
-    assert "Cloud Security Operations" in captured.out
+    assert "Joe Lopes" in captured.out
 
 
 def test_export_catalog_csv_stdout(capsys: pytest.CaptureFixture[str]) -> None:

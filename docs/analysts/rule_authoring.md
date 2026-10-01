@@ -20,11 +20,11 @@ flowchart TD
 Core identification, operational ownership, and threat taxonomy mapping. All 7 fields are **required** by the base schema to enforce catalog consistency:
 
 - `id` *(UUID string, required)*: Globally unique identifier (v4 UUID format).
-- `name` *(string, required)*: Unique snake_case rule identifier (`^[a-z0-9_]+$`, max 64 chars).
+- `name` *(string, required)*: Unique snake_case rule identifier (`^[a-z0-9]+(?:_[a-z0-9]+)*$`, max 64 chars, never starting or ending with `_`, `"index"` reserved) following the `<subject>_<fact>` convention.
 - `description` *(string, required)*: Plain-text explanation of the detection objective (non-blank, max 128 chars).
 - `owners` *(list of strings, required, min 1 unique item)*: Teams or individuals operationally accountable for maintaining and tuning the rule (e.g., `Cloud Security Operations`, `Detection Engineering <detection@company.com>`).
 - `mitre` *(mapping of tactic to techniques, required, min 1 tactic with min 1 unique technique)*: MITRE ATT&CK Enterprise taxonomy mapping. Must use MITRE's normalized tactic names (lowercase with spaces replaced by dashes, e.g., `initial-access`, `privilege-escalation`, `execution` — see [MITRE Enterprise Tactics](https://attack.mitre.org/tactics/enterprise/)) and real technique IDs (`T1566.002`, `T1098.001`). Validated against the pre-indexed matrix during linting.
-- `tags` *(list of strings, required, min 1 unique item)*: Lowercase categorical labels (`^[a-z0-9_/\\-]+$`, e.g., `google_workspace`, `gcp`, `phishing`).
+- `tags` *(list of strings, required, min 1 unique item, max 32)*: Lowercase categorical labels (`^[a-z0-9_/\\-]+$`). Prefer 2–3 broad, reusable platform or telemetry surface labels per rule (e.g., `gcp`, `iam`, `storage`, `workspace`, `email`, `whois`, `gcti`, `network`) so tags aggregate cleanly across the catalog. Avoid one-off rule keywords or duplicating fields already captured elsewhere (`engine`, `rule_type`, or MITRE tactics).
 - `references` *(list of strings, required, min 1 unique item)*: Non-blank strings citing threat research URLs, internal design docs, or external/community author attribution.
 
 #### Ownership (`metadata.owners`) vs. Authorship (`git log` & `metadata.references`)
@@ -84,9 +84,48 @@ Synthetic replay test fixtures for automated validation.
 
 ---
 
-## 2. Rule Identification & Uniqueness Scoping
+## 2. Rule Identification, Naming Convention & Uniqueness Scoping
 
-To maintain data integrity across multi-engine deployments, audit catalogs, and SIEM migrations, Graft enforces a three-tier uniqueness model:
+### Rule Naming Convention: `<subject>_<fact>`
+
+Because modern SIEMs correlate telemetry across multiple log sources, entity graphs, and threat intelligence feeds within a single query, prefixing rule names with a rigid log source or broad security domain quickly breaks down. Graft standardizes rule naming around a concise, 2-element **`<subject>_<fact>`** pattern:
+
+1. **`<subject>` (What entity, resource, or artifact was acted upon):**
+   - Names the concrete target or artifact at the center of the detection (e.g., `gcp_service_account_key`, `gcp_storage_bucket`, `workspace_nrd_email`, `gcti_breach_network_indicator`, `shimcache`).
+2. **`<fact>` (What happened to it, ending in a past-tense verb):**
+   - States the observable action or state change that occurred, always finishing with a past-tense verb (e.g., `created`, `public_access_granted`, `opened`, `matched`, `flushed`).
+
+#### Structural Guardrails (Enforced in Code)
+Both the rule filename stem (`<stem>.yaml`) and `metadata.name` are enforced by `graft lint`, `graft new`, and the core loader:
+- **Character limit:** `1` to `64` characters maximum.
+- **Allowed characters & underscore placement:** `^[a-z0-9]+(?:_[a-z0-9]+)*$` — lowercase ASCII letters and digits separated by single underscores (`_`). Names must never start or end with an underscore (`_foo`, `foo_`) and must never contain consecutive underscores (`foo__bar`).
+- **Reserved identifier:** `"index"` is prohibited for both filename stems and `metadata.name` (reserved for `rulesets/<engine>/managed/index.yaml`).
+- **Filename vs. `metadata.name` decoupling:** By convention (and when scaffolding with `graft new`), a rule's filename stem matches its `metadata.name` (e.g., `workspace_nrd_email_opened.yaml` defines `name: "workspace_nrd_email_opened"`). However, `graft lint` validates them independently and does not require them to match, allowing teams to organize filenames freely if needed while guaranteeing both remain valid and unique per engine.
+
+#### Semantic Guardrails (Authoring Guidelines)
+- **Avoid prepositions and connectors:** Strip filler tokens like `_to_`, `_of_`, `_or_`, `_in_`, `_with_`, `_for_`, `_at_`, `_by_`, `_via_`, and `_from_`.
+- **Avoid speculative or filler words:** Never include words like `possible`, `suspicious`, `potential`, `activity`, `detected`, `attempt`, `success`, or `alert`. Describe the empirical telemetry fact (`workspace_nrd_email_opened`, not `workspace_nrd_possible_phishing`).
+- **Drop redundant product qualifiers:** When the resource is already unambiguous, omit intermediate service labels (`gcp_storage_bucket` instead of `gcp_cloud_storage_iam_bucket`; `gcp_service_account_key` instead of `gcp_iam_service_account_key`).
+- **Apply consistently to registered managed rules:** Registered vendor-managed rule envelopes (`rulesets/<engine>/managed/<rule_name>.yaml`) follow the exact same `<subject>_<fact>` naming convention because the vendor's upstream identifier is linked separately via `managed.id`.
+
+#### Examples & Comparison with `chronicle/detection-rules`
+
+| Old Name (`chronicle/detection-rules`) | New Name (`<subject>_<fact>`) | Description |
+| :--- | :--- | :--- |
+| `google_cloud_service_account_key_created_or_uploaded` | `gcp_service_account_key_created` | User-managed GCP service account key created. |
+| `gcp_storage_bucket_opened_to_public` | `gcp_storage_bucket_public_access_granted` | Google Cloud Storage bucket IAM policy modified to grant public access. |
+| `whois_recently_created_domain_access` | `workspace_nrd_email_opened` | Google Workspace email opened from a newly registered domain. |
+| `gcti_active_breach_network_indicators` *(Curated Ruleset)* | `gcti_breach_network_indicator_matched` | GCTI curated ruleset matching active breach priority network indicators. |
+| `windows_application_compatibility_cache_flush_via_rundll32` | `shimcache_flushed` | Windows Application Compatibility Cache (Shimcache) flushed. |
+| `windows_Possible_Dcsync_Attempt` | `ad_directory_replication_requested` | Active Directory replication rights requested (DCSync). |
+| `Successful_Brute_Force_Attacks_By_User` | `user_login_brute_forced` | Multiple failed logins followed by a successful authentication. |
+| `psexec_service_installation_or_execution` | `psexec_service_installed` | PsExec remote service binary installed on host. |
+
+---
+
+### Uniqueness Scoping Model
+
+To maintain data integrity across multi-engine deployments, audit catalogs, and SIEM migrations, Graft enforces a multi-tier uniqueness model:
 
 ```mermaid
 flowchart TD
@@ -95,25 +134,25 @@ flowchart TD
     end
 
     subgraph EngineScope["Engine Scope (Per Engine)"]
-        NAME["<b>metadata.name (Engine-Scoped Uniqueness)</b><br/>Must be unique across <code>custom/</code> and <code>managed/</code> within the engine<br/><i>e.g. Rules in different engines CAN share the same technical name</i>"]
+        NAME["<b>metadata.name &amp; Filename Stem (Engine-Scoped Uniqueness)</b><br/>Must be unique across <code>custom/</code> and <code>managed/</code> within the engine<br/><i>e.g. Rules in different engines CAN share the same technical name</i>"]
         MAN_ID["<b>managed.id (1-to-1 Managed Registration)</b><br/>Must match an ID in <code>managed/index.yaml</code> and never overlap<br/><i>Two YAML files cannot link to the same vendor managed rule ID</i>"]
     end
 ```
 
-### 1. Global Scope: `metadata.id`
+#### 1. Global Scope: `metadata.id`
 - **Constraint:** Must be a valid v4 UUID string (`^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$`) and strictly unique across the entire Graft codebase.
 - **Rationale:** The `metadata.id` represents the immutable, canonical identity of the detection concept within the enterprise. It is referenced by audit logs, compliance exports, ATT&CK Navigator heatmaps, and cross-platform SIEM migration tooling. No two rule files in the repository may share an `id`, even if they target completely different detection engines (e.g., Google SecOps vs. CrowdStrike Falcon).
 
-### 2. Engine Scope: `metadata.name`
-- **Constraint:** Must be a lowercase alphanumeric snake_case slug (`^[a-z0-9_]+$`, max 64 characters, `"index"` reserved for `managed/index.yaml`) and unique within the target engine (`rulesets/<engine>/custom/` and `rulesets/<engine>/managed/`).
-- **Rationale:** The `metadata.name` serves as the native SIEM identifier (such as the YARA-L rule identifier `rule <name> { ... }` in Chronicle or the detection title in other platforms). While two rules in the same engine cannot share a name (which would create an overwrite or catalog collision), rules across different engines **can** share the same `name` (e.g. `rulesets/secops/custom/gcp_iam_service_account_key_create.yaml` and a corresponding `rulesets/crowdstrike/custom/gcp_iam_service_account_key_create.yaml`).
+#### 2. Engine Scope: `metadata.name` & Rule Filename Stem (`<stem>.yaml`)
+- **Constraint:** Both `metadata.name` and the YAML filename stem must satisfy `^[a-z0-9]+(?:_[a-z0-9]+)*$` (1–64 characters, `"index"` reserved for `managed/index.yaml`) and be unique across all subdirectories within the target engine (`rulesets/<engine>/custom/` and `rulesets/<engine>/managed/`).
+- **Rationale:** The `metadata.name` serves as the native SIEM identifier (such as the YARA-L rule identifier `rule <name> { ... }` in Chronicle or the detection title in other platforms), while engine-scoped filename stem uniqueness prevents ambiguous file collisions across `custom/`, `managed/`, or nested subdirectories. Rules across different engines **can** share the same `name` and filename (e.g. `rulesets/secops/custom/gcp_service_account_key_created.yaml` and a corresponding `rulesets/crowdstrike/custom/gcp_service_account_key_created.yaml`).
 
-### 3. Engine Scope: `managed.id` (Registered Managed Rules)
+#### 3. Engine Scope: `managed.id` (Registered Managed Rules)
 - **Constraint:** When registering a vendor-managed rule in `rulesets/<engine>/managed/<rule_name>.yaml`, `managed.id` must match a valid rule/ruleset `id` in `rulesets/<engine>/managed/index.yaml` and be strictly unique (1-to-1) within that engine.
 - **Rationale:** Prevents duplicate or conflicting MITRE ATT&CK mappings and runbooks for the same underlying vendor detection.
 
-### 4. Automated Verification
-Rule uniqueness is enforced automatically during:
+#### 4. Automated Verification
+Rule uniqueness and identifier guardrails are enforced automatically during:
 - Local rule linting (`graft lint`).
 - Git pre-commit hooks (`.githooks/pre-commit`).
 - Pull request CI/CD gates (`.github/workflows/pr-validation.yml`).
@@ -127,29 +166,32 @@ Below is an authentic reference rule implemented in [`rulesets/secops/custom/wor
 ```yaml
 metadata:
   id: "b1d72370-5fa3-4cb8-a579-22a468d6f101"
-  name: "workspace_nrd_possible_phishing"
-  description: "User opened an email from a domain created within the last 7 days."
+  name: "workspace_nrd_email_opened"
+  description: "Google Workspace email opened from a newly registered domain."
   owners:
-    - "Joe Lopes <lopes.id>"
-    - "Detection Engineering"
+    - "Joe Lopes"
   mitre:
     initial-access:
       - "T1566.002"
   tags:
-    - "google_workspace"
+    - "workspace"
     - "email"
-    - "nrd"
-    - "phishing"
     - "whois"
   references:
     - "https://lopes.id/log/high-fidelity-nrd-detections/"
+    - "https://github.com/chronicle/detection-rules/blob/main/rules/community/threat_intel/whois_recently_created_domain_access.yaral"
     - "https://support.google.com/a/answer/12384955"
 
 logic: |
   events:
+    $mail.metadata.log_type = "WORKSPACE_ACTIVITY"
     $mail.metadata.event_type = "EMAIL_TRANSACTION"
-    $mail.metadata.product_event_type = "2"
-    strings.extract_domain($mail.network.email.from) = $domain
+    (
+      $mail.metadata.product_event_type = "7" or // message opened for the first time
+      $mail.metadata.product_event_type = "31"   // message viewed (first and subsequent readings)
+    )
+    $domain = strings.to_lower(strings.extract_domain($mail.network.email.from))
+    $domain != ""
 
     $whois.graph.entity.domain.name = $domain
     $whois.graph.metadata.entity_type = "DOMAIN_NAME"
@@ -158,8 +200,8 @@ logic: |
     $whois.graph.metadata.source_type = "GLOBAL_CONTEXT"
     $whois.graph.entity.domain.creation_time.seconds > 0
 
-    // domain was created in the last 7 days: 7 * 24 * 60 * 60 = 604800 seconds
-    604800 > timestamp.current_seconds() - $whois.graph.entity.domain.creation_time.seconds
+    // domain was created within 7 days (604800 seconds) prior to the email event
+    604800 > $mail.metadata.event_timestamp.seconds - $whois.graph.entity.domain.creation_time.seconds
 
   match:
     $domain over 1h
@@ -169,7 +211,11 @@ logic: |
     $created_at = array_distinct(timestamp.get_date($whois.graph.entity.domain.creation_time.seconds))
     $sender = array_distinct($mail.network.email.from)
     $recipients = array_distinct($mail.network.email.to)
-    $num_messages = count($mail.network.email.mail_id)
+    $subjects = array_distinct($mail.network.email.subject)
+    $num_messages = count_distinct($mail.network.email.mail_id)
+    $num_attachments = array_distinct($mail.additional.fields["num_message_attachments"])
+    $dkim = array_distinct($mail.additional.fields["dkim_pass"])
+    $spf = array_distinct($mail.additional.fields["spf_pass"])
 
   condition:
     $mail and $whois
@@ -180,11 +226,10 @@ deployment:
   run_frequency: "live"
 
 runbook:
-  context: |
-    Adversaries frequently register new domains and immediately weaponize them in spear-phishing campaigns before reputation feeds and web categorization tools index them. Correlating Google Workspace message open events with domain registration timestamps isolates zero-day phishing infrastructure.
+  context: "Adversaries frequently register new domains and immediately weaponize them in spear-phishing campaigns before reputation feeds and web categorization tools index them. Correlating Google Workspace message open events with domain registration timestamps isolates zero-day phishing infrastructure."
   triage: |
     1. Identify recipient user account and workstation coordinates.
-    2. Review email subject, sender domain WHOIS registrar, and message attachments.
+    2. Review email subject, sender domain WHOIS registrar, SPF/DKIM authentication results, and message attachments.
     3. Check if recipient clicked any hyperlinks or submitted credentials.
     4. Search email transaction logs across the organization for other recipients of the same domain.
   response: |
@@ -192,6 +237,7 @@ runbook:
     2. Add the sender domain to global perimeter and email blocklists.
     3. If credentials were provided or malicious payload downloaded, initiate host containment and session revocation.
 
+# EXPERIMENTAL - NOT WORKING
 tests:
   - id: "match_opened_nrd_email"
     description: "Triggers when a user opens an email originating from a newly registered domain"
@@ -200,13 +246,15 @@ tests:
       - timestamp: "2026-09-17T14:00:00Z"
         payload:
           metadata:
+            log_type: "WORKSPACE_ACTIVITY"
             event_type: "EMAIL_TRANSACTION"
-            product_event_type: "2"
+            product_event_type: "7"
           network:
             email:
               from: "security-update@login-verify-account.top"
               to:
                 - "employee@corp.example.com"
+              subject: "Action Required: Verify Your Workspace Account"
               mail_id: "msg-workspace-98214"
       - timestamp: "2026-09-17T14:00:05Z"
         payload:
@@ -220,22 +268,24 @@ tests:
               domain:
                 name: "login-verify-account.top"
                 creation_time:
-                  seconds: 1773700000
+                  seconds: 1789500000
 
   - id: "ignore_standard_unopened_email"
-    description: "Verifies no alert triggers when email is received but not opened"
+    description: "Verifies no alert triggers when email is received (product_event_type 2) but not opened"
     expect: 0
     events:
       - timestamp: "2026-09-17T14:10:00Z"
         payload:
           metadata:
+            log_type: "WORKSPACE_ACTIVITY"
             event_type: "EMAIL_TRANSACTION"
-            product_event_type: "1"
+            product_event_type: "2"
           network:
             email:
               from: "newsletter@trusted-vendor.com"
               to:
                 - "employee@corp.example.com"
+              subject: "Monthly Product Newsletter"
               mail_id: "msg-workspace-98215"
 ```
 
@@ -249,16 +299,16 @@ Use `graft secops new` or `graft new rule` to bootstrap a complete 5-block custo
 
 ```bash
 # Custom rule — SecOps engine shortcut (recommended):
-graft secops new gcp_cloud_storage_public_bucket
+graft secops new gcp_storage_bucket_public_access_granted
 
 # Custom rule — Engine-agnostic dispatcher:
-graft new rule gcp_cloud_storage_public_bucket --engine secops
+graft new rule gcp_storage_bucket_public_access_granted --engine secops
 
 # Registered managed rule — Link to an ID from rulesets/secops/managed/index.yaml:
-graft secops new gcti_active_breach_network_indicators --managed 433faf9e-4d51-f284-c35b-009528ecff05
+graft secops new gcti_breach_network_indicator_matched --managed 433faf9e-4d51-f284-c35b-009528ecff05
 
 # Specify a custom target path:
-graft secops new gcp_cloud_storage_public_bucket --out rulesets/secops/custom/tier1/storage.yaml
+graft secops new gcp_storage_bucket_public_access_granted --out rulesets/secops/custom/tier1/gcp_storage_bucket_public_access_granted.yaml
 ```
 
 For custom rules, the generated file includes pre-populated runbook sections, deployment defaults (`enabled: false`, `alerting: false`, `run_frequency: "live"`), and a template test fixture.
@@ -269,7 +319,7 @@ Graft's linter validates JSON Schema constraints, verifies MITRE techniques agai
 
 ```bash
 # Lint specific rule
-graft lint rulesets/secops/custom/workspace_nrd_possible_phishing.yaml
+graft lint rulesets/secops/custom/workspace_nrd_email_opened.yaml
 
 # Lint entire repository
 graft lint
@@ -283,9 +333,9 @@ graft --json lint
 
 #### Example Linter Output:
 ```text
-[PASS] rulesets/secops/custom/workspace_nrd_possible_phishing.yaml
-[PASS] rulesets/secops/custom/gcp_iam_service_account_key_create.yaml
-[PASS] rulesets/secops/managed/gcti_active_breach_network_indicators.yaml
+[PASS] rulesets/secops/custom/workspace_nrd_email_opened.yaml
+[PASS] rulesets/secops/custom/gcp_service_account_key_created.yaml
+[PASS] rulesets/secops/managed/gcti_breach_network_indicator_matched.yaml
 [PASS] rulesets/secops/managed/index.yaml
 Checked 5 rules across 1 engines. All rules passed validation.
 ```
@@ -358,7 +408,7 @@ flowchart TD
 2. **Scaffold the Registered Managed Rule:**
    Pass `--managed <id>` to `graft <engine> new`:
    ```bash
-   graft secops new gcti_active_breach_network_indicators --managed 433faf9e-4d51-f284-c35b-009528ecff05
+   graft secops new gcti_breach_network_indicator_matched --managed 433faf9e-4d51-f284-c35b-009528ecff05
    ```
    This creates [`rulesets/secops/managed/gcti_breach_network_indicator_matched.yaml`](../../rulesets/secops/managed/gcti_breach_network_indicator_matched.yaml) with a fresh `metadata.id` UUID and `managed.id: "433faf9e-4d51-f284-c35b-009528ecff05"`.
 
@@ -386,9 +436,9 @@ Instead, move decommissioned rules into the standardized `_archived/` directory 
 
 ```bash
 # Decommission a rule by moving it to _archived/
-mv rulesets/secops/custom/workspace_nrd_possible_phishing.yaml rulesets/secops/_archived/
+mv rulesets/secops/custom/workspace_nrd_email_opened.yaml rulesets/secops/_archived/
 git add rulesets/secops/
-git commit -m "secops: decommission workspace_nrd_possible_phishing to _archived"
+git commit -m "secops: decommission workspace_nrd_email_opened to _archived"
 ```
 
 ### The Underscore (`_`) Exclusion Rule

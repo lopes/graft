@@ -3,7 +3,7 @@ metadata:
   name: "gcti_breach_network_indicator_matched"
   description: "GCTI curated ruleset matching active breach priority network indicators."
   owners:
-    - "Cloud Security Operations"
+    - "Joe Lopes"
   mitre:
     command-and-control:
       - "T1071.001"

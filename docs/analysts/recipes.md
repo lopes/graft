@@ -27,17 +27,17 @@ Create a new detection rule file with an auto-generated UUID, valid schema defau
 ### Command
 ```bash
 # Custom rule — Using the engine-specific command:
-graft secops new gcp_iam_service_account_key_create
+graft secops new gcp_service_account_key_created
 
 # Custom rule — Or using the root command router:
-graft new rule gcp_iam_service_account_key_create --engine secops
+graft new rule gcp_service_account_key_created --engine secops
 
 # Registered managed rule — Link to a vendor ID in rulesets/secops/managed/index.yaml:
-graft secops new gcti_active_breach_network_indicators --managed 433faf9e-4d51-f284-c35b-009528ecff05
+graft secops new gcti_breach_network_indicator_matched --managed 433faf9e-4d51-f284-c35b-009528ecff05
 ```
 
 ### Result
-For custom rules, Graft creates `rulesets/secops/custom/gcp_iam_service_account_key_create.yaml` with pre-populated `metadata`, `logic`, `deployment`, `runbook`, and `tests` blocks. When `--managed <id>` is supplied, Graft creates `rulesets/secops/managed/<rule_name>.yaml` with `metadata`, `managed`, `runbook`, and `tests: []`.
+For custom rules, Graft creates `rulesets/secops/custom/gcp_service_account_key_created.yaml` with pre-populated `metadata`, `logic`, `deployment`, `runbook`, and `tests` blocks. When `--managed <id>` is supplied, Graft creates `rulesets/secops/managed/<rule_name>.yaml` with `metadata`, `managed`, `runbook`, and `tests: []`.
 
 ---
 
@@ -50,10 +50,10 @@ Fill out the scaffolded rule with realistic detection logic, operational control
 ```yaml
 metadata:
   id: "b1d72370-5fa3-4cb8-a579-22a468d6f101"
-  name: "gcp_iam_service_account_key_create"
+  name: "gcp_service_account_key_created"
   description: "Long-lived user-managed GCP service account keys created."
   owners:
-    - "Detection Engineering <detection@company.com>"
+    - "Joe Lopes"
   mitre:
     persistence:
       - "T1098"
@@ -63,7 +63,6 @@ metadata:
   tags:
     - "gcp"
     - "iam"
-    - "service_account"
   references:
     - "https://cloud.google.com/iam/docs/creating-managing-service-account-keys"
 
@@ -124,10 +123,10 @@ Verify that rule YAML files conform to Draft 2020-12 JSON Schema, contain valid 
 graft lint
 
 # Lint only your modified rule file
-graft lint rulesets/secops/custom/gcp_iam_service_account_key_create.yaml
+graft lint rulesets/secops/custom/gcp_service_account_key_created.yaml
 
 # Output structured JSON for automation or pre-commit hooks
-graft --json lint rulesets/secops/custom/gcp_iam_service_account_key_create.yaml
+graft --json lint rulesets/secops/custom/gcp_service_account_key_created.yaml
 ```
 
 ### Exit Codes
@@ -144,7 +143,7 @@ Verify that your YARA-L logic compiles cleanly against the real Google SecOps en
 ### Commands
 ```bash
 # Dry-run syntax compilation against staging SecOps tenant
-graft secops verify rulesets/secops/custom/gcp_iam_service_account_key_create.yaml
+graft secops verify rulesets/secops/custom/gcp_service_account_key_created.yaml
 
 # Dry-run syntax across all custom rules in the engine
 graft secops verify
@@ -163,7 +162,7 @@ Test your detection logic against synthetic event fixtures in an isolated stagin
 ### Commands
 ```bash
 # Run replay tests for a specific rule
-graft secops test rulesets/secops/custom/gcp_iam_service_account_key_create.yaml
+graft secops test rulesets/secops/custom/gcp_service_account_key_created.yaml
 
 # Run tests only for rules modified in your current Git branch
 graft secops test --changed-only
@@ -358,41 +357,41 @@ Open [`rulesets/secops/managed/index.yaml`](../../rulesets/secops/managed/index.
 
 ### Step 2: Scaffold the Registered Managed Rule
 ```bash
-graft secops new gcti_active_breach_network_indicators --managed 433faf9e-4d51-f284-c35b-009528ecff05
+graft secops new gcti_breach_network_indicator_matched --managed 433faf9e-4d51-f284-c35b-009528ecff05
 ```
 
 ### Step 3: Populate Metadata, MITRE & Runbook
-Edit `rulesets/secops/managed/gcti_active_breach_network_indicators.yaml` (validated against `base_managed.schema.json`):
+Edit `rulesets/secops/managed/gcti_breach_network_indicator_matched.yaml` (validated against `base_managed.schema.json`):
 ```yaml
 metadata:
-  id: "a4d89e12-3b77-4f08-9c61-82d47e910b3a"
-  name: "gcti_active_breach_network_indicators"
-  description: "Google Cloud Threat Intelligence network indicators from active breach investigations."
+  id: "e8a1b7c3-4f92-41d0-9e65-28f19c047110"
+  name: "gcti_breach_network_indicator_matched"
+  description: "GCTI curated ruleset matching active breach priority network indicators."
   owners:
-    - "Cloud Security Operations"
+    - "Joe Lopes"
   mitre:
     command-and-control:
-      - "T1071"
       - "T1071.001"
   tags:
     - "gcti"
-    - "curated"
     - "network"
   references:
-    - "https://cloud.google.com/chronicle/docs/detection/cloud-threats-category"
+    - "https://docs.cloud.google.com/chronicle/docs/detection/curated-detections"
 
 managed:
   id: "433faf9e-4d51-f284-c35b-009528ecff05"
 
 runbook:
-  context: |
-    Matches network telemetry against curated indicators of compromise (IoCs) maintained by GCTI.
+  context: "Google Cloud Threat Intelligence (GCTI) Active Breach Priority Network Indicators detects outbound and inbound network telemetry matching high-confidence command-and-control (C2) domains and IP addresses observed in active intrusion campaigns."
   triage: |
-    1. Inspect the matched indicator (domain, IP, or URI) and principal asset.
-    2. Pivot on the principal asset across DNS, proxy, and process telemetry.
+    1. Identify the internal host or workload initiating or receiving the network connection.
+    2. Inspect the matched GCTI indicator (domain or IP address), port, protocol, and process lineage.
+    3. Correlate endpoint and DNS telemetry on the affected asset over the preceding 24 hours.
+    4. Check if any other internal assets communicated with the same external infrastructure.
   response: |
-    1. Isolate the affected host or workload if active C2 is confirmed.
-    2. Block the indicator across perimeter firewall and DNS controls.
+    1. Isolate the affected host or workload if unauthorized C2 communication is confirmed.
+    2. Block the malicious domain and IP address at perimeter firewalls and DNS resolvers.
+    3. Capture volatile memory or disk artifacts and escalate to Incident Response.
 
 tests: []
 ```

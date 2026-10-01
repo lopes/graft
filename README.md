@@ -79,8 +79,8 @@ Modern SIEMs run a combination of bespoke custom rules and vendor-managed curate
 ```bash
 $ graft secops diff --env production
 === Custom Rules Diff ===
-[+] Custom rule to create: gcp_storage_iam_public_access_granted
-[~] Custom rule to update: workspace_nrd_possible_phishing (ID: ru_12345678-abcd-ef01-2345-6789abcdef01)
+[+] Custom rule to create: gcp_storage_bucket_public_access_granted
+[~] Custom rule to update: workspace_nrd_email_opened (ID: ru_12345678-abcd-ef01-2345-6789abcdef01)
 [?] Untracked custom rule on tenant: legacy_unmanaged_alert (ID: ru_98765432-feee-dcba-0000-111122223333)
 
 === Google SecOps Managed Content Diff ===
@@ -97,12 +97,12 @@ Bridge the gap between detection engineering code, SOC operations, and leadershi
 
 ```bash
 $ graft export catalog
-Rule Name                              Engine  Type     Status   MITRE ATT&CK                        Owners                     Reviews  Updated   
--------------------------------------  ------  -------  -------  ----------------------------------  -------------------------  -------  ----------
-gcp_iam_service_account_key_create     secops  custom   enabled  TA0003:T1098.001, TA0004:T1098.001  Cloud Security Operations  12       2026-09-29
-gcp_storage_iam_public_access_granted  secops  custom   enabled  TA0001:T1078.004, TA0112:T1685      Cloud Security Operations  10       2026-09-29
-workspace_nrd_possible_phishing        secops  custom   enabled  TA0001:T1566.002                    Joe Lopes <lopes.id>       8        2026-09-29
-gcti_active_breach_network_indicators  secops  managed  silent   TA0011:T1071.001                    Cloud Security Operations  1        2026-09-30
+Rule Name                                 Engine  Type     Status   MITRE ATT&CK                        Owners     Reviews  Updated   
+----------------------------------------  ------  -------  -------  ----------------------------------  ---------  -------  ----------
+gcp_service_account_key_created           secops  custom   enabled  TA0003:T1098.001, TA0004:T1098.001  Joe Lopes  13       2026-10-01
+gcp_storage_bucket_public_access_granted  secops  custom   enabled  TA0001:T1078.004, TA0112:T1685      Joe Lopes  11       2026-10-01
+workspace_nrd_email_opened                secops  custom   enabled  TA0001:T1566.002                    Joe Lopes  9        2026-10-01
+gcti_breach_network_indicator_matched     secops  managed  silent   TA0011:T1071.001                    Joe Lopes  2        2026-10-01
 ```
 
 <p align="center">
@@ -177,7 +177,7 @@ git push origin main
 graft lint
 
 # Lint a specific rule file
-graft lint rulesets/secops/custom/workspace_nrd_possible_phishing.yaml
+graft lint rulesets/secops/custom/workspace_nrd_email_opened.yaml
 
 # Output structured JSON diagnostics for CI/CD pipelines
 graft --json lint
@@ -186,12 +186,12 @@ graft --json lint
 #### 2. Rule & Engine Scaffolding
 ```bash
 # Bootstrap a new custom detection rule (creates 5-block envelope with schema defaults)
-graft secops new suspicious_powershell_download
+graft secops new powershell_payload_downloaded
 # or using the engine-agnostic router:
-graft new rule suspicious_powershell_download --engine secops
+graft new rule powershell_payload_downloaded --engine secops
 
 # Register an enabled vendor-managed rule from rulesets/<engine>/managed/index.yaml
-graft secops new gcti_active_breach_network_indicators --managed 433faf9e-4d51-f284-c35b-009528ecff05
+graft secops new gcti_breach_network_indicator_matched --managed 433faf9e-4d51-f284-c35b-009528ecff05
 
 # Bootstrap an entirely new detection engine adapter (code, schema, rules, tests)
 graft new engine sentinel
@@ -200,7 +200,7 @@ graft new engine sentinel
 #### 3. Pre-Merge Verification & Staging Replay Testing
 ```bash
 # Dry-run YARA-L syntax against Google SecOps verifyRuleText (non-destructive)
-graft secops verify rulesets/secops/custom/workspace_nrd_possible_phishing.yaml
+graft secops verify rulesets/secops/custom/workspace_nrd_email_opened.yaml
 
 # Execute synthetic UDM replay tests in isolated staging quarantine
 graft secops test

@@ -99,7 +99,7 @@ When pulling managed content via `ManagedEnginePort.fetch_managed_state()`:
 When pulling custom rules via `RuleDeployerPort.list_rules()` and `EngineAdapter.deconstruct_rule()`:
 1. Graft fetches the active custom rule inventory and deployment states (`enabled`, `alerting`, schedule) from the tenant.
 2. The engine adapter's rule deconstructor:
-   - Sanitizes rule display names into valid snake_case identifiers matching `^[a-z0-9_]+$`.
+   - Sanitizes rule display names into valid snake_case identifiers matching `^[a-z0-9]+(?:_[a-z0-9]+)*$` (max 64 characters).
    - Normalizes or preserves UUIDs for `metadata.id`.
    - Extracts embedded `id` and `description` metadata while stripping engine-specific wrapper boilerplate so only clean query logic remains in the `logic` block.
    - Leaves `owners: []`, `mitre: {}`, `tags: []`, and `references: []` empty—Graft never guesses operational ownership from legacy inline author strings.

@@ -28,14 +28,15 @@ graft export matrix --format table --engine secops
 
 **Example Output:**
 ```text
-MITRE ATT&CK Detection Matrix (Total Rules: 3 | Covered Techniques: 4)
+MITRE ATT&CK Detection Matrix (Total Rules: 4 | Covered Techniques: 5)
 ==========================================================================================
 Technique ID    Technique Name                   Rules   Rules / Detections
 ------------------------------------------------------------------------------------------
-T1078.004       Cloud Accounts                   1       gcp_storage_iam_public_access...
-T1098.001       Additional Cloud Credentials     1       gcp_iam_service_account_key_c...
-T1685           Disable or Modify Tools          1       gcp_storage_iam_public_access...
-T1566.002       Spearphishing Link               1       workspace_nrd_possible_phishing
+T1071.001       Web Protocols                    1       gcti_breach_network_indicator...
+T1078.004       Cloud Accounts                   1       gcp_storage_bucket_public_acc...
+T1098.001       Additional Cloud Credentials     1       gcp_service_account_key_created
+T1566.002       Spearphishing Link               1       workspace_nrd_email_opened
+T1685           Disable or Modify Tools          1       gcp_storage_bucket_public_acc...
 ------------------------------------------------------------------------------------------
 ```
 
@@ -99,10 +100,10 @@ graft export catalog --format=markdown --out docs/RULE_CATALOG.md
 
 | Rule Name | Engine | Type | Status | MITRE ATT&CK | Author | Owners | Owner Count | Created | Last Updated | Reviews | Contributors |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| `gcp_iam_service_account_key_create` | secops | custom | enabled | TA0003:T1098.001, TA0004:T1098.001 | Joe Lopes | Cloud Security Operations | 1 | 2026-09-17 | 2026-09-29 | 12 | 1 |
-| `gcp_storage_iam_public_access_granted` | secops | custom | enabled | TA0001:T1078.004, TA0112:T1685 | Joe Lopes | Cloud Security Operations | 1 | 2026-09-17 | 2026-09-29 | 10 | 1 |
-| `workspace_nrd_possible_phishing` | secops | custom | enabled | TA0001:T1566.002 | Joe Lopes | Joe Lopes <lopes.id> | 1 | 2026-09-17 | 2026-09-29 | 8 | 1 |
-| `gcti_active_breach_network_indicators` | secops | managed | silent | TA0011:T1071.001 | Joe Lopes | Cloud Security Operations | 1 | 2026-09-30 | 2026-09-30 | 1 | 1 |
+| `gcp_service_account_key_created` | secops | custom | enabled | TA0003:T1098.001, TA0004:T1098.001 | Joe Lopes | Joe Lopes | 1 | 2026-09-17 | 2026-10-01 | 13 | 1 |
+| `gcp_storage_bucket_public_access_granted` | secops | custom | enabled | TA0001:T1078.004, TA0112:T1685 | Joe Lopes | Joe Lopes | 1 | 2026-09-17 | 2026-10-01 | 11 | 1 |
+| `workspace_nrd_email_opened` | secops | custom | enabled | TA0001:T1566.002 | Joe Lopes | Joe Lopes | 1 | 2026-09-17 | 2026-10-01 | 9 | 1 |
+| `gcti_breach_network_indicator_matched` | secops | managed | silent | TA0011:T1071.001 | Joe Lopes | Joe Lopes | 1 | 2026-09-30 | 2026-10-01 | 2 | 1 |
 
 ### CSV Catalog (`--format=csv`)
 Generate spreadsheet-ready exports for Polars, Google Sheets, security audits, and reporting pipelines:
