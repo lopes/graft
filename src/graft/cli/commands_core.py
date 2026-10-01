@@ -1,4 +1,5 @@
 import json
+import re
 import sys
 from pathlib import Path
 from typing import Any
@@ -15,7 +16,12 @@ from graft.core.catalog import (
     resolve_rule_deployment_status,
 )
 from graft.core.engine_registry import EngineRegistry
-from graft.core.loader import RuleLoadError, load_rule_from_yaml
+from graft.core.loader import (
+    DatasetLoadError,
+    RuleLoadError,
+    load_dataset_from_yaml,
+    load_rule_from_yaml,
+)
 from graft.core.matrix import (
     calculate_mitre_coverage,
     export_navigator_layer,
@@ -29,18 +35,68 @@ from graft.core.validation.mitre_validator import update_mitre_taxonomy
 from graft.core.validation.schema_validator import SchemaValidator
 
 _MANIFEST_FILENAMES = ("index.yaml", "index.yml")
+_DATASET_REF_RE = re.compile(r"%(?P<name>[a-zA-Z0-9_]+)(?:\.(?P<col>[a-zA-Z0-9_]+))?")
 
 
 def _iter_yaml_files(directory: Path) -> list[Path]:
     files = sorted(
-        f for f in directory.rglob("*.yaml") if not any(part.startswith("_") for part in f.parts)
+        f
+        for f in directory.rglob("*.yaml")
+        if not any(part.startswith("_") for part in f.relative_to(directory).parts)
     )
     files.extend(
         sorted(
-            f for f in directory.rglob("*.yml") if not any(part.startswith("_") for part in f.parts)
+            f
+            for f in directory.rglob("*.yml")
+            if not any(part.startswith("_") for part in f.relative_to(directory).parts)
         )
     )
     return files
+
+
+def _is_dataset_path(file_path: Path, datasets_dir: str) -> bool:
+    if "datasets" in file_path.parts:
+        return True
+    try:
+        file_path.resolve().relative_to(Path(datasets_dir).resolve())
+        return True
+    except ValueError:
+        return False
+
+
+def _validate_rule_dataset_references(
+    rule: RuleEnvelope,
+    local_dataset_names: set[str],
+) -> None:
+    if not rule.logic or not local_dataset_names:
+        return
+    uncommented_lines = [re.sub(r"//.*$", "", line) for line in rule.logic.splitlines()]
+    uncommented_logic = "\n".join(uncommented_lines)
+    uncommented_logic = re.sub(r"/\*.*?\*/", "", uncommented_logic, flags=re.DOTALL)
+
+    for match in _DATASET_REF_RE.finditer(uncommented_logic):
+        ds_name = match.group("name")
+        if ds_name not in local_dataset_names:
+            continue
+        col = match.group("col")
+        if col != "value":
+            raise ValueError(
+                f"Rule '{rule.metadata.name}' references local dataset '{ds_name}' as "
+                f"'{match.group(0)}'; Graft datasets are single-column string lists and "
+                f"must be referenced as '%{ds_name}.value'"
+            )
+        op_match = re.search(
+            rf"\bin\s+(?P<op>cidr|regex)\s+%{re.escape(ds_name)}(?:\.[a-zA-Z0-9_]+)?\b",
+            uncommented_logic,
+            flags=re.IGNORECASE,
+        )
+        if op_match:
+            op = op_match.group("op")
+            raise ValueError(
+                f"Rule '{rule.metadata.name}' uses 'in {op}' with local dataset "
+                f"'%{ds_name}.value'; Graft datasets are literal string lists and only "
+                f"support string membership ('in %{ds_name}.value')"
+            )
 
 
 def _infer_engine_from_path(file_path: Path) -> str:
@@ -74,9 +130,15 @@ def _resolve_index_manifest_path(rule_path: Path, engine: str, rules_dir: str) -
 def execute_lint(
     paths: list[str] | None = None,
     rules_dir: str = "rulesets",
+    datasets_dir: str | None = None,
     fail_fast: bool = False,
     json_output: bool = False,
 ) -> int:
+    resolved_datasets_dir = (
+        datasets_dir
+        if datasets_dir is not None
+        else (str(Path(rules_dir).parent / "datasets") if rules_dir != "rulesets" else "datasets")
+    )
     target_files: list[Path] = []
     if paths:
         for p_str in paths:
@@ -90,6 +152,9 @@ def execute_lint(
                     sys.stderr.write(f"Error: Path not found: {p}\n")
                 return 1
     else:
+        root_datasets = Path(resolved_datasets_dir)
+        if root_datasets.is_dir():
+            target_files.extend(_iter_yaml_files(root_datasets))
         root_rules = Path(rules_dir)
         if root_rules.is_dir():
             target_files.extend(_iter_yaml_files(root_rules))
@@ -101,6 +166,17 @@ def execute_lint(
     registry = EngineRegistry()
     adapters: dict[str, EngineAdapter | None] = {}
     managed_states: dict[tuple[str, Path], ManagedState | None] = {}
+    seen_datasets: dict[str, Path] = {}
+    local_dataset_names: set[str] = set()
+
+    for candidate_ds_dir in {Path(resolved_datasets_dir), Path("datasets")}:
+        if candidate_ds_dir.is_dir():
+            for ds_path in _iter_yaml_files(candidate_ds_dir):
+                try:
+                    ds = load_dataset_from_yaml(ds_path)
+                    local_dataset_names.add(ds.metadata.name)
+                except (DatasetLoadError, ValueError, OSError):
+                    local_dataset_names.add(ds_path.stem)
 
     target_set = {f.resolve() for f in target_files if f.exists()}
     root_rules = Path(rules_dir)
@@ -116,88 +192,110 @@ def execute_lint(
                 continue
 
     for file_path in target_files:
-        is_manifest = file_path.name in _MANIFEST_FILENAMES
-        is_managed_rule = not is_manifest and "managed" in file_path.parts
+        is_dataset = _is_dataset_path(file_path, resolved_datasets_dir)
+        is_manifest = not is_dataset and file_path.name in _MANIFEST_FILENAMES
+        is_managed_rule = not is_dataset and not is_manifest and "managed" in file_path.parts
+        file_type = (
+            "dataset"
+            if is_dataset
+            else ("managed" if (is_manifest or is_managed_rule) else "custom")
+        )
         file_result: dict[str, Any] = {
             "path": str(file_path),
-            "type": "managed" if (is_manifest or is_managed_rule) else "custom",
+            "type": file_type,
             "valid": False,
             "errors": [],
         }
 
         try:
-            engine = _infer_engine_from_path(file_path)
-
-            if is_manifest:
-                raw_text = file_path.read_text(encoding="utf-8")
-                manifest_data: Any = yaml.safe_load(raw_text)
-                if not isinstance(manifest_data, dict):
-                    raise ValueError("Managed manifest content must be a YAML mapping")
-
-                avail = schema_validator.available_schemas()
-                schema_to_use = None
-                for candidate in (f"{engine}:managed", f"{engine}_managed", "managed"):
-                    if candidate in avail:
-                        schema_to_use = candidate
-                        break
-
-                if schema_to_use is None:
-                    raise ValueError(
-                        f"Engine '{engine}' does not provide a managed manifest schema"
+            if is_dataset:
+                dataset = load_dataset_from_yaml(file_path)
+                local_dataset_names.add(dataset.metadata.name)
+                prev_ds_path = seen_datasets.get(dataset.metadata.name)
+                if prev_ds_path is not None and prev_ds_path.resolve() != file_path.resolve():
+                    raise DatasetLoadError(
+                        f"Duplicate dataset name '{dataset.metadata.name}' in "
+                        f"'{file_path}' (already defined in '{prev_ds_path}')"
                     )
-
-                errs = schema_validator.validate(manifest_data, schema_name=schema_to_use)
-                if errs:
-                    err_details = "; ".join(f"{e.path}: {e.message}" for e in errs)
-                    raise ValueError(f"Managed manifest validation failed: {err_details}")
+                seen_datasets[dataset.metadata.name] = file_path
             else:
-                rule = load_rule_from_yaml(file_path)
-                file_result["type"] = rule.rule_type
-                uniqueness_violations = uniqueness_validator.add_and_validate(
-                    rule, engine=engine, path=file_path
-                )
-                if uniqueness_violations:
-                    has_errors = True
-                    file_result["valid"] = False
-                    for v in uniqueness_violations:
-                        file_result["errors"].append(v.message)
-                        if not json_output:
-                            sys.stderr.write(f"[FAIL] {file_path}:\n  {v.message}\n")
-                    results.append(file_result)
-                    if fail_fast:
-                        break
-                    continue
+                engine = _infer_engine_from_path(file_path)
 
-                if rule.is_managed and rule.managed is not None:
-                    index_path = _resolve_index_manifest_path(file_path, engine, rules_dir)
-                    if not index_path.is_file():
+                if is_manifest:
+                    raw_text = file_path.read_text(encoding="utf-8")
+                    manifest_data: Any = yaml.safe_load(raw_text)
+                    if not isinstance(manifest_data, dict):
+                        raise ValueError("Managed manifest content must be a YAML mapping")
+
+                    avail = schema_validator.available_schemas()
+                    schema_to_use = None
+                    for candidate in (f"{engine}:managed", f"{engine}_managed", "managed"):
+                        if candidate in avail:
+                            schema_to_use = candidate
+                            break
+
+                    if schema_to_use is None:
                         raise ValueError(
-                            f"Managed index manifest not found at '{index_path}' "
-                            f"to validate managed.id '{rule.managed.id}'"
+                            f"Engine '{engine}' does not provide a managed manifest schema"
                         )
-                    if engine not in adapters:
-                        try:
-                            adapters[engine] = registry.load_adapter(engine)
-                        except Exception:
-                            adapters[engine] = None
-                    adapter = adapters[engine]
-                    if adapter is not None:
-                        cache_key = (engine, index_path.resolve())
-                        if cache_key not in managed_states:
-                            managed_states[cache_key] = adapter.load_managed_manifest(index_path)
-                        state = managed_states[cache_key]
-                        if state is not None and not adapter.has_managed_rule_id(
-                            rule.managed.id, state
-                        ):
+
+                    errs = schema_validator.validate(manifest_data, schema_name=schema_to_use)
+                    if errs:
+                        err_details = "; ".join(f"{e.path}: {e.message}" for e in errs)
+                        raise ValueError(f"Managed manifest validation failed: {err_details}")
+                else:
+                    rule = load_rule_from_yaml(file_path)
+                    file_result["type"] = rule.rule_type
+                    uniqueness_violations = uniqueness_validator.add_and_validate(
+                        rule, engine=engine, path=file_path
+                    )
+                    if uniqueness_violations:
+                        has_errors = True
+                        file_result["valid"] = False
+                        for v in uniqueness_violations:
+                            file_result["errors"].append(v.message)
+                            if not json_output:
+                                sys.stderr.write(f"[FAIL] {file_path}:\n  {v.message}\n")
+                        results.append(file_result)
+                        if fail_fast:
+                            break
+                        continue
+
+                    if not rule.is_managed:
+                        _validate_rule_dataset_references(rule, local_dataset_names)
+
+                    if rule.is_managed and rule.managed is not None:
+                        index_path = _resolve_index_manifest_path(file_path, engine, rules_dir)
+                        if not index_path.is_file():
                             raise ValueError(
-                                f"Managed rule ID '{rule.managed.id}' in '{rule.metadata.name}' "
-                                f"not found in '{index_path}'"
+                                f"Managed index manifest not found at '{index_path}' "
+                                f"to validate managed.id '{rule.managed.id}'"
                             )
+                        if engine not in adapters:
+                            try:
+                                adapters[engine] = registry.load_adapter(engine)
+                            except Exception:
+                                adapters[engine] = None
+                        adapter = adapters[engine]
+                        if adapter is not None:
+                            cache_key = (engine, index_path.resolve())
+                            if cache_key not in managed_states:
+                                managed_states[cache_key] = adapter.load_managed_manifest(
+                                    index_path
+                                )
+                            state = managed_states[cache_key]
+                            if state is not None and not adapter.has_managed_rule_id(
+                                rule.managed.id, state
+                            ):
+                                raise ValueError(
+                                    f"Managed rule ID '{rule.managed.id}' in "
+                                    f"'{rule.metadata.name}' not found in '{index_path}'"
+                                )
 
             file_result["valid"] = True
             if not json_output:
                 sys.stdout.write(f"[PASS] {file_path}\n")
-        except (RuleLoadError, ValueError, Exception) as exc:
+        except (DatasetLoadError, RuleLoadError, ValueError, Exception) as exc:
             has_errors = True
             file_result["valid"] = False
             file_result["errors"].append(str(exc))

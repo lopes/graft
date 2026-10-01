@@ -1,0 +1,16 @@
+metadata:
+  name: "known_scanner_ips"
+  description: "Authorized internal vulnerability scanners and network discovery nodes."
+  owners:
+    - "Joe Lopes"
+  tags:
+    - "network"
+    - "scanner"
+    - "suppression"
+  references:
+    - "https://lopes.id/log/detection-rules-netscan-portscan/"
+
+values:
+  - "10.10.0.50"  # Primary vulnerability scanner appliance
+  - "10.10.0.51"  # Secondary vulnerability scanner appliance
+  - "10.20.100.10"  # Network asset discovery collector

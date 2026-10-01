@@ -4,6 +4,7 @@ from typing import Any
 
 import yaml
 
+from graft.core.models.dataset import DatasetEnvelope, DatasetMetadata
 from graft.core.models.rule import (
     BaseDeploymentConfig,
     ManagedRuleRef,
@@ -17,10 +18,16 @@ from graft.core.validation.mitre_validator import MitreValidator
 from graft.core.validation.schema_validator import SchemaValidator
 
 RULE_IDENTIFIER_PATTERN = re.compile(r"^[a-z0-9]+(?:_[a-z0-9]+)*$")
+DATASET_IDENTIFIER_PATTERN = re.compile(r"^[a-z][a-z0-9]*(?:_[a-z0-9]+)*$")
 MAX_RULE_IDENTIFIER_LEN = 64
+MAX_DATASET_RAW_LINE_LEN = 512
 
 
 class RuleLoadError(Exception):
+    pass
+
+
+class DatasetLoadError(Exception):
     pass
 
 
@@ -32,6 +39,19 @@ def validate_rule_identifier(name: str, kind: str = "rule filename") -> None:
             f"Invalid {kind} '{name}': must be 1..{MAX_RULE_IDENTIFIER_LEN} chars matching "
             f"{RULE_IDENTIFIER_PATTERN.pattern} (lowercase alphanumeric and single underscores, "
             "never starting or ending with underscores)"
+        )
+
+
+def validate_dataset_identifier(name: str, kind: str = "dataset filename") -> None:
+    if name == "index":
+        raise DatasetLoadError(f"Invalid {kind} '{name}': 'index' is reserved")
+    if not (1 <= len(name) <= MAX_RULE_IDENTIFIER_LEN) or not DATASET_IDENTIFIER_PATTERN.match(
+        name
+    ):
+        raise DatasetLoadError(
+            f"Invalid {kind} '{name}': must be 1..{MAX_RULE_IDENTIFIER_LEN} chars matching "
+            f"{DATASET_IDENTIFIER_PATTERN.pattern} (must start with a lowercase letter, "
+            "lowercase alphanumeric and single underscores, never ending with underscores)"
         )
 
 
@@ -224,6 +244,91 @@ def rule_to_dict(rule: RuleEnvelope) -> dict[str, Any]:
 
 def dump_rule_to_yaml(rule: RuleEnvelope, path: Path | str) -> None:
     doc = rule_to_dict(rule)
+    dumped = yaml.safe_dump(doc, sort_keys=False, indent=2)
+    dest_path = Path(path)
+    dest_path.parent.mkdir(parents=True, exist_ok=True)
+    dest_path.write_text(dumped, encoding="utf-8")
+
+
+def load_dataset_from_str(
+    content: str,
+    schema_name: str = "base_dataset",
+) -> DatasetEnvelope:
+    for line_no, raw_line in enumerate(content.splitlines(), start=1):
+        if len(raw_line) > MAX_DATASET_RAW_LINE_LEN:
+            raise DatasetLoadError(
+                f"Line {line_no} length ({len(raw_line)} chars) exceeds maximum length "
+                f"of {MAX_DATASET_RAW_LINE_LEN} chars"
+            )
+
+    try:
+        data: Any = yaml.safe_load(content)
+    except yaml.YAMLError as e:
+        raise DatasetLoadError(f"YAML parsing error: {e}") from e
+
+    if not isinstance(data, dict):
+        raise DatasetLoadError("Dataset content must be a YAML mapping")
+
+    schema_validator = SchemaValidator()
+    errors = schema_validator.validate(data, schema_name=schema_name)
+    if errors:
+        error_lines = "\n".join(f"- {err.path}: {err.message}" for err in errors)
+        raise DatasetLoadError(f"Schema validation failed:\n{error_lines}")
+
+    metadata_raw: dict[str, Any] = data.get("metadata", {})
+    name_str = str(metadata_raw["name"])
+    validate_dataset_identifier(name_str, kind="dataset metadata.name")
+
+    metadata = DatasetMetadata(
+        name=name_str,
+        description=str(metadata_raw["description"]),
+        owners=tuple(str(o) for o in metadata_raw.get("owners", ())),
+        tags=tuple(str(t) for t in metadata_raw.get("tags", ())),
+        references=tuple(str(r) for r in metadata_raw.get("references", ())),
+    )
+
+    values_raw = data.get("values", ())
+    values = tuple(str(v) for v in values_raw)
+
+    return DatasetEnvelope(
+        metadata=metadata,
+        values=values,
+    )
+
+
+def load_dataset_from_yaml(
+    path: Path | str,
+    schema_name: str = "base_dataset",
+) -> DatasetEnvelope:
+    file_path = Path(path)
+    if not file_path.is_file():
+        raise DatasetLoadError(f"Dataset file not found: {file_path}")
+    validate_dataset_identifier(file_path.stem, kind="dataset filename")
+    content = file_path.read_text(encoding="utf-8")
+    dataset = load_dataset_from_str(content, schema_name=schema_name)
+    if dataset.metadata.name != file_path.stem:
+        raise DatasetLoadError(
+            f"Dataset metadata.name '{dataset.metadata.name}' must match "
+            f"filename stem '{file_path.stem}'"
+        )
+    return dataset
+
+
+def dataset_to_dict(dataset: DatasetEnvelope) -> dict[str, Any]:
+    return {
+        "metadata": {
+            "name": dataset.metadata.name,
+            "description": dataset.metadata.description,
+            "owners": list(dataset.metadata.owners),
+            "tags": list(dataset.metadata.tags),
+            "references": list(dataset.metadata.references),
+        },
+        "values": list(dataset.values),
+    }
+
+
+def dump_dataset_to_yaml(dataset: DatasetEnvelope, path: Path | str) -> None:
+    doc = dataset_to_dict(dataset)
     dumped = yaml.safe_dump(doc, sort_keys=False, indent=2)
     dest_path = Path(path)
     dest_path.parent.mkdir(parents=True, exist_ok=True)

@@ -1,9 +1,11 @@
 from graft.core.ports.compiler import RuleCompilerPort
+from graft.core.ports.dataset import DatasetPort
 from graft.core.ports.deployer import RuleDeployerPort
 from graft.core.ports.managed import ManagedEnginePort
 from graft.core.ports.replay import ReplayHarnessPort, ReplayResult
 
 __all__ = [
+    "DatasetPort",
     "ManagedEnginePort",
     "ReplayHarnessPort",
     "ReplayResult",

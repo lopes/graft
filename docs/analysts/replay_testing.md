@@ -10,7 +10,7 @@ Static syntax linting validates query structure, but cannot verify whether compl
 
 ## 1. The Replay Testing Lifecycle
 
-When `graft <engine> test` is executed, the engine's replay adapter deploys a temporary quarantine rule, ingests synthetic test events into the staging instance, triggers an ad-hoc evaluation over the test time window, asserts the detection count against `test.expect`, and guarantees teardown cleanup.
+When `graft <engine> test` is executed, the engine's replay adapter pre-synchronizes any referenced local datasets (`datasets/<name>.yaml`) to the staging tenant, deploys a temporary quarantine rule, ingests synthetic test events into the staging instance, triggers an ad-hoc evaluation over the test time window, asserts the detection count against `test.expect`, and guarantees teardown cleanup.
 
 ```mermaid
 sequenceDiagram
@@ -20,6 +20,8 @@ sequenceDiagram
     participant API as Staging SIEM API
 
     Dev->>Graft: graft <engine> test [rule]
+    Graft->>API: Pre-Sync Referenced Local Datasets (%<name>.value)
+    API-->>Graft: Staging Data Tables created or updated
     Graft->>API: Create Quarantined Rule (enabled=True, alerting=False)
     API-->>Graft: Return temporary rule_id
     Note over Graft,API: Rule is quarantined: zero live alerts or SOC contamination

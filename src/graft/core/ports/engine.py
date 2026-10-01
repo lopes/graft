@@ -4,6 +4,7 @@ from typing import Protocol, runtime_checkable
 from graft.core.models.managed import ManagedState
 from graft.core.models.rule import RuleEnvelope
 from graft.core.ports.compiler import RuleCompilerPort
+from graft.core.ports.dataset import DatasetPort
 from graft.core.ports.deployer import RuleDeployerPort
 from graft.core.ports.managed import ManagedEnginePort
 from graft.core.ports.replay import ReplayHarnessPort
@@ -20,6 +21,9 @@ class EngineAdapter(Protocol):
     def get_managed(self) -> ManagedEnginePort | None: ...
 
     def get_replay(self) -> ReplayHarnessPort | None: ...
+
+    def get_dataset(self) -> DatasetPort | None:
+        return None
 
     def resolve_deployment_status(
         self,

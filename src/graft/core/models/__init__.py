@@ -1,4 +1,5 @@
 from graft.core.models.compiler import CompilationDiagnostic, CompilationResult
+from graft.core.models.dataset import DatasetEnvelope, DatasetMetadata
 from graft.core.models.engine import EngineCapabilities, EngineManifest
 from graft.core.models.managed import (
     ManagedDeployment,
@@ -20,6 +21,8 @@ __all__ = [
     "BaseDeploymentConfig",
     "CompilationDiagnostic",
     "CompilationResult",
+    "DatasetEnvelope",
+    "DatasetMetadata",
     "EngineCapabilities",
     "EngineManifest",
     "ManagedDeployment",

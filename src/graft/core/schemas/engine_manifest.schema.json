@@ -40,6 +40,9 @@
         "custom_rules": {
           "type": "boolean"
         },
+        "datasets": {
+          "type": "boolean"
+        },
         "syntax_verification": {
           "type": "boolean"
         },

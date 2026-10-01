@@ -9,7 +9,7 @@ from pathlib import Path
 from graft import __version__
 from graft.cli.commands_core import execute_export, execute_lint, execute_update_mitre
 from graft.cli.engines import discover_and_register_engines
-from graft.cli.scaffold import ScaffoldError, scaffold_engine, scaffold_rule
+from graft.cli.scaffold import ScaffoldError, scaffold_dataset, scaffold_engine, scaffold_rule
 from graft.core.env import load_env_file
 
 logger = logging.getLogger("graft.cli")
@@ -31,10 +31,12 @@ def build_parser() -> argparse.ArgumentParser:
 
     # 1. lint
     lint_p = subparsers.add_parser(
-        "lint", help="Validate custom rules and managed manifests offline"
+        "lint", help="Validate custom rules, datasets, and managed manifests offline"
     )
     lint_p.add_argument(
-        "paths", nargs="*", help="Files or directories to lint (default: scan rulesets/)"
+        "paths",
+        nargs="*",
+        help="Files or directories to lint (default: scan datasets/ and rulesets/)",
     )
     lint_p.add_argument(
         "--rules-dir",
@@ -42,6 +44,12 @@ def build_parser() -> argparse.ArgumentParser:
         default="rulesets",
         dest="rules_dir",
         help="Root directory of rulesets (default: rulesets)",
+    )
+    lint_p.add_argument(
+        "--datasets-dir",
+        default=None,
+        dest="datasets_dir",
+        help="Root directory of datasets (default: datasets)",
     )
     lint_p.add_argument("--fail-fast", action="store_true", help="Stop execution on first error")
 
@@ -80,8 +88,8 @@ def build_parser() -> argparse.ArgumentParser:
         help="Hex color for Navigator layer gradient stop (default: #008744)",
     )
 
-    # 4. new (engine | rule)
-    new_p = subparsers.add_parser("new", help="Scaffold a new engine or detection rule")
+    # 4. new (engine | rule | dataset)
+    new_p = subparsers.add_parser("new", help="Scaffold a new engine, detection rule, or dataset")
     new_subparsers = new_p.add_subparsers(dest="new_type", required=True)
 
     new_engine_p = new_subparsers.add_parser(
@@ -99,6 +107,12 @@ def build_parser() -> argparse.ArgumentParser:
         metavar="MANAGED_ID",
         help="Scaffold a registered managed rule in rulesets/<engine>/managed/",
     )
+
+    new_dataset_p = new_subparsers.add_parser(
+        "dataset", help="Bootstrap a new engine-agnostic dataset"
+    )
+    new_dataset_p.add_argument("name", help="Dataset identifier slug (e.g. known_scanner_ips)")
+    new_dataset_p.add_argument("--out", help="Custom output path for generated YAML dataset")
 
     # 5. Discover & register pluggable engines (e.g., secops, sentinel, crowdstrike)
     discover_and_register_engines(subparsers)
@@ -133,6 +147,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             return execute_lint(
                 paths=args.paths if args.paths else None,
                 rules_dir=args.rules_dir,
+                datasets_dir=getattr(args, "datasets_dir", None),
                 fail_fast=args.fail_fast,
                 json_output=args.json,
             )
@@ -182,6 +197,20 @@ def main(argv: Sequence[str] | None = None) -> int:
                     sys.stdout.write(json.dumps({"success": True, "path": str(rule_path)}) + "\n")
                 else:
                     sys.stdout.write(f"Scaffolded rule template at: {rule_path}\n")
+                return 0
+
+            if args.new_type == "dataset":
+                out_path = Path(args.out) if getattr(args, "out", None) else None
+                dataset_path = scaffold_dataset(
+                    dataset_name=args.name,
+                    out_path=out_path,
+                )
+                if args.json:
+                    sys.stdout.write(
+                        json.dumps({"success": True, "path": str(dataset_path)}) + "\n"
+                    )
+                else:
+                    sys.stdout.write(f"Scaffolded dataset template at: {dataset_path}\n")
                 return 0
 
         engine_handler = getattr(args, "engine_handler", None)

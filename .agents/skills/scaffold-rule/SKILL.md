@@ -16,6 +16,7 @@ Before generating any fields, ground your decisions in:
 - [Rule Authoring Guide](../../../docs/analysts/rule_authoring.md)
 - [Base Custom Rule Schema](../../../src/graft/core/schemas/base_custom.schema.json)
 - [Base Managed Rule Schema](../../../src/graft/core/schemas/base_managed.schema.json)
+- [Base Dataset Schema](../../../src/graft/core/schemas/base_dataset.schema.json)
 - [Pinned MITRE ATT&CK v19.2 Matrix](../../../src/graft/data/mitre_attack.json)
 
 ---

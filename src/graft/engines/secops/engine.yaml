@@ -5,6 +5,7 @@ adapter_class: graft.engines.secops.adapter:SecOpsAdapter
 
 capabilities:
   custom_rules: true
+  datasets: true
   syntax_verification: true
   managed_rules: true
   replay_testing: true

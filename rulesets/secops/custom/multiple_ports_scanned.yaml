@@ -1,0 +1,72 @@
+metadata:
+  id: "c7e9d420-8b14-4a39-b512-9e4a1f623002"
+  name: "multiple_ports_scanned"
+  description: "Single source IP probing more than 10 privileged ports on a host in 1 minute."
+  owners:
+    - "Joe Lopes"
+  mitre:
+    discovery:
+      - "T1046"
+    reconnaissance:
+      - "T1595.001"
+  tags:
+    - "network"
+    - "portscan"
+    - "reconnaissance"
+  references:
+    - "https://lopes.id/log/detection-rules-netscan-portscan/"
+    - "https://attack.mitre.org/techniques/T1046/"
+    - "https://attack.mitre.org/techniques/T1595/001/"
+
+logic: |
+  events:
+    $e.metadata.event_type = "NETWORK_CONNECTION"
+    $e.target.port < 1024
+    $e.principal.ip = $src_ip
+    $e.target.ip = $dst_ip
+    not $src_ip in %known_scanner_ips.value
+    not $src_ip in %security_assessment_ips.value
+
+  match:
+    $src_ip, $dst_ip over 1m
+
+  outcome:
+    $target_port_count = count_distinct($e.target.port)
+    $target_ports = array_distinct($e.target.port)
+
+  condition:
+    $e and $target_port_count > 10
+
+deployment:
+  enabled: true
+  alerting: true
+  run_frequency: "live"
+
+runbook:
+  context: "Vertical port scans probe multiple privileged ports (< 1024) on a single target host within a short window (more than 10 distinct ports in 1 minute) to enumerate listening daemons and identify exploitable services."
+  triage: |
+    1. Identify the source IP ($src_ip) and destination host ($dst_ip).
+    2. Examine the list of probed privileged ports ($target_ports) and check which connections succeeded.
+    3. Correlate with process execution and authentication telemetry on both source and destination hosts.
+  response: |
+    1. Isolate the source host if unauthorized internal service discovery is confirmed.
+    2. If the source IP belongs to an authorized security assessment, register it in datasets/security_assessment_ips.yaml for the engagement window.
+    3. Audit exposed services on the target host and restrict unnecessary network access.
+
+# EXPERIMENTAL - NOT WORKING
+tests:
+  - id: "ignore_authorized_assessment_port_scan"
+    description: "Verifies no alert triggers when source IP belongs to security_assessment_ips"
+    expect: 0
+    events:
+      - timestamp: "2026-10-01T12:05:00Z"
+        payload:
+          metadata:
+            event_type: "NETWORK_CONNECTION"
+          principal:
+            ip:
+              - "192.0.2.10"
+          target:
+            ip:
+              - "10.50.1.25"
+            port: 443

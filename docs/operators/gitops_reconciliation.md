@@ -6,36 +6,55 @@ Modern security operations centers rely on both custom organization-owned detect
 
 ## 1. Unified Multi-Target Synchronization Model
 
-Graft provides unified synchronization commands for both custom rules and vendor-managed content through the `graft <engine> diff` and `graft <engine> apply` interfaces.
+Graft provides unified synchronization commands across reusable datasets, custom rules, and vendor-managed content through the `graft <engine> diff` and `graft <engine> apply` interfaces.
+
+When `--target all` (the default) is used during `diff` or `apply`, Graft executes in strict dependency order (**1. Datasets $\rightarrow$ 2. Custom Rules $\rightarrow$ 3. Managed Content**) so any newly created or updated dataset (`%<name>.value`) is already provisioned on the SIEM before custom rules referencing it are created or updated.
 
 ```mermaid
 flowchart TD
-    CLI["<b>graft &lt;engine&gt; apply / diff</b><br/><code>--target all | custom | managed</code>"]
+    CLI["<b>graft &lt;engine&gt; apply / diff</b><br/><code>--target all | datasets | custom | managed</code>"]
     TARGET{"Target Scope"}
 
     CLI --> TARGET
 
-    TARGET -- "custom / all" --> CUSTOM_FLOW["<b>Custom Rules Reconciler</b><br/><code>rulesets/&lt;engine&gt;/custom/*.yaml</code>"]
-    TARGET -- "managed / all" --> MANAGED_FLOW["<b>Managed Content Reconciler</b><br/><code>rulesets/&lt;engine&gt;/managed/index.yaml</code>"]
+    TARGET -- "1. datasets / all" --> DATASET_FLOW["<b>1. Dataset Reconciler</b><br/><code>datasets/&lt;name&gt;.yaml</code>"]
+    TARGET -- "2. custom / all" --> CUSTOM_FLOW["<b>2. Custom Rules Reconciler</b><br/><code>rulesets/&lt;engine&gt;/custom/*.yaml</code>"]
+    TARGET -- "3. managed / all" --> MANAGED_FLOW["<b>3. Managed Content Reconciler</b><br/><code>rulesets/&lt;engine&gt;/managed/index.yaml</code>"]
+
+    DATASET_FLOW --> DS_MATCH["Additive Coexistence by metadata.name<br/>Order-Insensitive Set Comparison"]
+    DS_MATCH --> DATASET_API["DatasetPort<br/>Create / Update Data Table &amp; Rows"]
 
     CUSTOM_FLOW --> MATCH["Match by metadata.name<br/>Preserve Graft metadata.id"]
-    MATCH --> CUSTOM_API["RuleDeployerPort<br/>Create / Update Rule & Deployment State"]
+    MATCH --> CUSTOM_API["RuleDeployerPort<br/>Create / Update Rule &amp; Deployment State"]
 
-    MANAGED_FLOW --> MAN_DIFF["Evaluate Ruleset & Exclusion Diff"]
-    MAN_DIFF --> MANAGED_API["ManagedEnginePort<br/>Sync Deployments & Exclusions"]
+    MANAGED_FLOW --> MAN_DIFF["Evaluate Ruleset &amp; Exclusion Diff"]
+    MAN_DIFF --> MANAGED_API["ManagedEnginePort<br/>Sync Deployments &amp; Exclusions"]
 
-    CUSTOM_API --> TENANT["<b>Target SIEM Tenant</b>"]
+    DATASET_API --> TENANT["<b>Target SIEM Tenant</b>"]
+    CUSTOM_API --> TENANT
     MANAGED_API --> TENANT
 ```
 
 ### Supported Scopes (`--target`)
-- **`all` (Default):** Reconciles both custom detection rules (`rulesets/<engine>/custom/`) and vendor-managed content (`rulesets/<engine>/managed/index.yaml`).
+- **`all` (Default):** Reconciles datasets (`datasets/*.yaml`), custom detection rules (`rulesets/<engine>/custom/`), and vendor-managed content (`rulesets/<engine>/managed/index.yaml`) in strict order (`datasets` $\rightarrow$ `custom` $\rightarrow$ `managed`). *(Note: `pull --target all` pulls `custom` and `managed` only; datasets are opt-in on `pull` via `--target datasets`).*
+- **`datasets`:** Scopes reconciliation strictly to reusable string datasets (`datasets/<name>.yaml`).
 - **`custom`:** Scopes reconciliation strictly to custom rules owned by your team.
 - **`managed`:** Scopes reconciliation strictly to vendor-managed rule sets and exclusions.
 
 ---
 
-## 2. Custom Rule Reconciliation Lifecycle
+## 2. Dataset Reconciliation Lifecycle (Additive Coexistence)
+
+Reusable string datasets are authored in 2-block YAML files under `datasets/<name>.yaml`. During reconciliation via `DatasetReconciler` and `DatasetPort`:
+
+1. **Identity Matching:** Local datasets are matched to remote SIEM tables by `metadata.name`.
+2. **Creations:** Datasets present in `datasets/<name>.yaml` (or modified in the active branch under Scoped Mode) that do not exist on the tenant are created via `DatasetPort.create_dataset()` (for example, in Google SecOps: creating a Data Table with a single `STRING` column named `value` and populating rows via `:bulkCreateDataTableRows`).
+3. **Updates:** For datasets existing in both Git and the tenant, `DatasetReconciler` compares `metadata.description.strip()` and `set(desired.values) == set(remote.values)` (order-insensitive set comparison). If either differs, `DatasetPort.update_dataset()` synchronizes the table description and atomically replaces the table rows (e.g., `:bulkReplaceDataTableRows`).
+4. **Additive Coexistence (Zero Untracked Noise, Zero Deletions):** Because SIEM tenants routinely store external multi-column tables, CMDB exports, or SOAR-managed lookup lists that do not belong in Git, `DatasetReconciler` operates under strict **additive coexistence**: tables on the SIEM that are not in `datasets/` are never flagged as `[?] Untracked` and are never deleted.
+
+---
+
+## 3. Custom Rule Reconciliation Lifecycle
 
 Custom detection rules are authored in 5-block envelope YAML files under `rulesets/<engine>/custom/`. During reconciliation via `GitOpsReconciler` and `RuleDeployerPort`:
 
@@ -50,7 +69,7 @@ Custom detection rules are authored in 5-block envelope YAML files under `rulese
 
 ---
 
-## 3. Vendor-Managed Content Manifest (`rulesets/<engine>/managed/index.yaml`)
+## 4. Vendor-Managed Content Manifest (`rulesets/<engine>/managed/index.yaml`)
 
 Vendor-managed content state is tracked in a single declarative manifest (`rulesets/<engine>/managed/index.yaml`) conforming to `src/graft/engines/<engine>/schemas/managed.schema.json` (while optional registered managed rule envelopes in `rulesets/<engine>/managed/<rule_name>.yaml` provide MITRE ATT&CK coverage and SOC runbooks).
 
@@ -80,32 +99,35 @@ exclusions:
 
 ---
 
-## 4. Reconciliation Modes: Scoped vs. Full Catalog
+## 5. Reconciliation Modes: Scoped vs. Full Catalog
 
 Graft provides two execution modes to balance rapid pull request evaluation with comprehensive tenant self-healing:
 
 | Parameter | Scoped Reconciliation (Default) | Full Catalog Reconciliation (`--all` / `--full`) |
 | :--- | :--- | :--- |
 | **CLI Flag** | *(No flag, default)* | `--all` or `--full` |
-| **Evaluation Scope** | Detection files modified in Git branch / working tree | Every detection rule and ruleset in the entire repository |
+| **Evaluation Scope** | Datasets and detection files modified in Git branch / working tree | Every dataset, detection rule, and ruleset in the entire repository |
 | **Use Case** | Local development, feature branches, PR validation gates | Mainline merge to `main`, scheduled cron drift detection |
-| **Drift Behavior** | Ignores untouched drifted tenant rules | Identifies out-of-band console edits across entire catalog |
+| **Drift Behavior** | Ignores untouched drifted tenant datasets and rules | Identifies out-of-band console edits across entire catalog |
 | **Convergence** | Reconciles only touched files | Overwrites console edits and restores Git desired state |
 
 ---
 
-## 5. Command Reference & CLI Workflows
+## 6. Command Reference & CLI Workflows
 
 ### 1. Unified Drift Detection (`graft secops diff`)
 
-Compares repository detection state against the live SecOps tenant:
+Compares repository dataset and detection state against the live SecOps tenant:
 
 ```bash
-# Scoped Reconciliation: Compare only detection files modified in your branch
+# Scoped Reconciliation: Compare only datasets and detection files modified in your branch
 graft secops diff --env production
 
 # Full Catalog Reconciliation: Scan entire tenant catalog for out-of-band console drift
 graft secops diff --all --env production
+
+# Target only reusable datasets
+graft secops diff --target datasets --env production
 
 # Target only custom rules
 graft secops diff --target custom --env production
@@ -121,31 +143,40 @@ graft secops diff --target managed --env production
 
 #### Example Drift Output:
 ```text
+=== Datasets Diff ===
++ Datasets to create (1):
+  [+] known_scanner_ips (3 rows)
+~ Datasets to update (1):
+  [~] security_assessment_ips (2 rows)
+
+=== Google SecOps Custom Rules Diff ===
++ Custom rules to create (1):
+  [+] multiple_hosts_scanned (id=c4e89a12-5d31-4f88-9a20-71b4e2f90311)
+~ Custom rules to update (1):
+  [~] workspace_nrd_email_opened (id=b1d72370-5fa3-4cb8-a579-22a468d6f101)
+? Untracked custom rules in tenant (1):
+  [?] legacy_console_rule (id=89a74bc1-1111-2222-3333-444455556666)
+
 === Google SecOps Managed Content Diff ===
 ~ Deployments to update (1):
   [~] Cloud IAM Privilege Escalation [ur_cloud_iam_privilege_escalation] (PRECISE): alerting False -> True
 + Exclusions to create (1):
   [+] ex-backup-service-account -> ur_cloud_iam_privilege_escalation
-
-=== Google SecOps Custom Rules Diff ===
-+ Custom rules to create (1):
-  [+] gcp_storage_bucket_public_access_granted (id=d8a19c42-7f10-4b22-9e55-0192837465ab)
-~ Custom rules to update (1):
-  [~] workspace_nrd_email_opened (id=b1d72370-5fa3-4cb8-a579-22a468d6f101)
-? Untracked custom rules in tenant (1):
-  [?] legacy_console_rule (id=89a74bc1-1111-2222-3333-444455556666)
 ```
 
 ### 2. Unified State Synchronization (`graft secops apply`)
 
-Applies the desired repository state directly to the Google SecOps tenant:
+Applies the desired repository state directly to the Google SecOps tenant (in order: Datasets $\rightarrow$ Custom Rules $\rightarrow$ Managed Content):
 
 ```bash
-# Scoped Reconciliation: Apply only detection files modified in your branch
+# Scoped Reconciliation: Apply only datasets and detection files modified in your branch
 graft secops apply --env production
 
 # Full Catalog Reconciliation: Enforce full catalog convergence, healing all console drift
 graft secops apply --all --env production
+
+# Apply datasets only
+graft secops apply --target datasets --env production
 
 # Apply custom rules only
 graft secops apply --target custom --env production
@@ -155,13 +186,18 @@ graft secops apply --target managed --env production
 ```
 
 #### Zero-Cost No-Op Guarantee
-Graft computes an in-memory diff before issuing mutations. If an existing rule's logic and deployment toggles already match Git, Graft skips API write requests, preventing unnecessary rule revision churn in Chronicle.
+Graft computes an in-memory diff before issuing mutations. If an existing dataset's values and description or an existing rule's logic and deployment toggles already match Git, Graft skips API write requests, preventing unnecessary API churn in Chronicle.
 
-### 3. Dedicated Managed Commands (`graft secops managed`)
+### 3. Dedicated Datasets & Managed Commands (`graft secops datasets` / `graft secops managed`)
 
-Granular operations for vendor-curated rule sets and exclusions:
+Granular operations for reusable datasets or vendor-curated rule sets and exclusions:
 
 ```bash
+# Compare, apply, or pull reusable datasets (Data Tables)
+graft secops datasets diff --env production
+graft secops datasets apply --env production
+graft secops datasets pull --env production --out datasets
+
 # Compare local managed/index.yaml against tenant Curated Rule Sets
 graft secops managed diff --env production
 
@@ -183,11 +219,14 @@ graft secops pull --env production
 # Pull custom rules only into a custom directory
 graft secops pull --target custom --env production --out-dir rulesets/secops/custom
 
-# Overwrite existing rule files (default prompts for confirmation)
+# Opt-in: Pull compatible 1-column STRING Data Tables (originalColumn == "value") into datasets/
+graft secops pull --target datasets --env production --out-datasets-dir datasets
+
+# Overwrite existing files (default prompts for confirmation)
 graft secops pull --target custom --env production --force
 ```
 
-## 6. Fault Tolerance & Partial Failure Recovery (Idempotent Healing)
+## 7. Fault Tolerance & Partial Failure Recovery (Idempotent Healing)
 
 A common operational concern in GitOps pipelines is handling partial deployment failures. For example:
 - A change modifies three detection rules (`Rule A`, `Rule B`, `Rule C`).
@@ -229,7 +268,7 @@ flowchart TD
 **No. Operators never need to roll back succeeded rules or manually untangle partial deployments.**
 
 Graft's reconciliation architecture is strictly **declarative and idempotent**:
-- **Live State Evaluation:** On every run, `graft <engine> apply` queries the live tenant state (`port.list_rules()`, `port.fetch_managed_state()`).
+- **Live State Evaluation:** On every run, `graft <engine> apply` queries the live tenant state (`port.list_datasets()`, `port.list_rules()`, `port.fetch_managed_state()`).
 - **Zero-Cost No-Op Skip:** Graft compares the live tenant state against the desired Git state. Because `Rule A` was already successfully applied in Attempt 1, Graft detects that the tenant is already in sync for `Rule A` and **skips it entirely** without issuing redundant API calls or generating audit noise.
 - **Targeted Delta Convergence:** Graft identifies that only `Rule B` (now fixed) and `Rule C` (previously unreached) differ from the live tenant, and converges only those remaining delta items.
 
@@ -237,7 +276,7 @@ In production pipelines (`deploy-production.yml`), `graft secops apply --all` gu
 
 ---
 
-## 7. Next Steps & References
+## 8. Next Steps & References
 
 For the complete lifecycle guide covering Day 0 discovery, baseline enrichment, and declaring Git as the permanent Source of Truth, see **[Engine Adoption & Lifecycle Guide](adoption.md)**.
 

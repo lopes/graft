@@ -293,9 +293,9 @@ tests:
 
 ## 4. Scaffolding & Offline Validation
 
-### Scaffolding a New Rule
+### Scaffolding a New Rule or Dataset
 
-Use `graft secops new` or `graft new rule` to bootstrap a complete 5-block custom rule envelope (or a 4-block registered managed rule envelope via `--managed <id>`) with schema defaults and a unique UUID:
+Use `graft secops new` or `graft new rule` to bootstrap a complete 5-block custom rule envelope (or a 4-block registered managed rule envelope via `--managed <id>`) with schema defaults and a unique UUID, and `graft new dataset` to bootstrap a 2-block reusable string dataset:
 
 ```bash
 # Custom rule — SecOps engine shortcut (recommended):
@@ -303,6 +303,9 @@ graft secops new gcp_storage_bucket_public_access_granted
 
 # Custom rule — Engine-agnostic dispatcher:
 graft new rule gcp_storage_bucket_public_access_granted --engine secops
+
+# Reusable dataset — Engine-agnostic 2-block envelope (datasets/<name>.yaml):
+graft new dataset known_scanner_ips
 
 # Registered managed rule — Link to an ID from rulesets/secops/managed/index.yaml:
 graft secops new gcti_breach_network_indicator_matched --managed 433faf9e-4d51-f284-c35b-009528ecff05
@@ -313,33 +316,37 @@ graft secops new gcp_storage_bucket_public_access_granted --out rulesets/secops/
 
 For custom rules, the generated file includes pre-populated runbook sections, deterministic owner attribution from `git config user.name` (falling back to `"Detection Engineer"`), deployment defaults (`enabled: false`, `alerting: false`, `run_frequency: "live"`), and a template test fixture.
 
-### AI-Assisted Rule Authoring & Review (`.agents/skills/`)
+### AI-Assisted Rule & Dataset Authoring & Review (`.agents/skills/`)
 
-Graft ships three composable, single-responsibility AI agent skills under [`.agents/skills/`](../../.agents/skills/) that pair LLM reasoning with deterministic CLI guardrails (`graft new rule` and `graft lint`):
+Graft ships four composable, single-responsibility AI agent skills under [`.agents/skills/`](../../.agents/skills/) that pair LLM reasoning with deterministic CLI guardrails (`graft new dataset`, `graft new rule`, and `graft lint`):
 
 ```mermaid
 flowchart LR
+    S0["<b>0. /scaffold-dataset</b><br/>Runs <code>graft new dataset</code> &amp; populates<br/><code>metadata</code> + <code>values</code>"]
     S1["<b>1. /scaffold-rule</b><br/>Runs <code>graft new rule</code> &amp; populates<br/>ONLY <code>metadata</code> + <code>runbook</code>"]
     LOGIC["<b>2. Analyst Authors Logic</b><br/>Write &amp; tune engine query<br/>in <code>logic</code> block"]
     S2["<b>3. /scaffold-tests</b><br/>Parses <code>logic</code> predicates to generate<br/><code>match_*</code> &amp; <code>ignore_*</code> in <code>tests</code>"]
     S3["<b>4. /review-rule</b><br/>Read-only 5-block audit + <code>graft lint</code><br/>with concrete remediation snippets"]
 
+    S0 -.-> LOGIC
     S1 --> LOGIC --> S2 --> S3
 ```
 
+- **[`/scaffold-dataset`](../../.agents/skills/scaffold-dataset/SKILL.md)**: Accepts a natural-language dataset concept (or an existing `datasets/<name>.yaml` path), derives a plural noun phrase `<context>_<entity_plural>` identifier, runs `uv run graft new dataset <name>`, populates `metadata` and `values` (preserving inline `#` comments for contextual traceability), and validates via `uv run graft lint`.
 - **[`/scaffold-rule`](../../.agents/skills/scaffold-rule/SKILL.md)**: Accepts a natural-language detection concept (or an existing `.yaml` rule path), derives a `<subject>_<fact>` identifier, runs `uv run graft new rule <name> --engine <engine>` (or `--managed <id>`), and populates **only `metadata` and `runbook`** (preserving the generated UUIDv4, Git owner, `logic`, `deployment`, and `tests`), followed by `uv run graft lint`.
 - **[`/scaffold-tests`](../../.agents/skills/scaffold-tests/SKILL.md)**: Reads the authored `logic` block of a custom rule and populates **only the `tests` block** with positive (`id: "match_*"`, `expect: 1`) and negative (`id: "ignore_*"`, `expect: 0`) synthetic event vectors matching the query's predicates, joins, and time windows, followed by `uv run graft lint`.
-- **[`/review-rule`](../../.agents/skills/review-rule/SKILL.md)**: Performs a read-only audit of one or more rule files across all 5 blocks against this guide's structural and semantic guardrails, running `uv run graft lint` and outputting a `PASS / WARN / FAIL` table with suggested fixes.
+- **[`/review-rule`](../../.agents/skills/review-rule/SKILL.md)**: Performs a read-only audit of one or more rule files across all 5 blocks against this guide's structural and semantic guardrails (including `%<dataset>.value` cross-checks), running `uv run graft lint` and outputting a `PASS / WARN / FAIL` table with suggested fixes.
 
-### Validating Rules Offline
+### Validating Rules & Datasets Offline
 
-Graft's linter validates JSON Schema constraints, verifies MITRE techniques against the bundled ATT&CK matrix, and cross-checks registered managed rule IDs against `rulesets/<engine>/managed/index.yaml` in milliseconds without network calls:
+Graft's linter validates JSON Schema constraints, verifies MITRE techniques against the bundled ATT&CK matrix, cross-checks `%<name>.value` dataset references in custom rule logic against `datasets/<name>.yaml`, and verifies registered managed rule IDs against `rulesets/<engine>/managed/index.yaml` in milliseconds without network calls:
 
 ```bash
-# Lint specific rule
+# Lint specific rule or dataset
 graft lint rulesets/secops/custom/workspace_nrd_email_opened.yaml
+graft lint datasets/known_scanner_ips.yaml
 
-# Lint entire repository
+# Lint entire repository (datasets/ + rulesets/)
 graft lint
 
 # Fail immediately on first error
@@ -351,11 +358,15 @@ graft --json lint
 
 #### Example Linter Output:
 ```text
+[PASS] datasets/known_scanner_ips.yaml
+[PASS] datasets/security_assessment_ips.yaml
+[PASS] rulesets/secops/custom/multiple_hosts_scanned.yaml
+[PASS] rulesets/secops/custom/multiple_ports_scanned.yaml
 [PASS] rulesets/secops/custom/workspace_nrd_email_opened.yaml
 [PASS] rulesets/secops/custom/gcp_service_account_key_created.yaml
 [PASS] rulesets/secops/managed/gcti_breach_network_indicator_matched.yaml
 [PASS] rulesets/secops/managed/index.yaml
-Checked 5 rules across 1 engines. All rules passed validation.
+Checked 9 files across 1 engines. All files passed validation.
 ```
 
 When schema constraints or invalid MITRE tactics/techniques are detected:
@@ -439,39 +450,131 @@ flowchart TD
    ```
    During linting, Graft automatically verifies:
    - The file conforms to `base_managed.schema.json` and all MITRE ATT&CK techniques are valid.
-   - `managed.id` matches an existing entry in `rulesets/<engine>/managed/index.yaml`.
+   - `managed.id` exists in `rulesets/<engine>/managed/index.yaml`.
    - No other YAML file in `rulesets/<engine>/managed/` links to the same `managed.id` (strict 1-to-1 mapping).
 
 ---
 
-## 6. Decommissioning Rules & Underscore Convention
+## 6. Engine-Agnostic Datasets (`datasets/<name>.yaml`)
 
-When a detection is retired, superseded, or taken offline, **do not hard-delete the file**. Deleting rules destroys version history context, runbook guidance, and synthetic test payloads that may be needed for historic incident triage, post-mortems, or compliance audits.
+Detection rules frequently rely on contextual lists—such as authorized vulnerability scanner IPs, security assessment source addresses, VIP accounts, or corporate egress ranges—to suppress benign operational noise or enrich high-priority alerts. Rather than maintaining duplicate lookup tables manually across SIEM consoles, Graft tracks reusable string lists in `datasets/<name>.yaml` as a cross-engine Source of Truth.
+
+### 1. The 2-Block Dataset Envelope (`base_dataset.schema.json`)
+
+Every dataset file in `datasets/<name>.yaml` is validated against [`base_dataset.schema.json`](../../src/graft/core/schemas/base_dataset.schema.json) and consists of two top-level blocks:
+
+```mermaid
+flowchart TD
+    ROOT["Dataset Envelope (datasets/&lt;name&gt;.yaml)"]
+    ROOT --> B1["<b>1. metadata</b><br/>Name, Description, Owners, Tags, References"]
+    ROOT --> B2["<b>2. values</b><br/>1-D List of 1..1,000 Unique Non-Empty Strings (max 256 chars)"]
+```
+
+- **`metadata`**:
+  - `name` *(string, required)*: Snake_case dataset identifier (`^[a-z][a-z0-9]*(?:_[a-z0-9]+)*$`, `1..64` chars, `"index"` reserved). Must start with a lowercase letter (`[a-z]`) for compatibility with SIEM table resource identifiers and **must strictly match the YAML filename stem** (`datasets/<name>.yaml`).
+  - `description` *(string, required)*: Plain-text explanation of what the dataset contains (`1..128` chars). Synced directly to the target SIEM table description.
+  - `owners` *(list of strings, required, min 1 unique item)*: Teams or individuals accountable for maintaining the list.
+  - `tags` *(list of strings, required, 1..32 unique items)*: Lowercase categorical labels (`^[a-z0-9_/\\-]+$`).
+  - `references` *(list of strings, required, 1..32 unique items)*: Non-blank strings citing ticket links, internal inventory docs, or runbooks.
+- **`values`**:
+  - Required 1-D list of `1..1,000` unique, non-empty literal strings (`minLength: 1`, `maxLength: 256`, `uniqueItems: true`).
+  - Raw YAML lines inside `datasets/<name>.yaml` may be up to `512` characters long (`MAX_DATASET_RAW_LINE_LEN = 512`) so operators can annotate entries with inline `#` YAML comments (e.g., `- "10.240.10.15"  # Primary US-East Qualys appliance`) without inflating the parsed string sent to the SIEM.
+  - **Intentional String-Only Design:** Graft datasets intentionally omit a `type` field (`cidr`, `regex`, multi-column schemas). All values are synchronized as literal strings into a single canonical column named **`value`**. Multi-column CMDB tables or CIDR/regex lookup tables can live directly on the SIEM; Graft's additive coexistence model never flags or deletes unmanaged SIEM tables.
+
+### 2. Dataset Naming Convention: Plural Noun Phrase (`<context>_<entity_plural>`)
+
+While detection rules describe an empirical event and follow `<subject>_<fact>` ending in a past-tense verb (`multiple_hosts_scanned`), a dataset represents a **collection of entities or indicators**. Datasets therefore follow a **plural noun phrase (`<context>_<entity_plural>`)** convention:
+
+| Pattern | Dataset Name (`<context>_<entity_plural>`) | Description |
+| :--- | :--- | :--- |
+| `<context>_ips` | `known_scanner_ips` | Internal vulnerability management scanner IP addresses. |
+| `<context>_ips` | `security_assessment_ips` | Authorized red-team and penetration testing source IP addresses. |
+| `<context>_users` | `privileged_admin_users` | Break-glass and tier-0 administrative user identifiers. |
+| `<context>_domains` | `partner_federated_domains` | Trusted B2B partner email and authentication domains. |
+| `<context>_hosts` | `jumpbox_bastion_hosts` | Authorized administrative jumpbox hostnames. |
+
+### 3. Referencing Datasets in Rules & Offline Cross-Validation (`graft lint`)
+
+In Google SecOps YARA-L 2.0 rules, Graft datasets are synchronized as Data Tables with a single `STRING` column named `value` and referenced using `%<dataset_name>.value`:
+
+```yaml
+# datasets/known_scanner_ips.yaml
+metadata:
+  name: "known_scanner_ips"
+  description: "Internal vulnerability management scanner IP addresses excluded from scan detections."
+  owners:
+    - "Detection Engineering"
+  tags:
+    - "network"
+    - "scanners"
+  references:
+    - "https://lopes.id/log/detection-rules-netscan-portscan/"
+
+values:
+  - "10.240.10.15"  # Primary US-East vulnerability scanner
+  - "10.240.10.16"  # Secondary US-West vulnerability scanner
+  - "172.16.100.50" # Internal DMZ compliance scanner
+```
+
+Referenced inside [`rulesets/secops/custom/multiple_hosts_scanned.yaml`](../../rulesets/secops/custom/multiple_hosts_scanned.yaml):
+
+```yaml
+logic: |
+  events:
+    $net.metadata.event_type = "NETWORK_CONNECTION"
+    $net.principal.ip != ""
+    $net.target.ip != ""
+    not $net.principal.ip in %known_scanner_ips.value
+    not $net.principal.ip in %security_assessment_ips.value
+    $src_ip = $net.principal.ip
+    $dst_ip = $net.target.ip
+
+  match:
+    $src_ip over 5m
+
+  outcome:
+    $unique_target_ip_count = count_distinct($dst_ip)
+
+  condition:
+    $net and $unique_target_ip_count > 10
+```
+
+During `graft lint`, Graft cross-validates custom rule logic against all local datasets in `datasets/`:
+- **Column Check:** If `<name>` exists in `datasets/<name>.yaml`, any `%<name>` reference in rule logic must access `.value` (`%<name>.value`). Bare `%<name>` or unknown columns (`%<name>.ip`) fail linting immediately.
+- **Operator Check:** Because Graft datasets are literal `STRING` lists, referencing a local Graft dataset with `in cidr %<name>...` or `in regex %<name>...` fails linting with a clear diagnostic.
+- **Additive Coexistence for Unmanaged SIEM Tables:** If a rule references `%external_cmdb_table.cidr_range` and `external_cmdb_table` is *not* in `datasets/`, `graft lint` passes silently so rules can freely reference complex native SIEM Data Tables managed outside Graft.
+
+---
+
+## 7. Decommissioning Rules & Datasets & Underscore Convention
+
+When a detection rule or dataset is retired, superseded, or taken offline, **do not hard-delete the file**. Deleting artifacts destroys version history context, runbook guidance, and synthetic test payloads that may be needed for historic incident triage, post-mortems, or compliance audits.
 
 ### The `_archived` Standard
 
-Instead, move decommissioned rules into the standardized `_archived/` directory under that ruleset:
+Instead, move decommissioned rules or datasets into the standardized `_archived/` directory:
 
 ```bash
-# Decommission a rule by moving it to _archived/
+# Decommission a rule by moving it to rulesets/<engine>/_archived/
 mv rulesets/secops/custom/workspace_nrd_email_opened.yaml rulesets/secops/_archived/
-git add rulesets/secops/
-git commit -m "secops: decommission workspace_nrd_email_opened to _archived"
+
+# Decommission a dataset by moving it to datasets/_archived/
+mv datasets/security_assessment_ips.yaml datasets/_archived/
 ```
 
 ### The Underscore (`_`) Exclusion Rule
 
-Graft's rule loader and linter automatically ignore **any directory or file starting with an underscore (`_`)** within `rulesets/<engine>/`. 
+Graft's loader and linter automatically ignore **any directory or file starting with an underscore (`_`)** within `rulesets/<engine>/` and `datasets/`.
 
 This provides operators with flexible organizational options:
-- `rulesets/<engine>/_archived/`: Standardized resting place for decommissioned or obsolete rules.
+- `rulesets/<engine>/_archived/` & `datasets/_archived/`: Standardized resting places for decommissioned or obsolete rules and datasets.
 - `rulesets/<engine>/_deprecated/`: Alternative folder for rules pending planned sunset or migration.
 - `rulesets/<engine>/_templates/`: Reusable rule scaffolding templates or partial snippets.
 - `rulesets/<engine>/_drafts/`: Work-in-progress detection experiments not yet ready for linting or CI/CD gates.
 
-Rules located in underscore-prefixed directories are completely skipped during:
-- Rule discovery and loading (`load_rules_for_engine`).
-- Schema and MITRE taxonomy linting (`graft lint`).
+Artifacts located in underscore-prefixed directories are completely skipped during:
+- Rule and dataset discovery and loading (`load_rules_for_engine`, `load_datasets`).
+- Schema, MITRE taxonomy, and dataset cross-reference linting (`graft lint`).
 - Threat coverage matrix generation (`graft export matrix`).
 - Visibility catalog exports (`graft export catalog`).
 - GitOps reconciliation and deployment (`graft <engine> diff / apply`).
