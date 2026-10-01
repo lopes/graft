@@ -1,6 +1,6 @@
 metadata:
   id: "e8a1b7c3-4f92-41d0-9e65-28f19c047110"
-  name: "gcti_active_breach_network_indicators"
+  name: "gcti_breach_network_indicator_matched"
   description: "GCTI curated ruleset matching active breach priority network indicators."
   owners:
     - "Cloud Security Operations"
@@ -8,11 +8,8 @@ metadata:
     command-and-control:
       - "T1071.001"
   tags:
-    - "secops"
-    - "managed"
     - "gcti"
     - "network"
-    - "c2"
   references:
     - "https://docs.cloud.google.com/chronicle/docs/detection/curated-detections"
 

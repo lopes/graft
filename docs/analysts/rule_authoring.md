@@ -122,7 +122,7 @@ Rule uniqueness is enforced automatically during:
 
 ## 3. Reference Rule Example (Google Workspace)
 
-Below is an authentic reference rule implemented in [`rulesets/secops/custom/workspace_nrd_possible_phishing.yaml`](../../rulesets/secops/custom/workspace_nrd_possible_phishing.yaml):
+Below is an authentic reference rule implemented in [`rulesets/secops/custom/workspace_nrd_email_opened.yaml`](../../rulesets/secops/custom/workspace_nrd_email_opened.yaml):
 
 ```yaml
 metadata:
@@ -360,7 +360,7 @@ flowchart TD
    ```bash
    graft secops new gcti_active_breach_network_indicators --managed 433faf9e-4d51-f284-c35b-009528ecff05
    ```
-   This creates [`rulesets/secops/managed/gcti_active_breach_network_indicators.yaml`](../../rulesets/secops/managed/gcti_active_breach_network_indicators.yaml) with a fresh `metadata.id` UUID and `managed.id: "433faf9e-4d51-f284-c35b-009528ecff05"`.
+   This creates [`rulesets/secops/managed/gcti_breach_network_indicator_matched.yaml`](../../rulesets/secops/managed/gcti_breach_network_indicator_matched.yaml) with a fresh `metadata.id` UUID and `managed.id: "433faf9e-4d51-f284-c35b-009528ecff05"`.
 
 3. **Document Metadata, MITRE Mappings & Runbook:**
    Fill in `metadata.description`, `owners`, `mitre`, `tags`, `references`, and the SOC `runbook` (`context`, `triage`, `response`).

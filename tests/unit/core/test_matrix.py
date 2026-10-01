@@ -128,7 +128,7 @@ def test_export_navigator_layer_managed_rule_type_and_explicit_status() -> None:
     managed_rule = RuleEnvelope(
         metadata=RuleMetadata(
             id="00000000-0000-0000-0000-000000000010",
-            name="gcti_active_breach_network_indicators",
+            name="gcti_breach_network_indicator_matched",
             description="Managed GCTI ruleset",
             mitre={"command-and-control": ("T1071.001",)},
         ),
@@ -143,7 +143,7 @@ def test_export_navigator_layer_managed_rule_type_and_explicit_status() -> None:
             (
                 managed_rule,
                 "secops",
-                Path("rulesets/secops/managed/gcti_active_breach_network_indicators.yaml"),
+                Path("rulesets/secops/managed/gcti_breach_network_indicator_matched.yaml"),
                 "silent",
             )
         ]

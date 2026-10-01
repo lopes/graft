@@ -15,7 +15,10 @@ _SECTION_HEADER_REGEX = re.compile(r"^\s*(events|match|condition):", re.MULTILIN
 
 
 def _sanitize_slug(raw: str) -> str:
-    cleaned = re.sub(r"[^a-zA-Z0-9_]+", "_", raw).strip("_").lower()
+    cleaned = re.sub(r"[^a-zA-Z0-9]+", "_", raw).strip("_").lower()
+    cleaned = cleaned[:64].rstrip("_")
+    if cleaned == "index":
+        return "index_rule"
     return cleaned or "unnamed_rule"
 
 

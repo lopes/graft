@@ -207,14 +207,51 @@ def test_test_event_timestamp_and_payload_constraints(
     assert validator.is_valid(valid_secops_custom_dict, schema_name="secops_custom") is False
 
 
+@pytest.mark.parametrize(
+    "bad_name",
+    [
+        "PowerShell-Rule!",
+        "_leading_underscore",
+        "trailing_underscore_",
+        "double__underscore",
+        "a" * 65,
+        "_",
+    ],
+)
 def test_invalid_rule_name_pattern(
-    validator: SchemaValidator, valid_secops_custom_dict: dict[str, object]
+    validator: SchemaValidator,
+    valid_secops_custom_dict: dict[str, object],
+    valid_managed_rule_dict: dict[str, object],
+    bad_name: str,
 ) -> None:
     metadata = valid_secops_custom_dict["metadata"]
     assert isinstance(metadata, dict)
-    metadata["name"] = "PowerShell-Rule!"  # Must be lowercase slug ^[a-z0-9_]+$
+    metadata["name"] = bad_name
     errors = validator.validate(valid_secops_custom_dict, schema_name="secops_custom")
     assert len(errors) >= 1
+
+    managed_meta = valid_managed_rule_dict["metadata"]
+    assert isinstance(managed_meta, dict)
+    managed_meta["name"] = bad_name
+    managed_errors = validator.validate(valid_managed_rule_dict, schema_name="base_managed")
+    assert len(managed_errors) >= 1
+
+
+def test_max_64_char_rule_name_passes(
+    validator: SchemaValidator,
+    valid_secops_custom_dict: dict[str, object],
+    valid_managed_rule_dict: dict[str, object],
+) -> None:
+    name_64 = "a" * 64
+    metadata = valid_secops_custom_dict["metadata"]
+    assert isinstance(metadata, dict)
+    metadata["name"] = name_64
+    assert validator.is_valid(valid_secops_custom_dict, schema_name="secops_custom") is True
+
+    managed_meta = valid_managed_rule_dict["metadata"]
+    assert isinstance(managed_meta, dict)
+    managed_meta["name"] = name_64
+    assert validator.is_valid(valid_managed_rule_dict, schema_name="base_managed") is True
 
 
 def test_mitre_tactic_property_names_use_dashes_and_reject_underscores(

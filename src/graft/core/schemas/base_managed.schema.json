@@ -28,7 +28,7 @@
         },
         "name": {
           "type": "string",
-          "pattern": "^[a-z0-9_]+$",
+          "pattern": "^[a-z0-9]+(?:_[a-z0-9]+)*$",
           "not": {
             "const": "index"
           },

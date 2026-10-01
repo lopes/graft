@@ -22,7 +22,7 @@ def test_cli_test_graceful_degradation_when_staging_missing(
         monkeypatch.delenv(var, raising=False)
 
     exit_code = main(
-        ["secops", "test", "rulesets/secops/custom/gcp_iam_service_account_key_create.yaml"]
+        ["secops", "test", "rulesets/secops/custom/gcp_service_account_key_created.yaml"]
     )
     assert exit_code == 0
     captured = capsys.readouterr()
@@ -47,7 +47,7 @@ def test_cli_test_require_staging_fails_when_staging_missing(
         [
             "secops",
             "test",
-            "rulesets/secops/custom/gcp_iam_service_account_key_create.yaml",
+            "rulesets/secops/custom/gcp_service_account_key_created.yaml",
             "--require-staging",
         ]
     )
@@ -75,7 +75,7 @@ def test_cli_test_execution_all_passed(
         mock_adapter_cls.return_value = mock_adapter
 
         exit_code = main(
-            ["secops", "test", "rulesets/secops/custom/gcp_iam_service_account_key_create.yaml"]
+            ["secops", "test", "rulesets/secops/custom/gcp_service_account_key_created.yaml"]
         )
         assert exit_code == 0
         captured = capsys.readouterr()
@@ -101,7 +101,7 @@ def test_cli_test_execution_assertion_failed(
         mock_adapter_cls.return_value = mock_adapter
 
         exit_code = main(
-            ["secops", "test", "rulesets/secops/custom/gcp_iam_service_account_key_create.yaml"]
+            ["secops", "test", "rulesets/secops/custom/gcp_service_account_key_created.yaml"]
         )
         assert exit_code == 1
         captured = capsys.readouterr()
@@ -131,7 +131,7 @@ def test_cli_test_json_output(
                 "--json",
                 "secops",
                 "test",
-                "rulesets/secops/custom/gcp_iam_service_account_key_create.yaml",
+                "rulesets/secops/custom/gcp_service_account_key_created.yaml",
             ]
         )
         assert exit_code == 0
@@ -153,7 +153,7 @@ def test_cli_test_skips_when_pointing_to_prod_tenant(
     monkeypatch.setenv("GRAFT_SECOPS_PROD_INSTANCE_ID", "prod-inst")
 
     exit_code = main(
-        ["secops", "test", "rulesets/secops/custom/gcp_iam_service_account_key_create.yaml"]
+        ["secops", "test", "rulesets/secops/custom/gcp_service_account_key_created.yaml"]
     )
     assert exit_code == 0
     captured = capsys.readouterr()
@@ -175,7 +175,7 @@ def test_cli_test_fails_when_pointing_to_prod_tenant_and_require_staging(
         [
             "secops",
             "test",
-            "rulesets/secops/custom/gcp_iam_service_account_key_create.yaml",
+            "rulesets/secops/custom/gcp_service_account_key_created.yaml",
             "--require-staging",
         ]
     )

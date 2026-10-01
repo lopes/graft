@@ -150,13 +150,13 @@ def test_scaffold_managed_rule_requires_managed_id(tmp_path: Path) -> None:
 def test_scaffold_managed_rule_with_explicit_id(tmp_path: Path) -> None:
     rule_path = scaffold_rule(
         "secops",
-        "gcti_active_breach_network_indicators",
+        "gcti_breach_network_indicator_matched",
         project_root=tmp_path,
         managed=True,
         managed_id="433faf9e-4d51-f284-c35b-009528ecff05",
     )
     assert rule_path == (
-        tmp_path / "rulesets" / "secops" / "managed" / "gcti_active_breach_network_indicators.yaml"
+        tmp_path / "rulesets" / "secops" / "managed" / "gcti_breach_network_indicator_matched.yaml"
     )
     envelope = load_rule_from_yaml(rule_path)
     assert envelope.is_managed is True
@@ -177,4 +177,48 @@ def test_scaffold_rule_rejects_reserved_index_name(tmp_path: Path) -> None:
             project_root=tmp_path,
             managed=True,
             managed_id="433faf9e-4d51-f284-c35b-009528ecff05",
+        )
+
+
+@pytest.mark.parametrize(
+    "bad_name",
+    [
+        "_leading_underscore",
+        "trailing_underscore_",
+        "double__underscore",
+        "a" * 65,
+    ],
+)
+def test_scaffold_rule_and_engine_reject_underscore_and_length_violations(
+    tmp_path: Path,
+    bad_name: str,
+) -> None:
+    with pytest.raises(ScaffoldError, match="Invalid rule name"):
+        scaffold_rule("secops", bad_name, project_root=tmp_path)
+    with pytest.raises(ScaffoldError, match="Invalid engine name"):
+        scaffold_engine(bad_name, project_root=tmp_path)
+
+
+@pytest.mark.parametrize(
+    "bad_out_filename",
+    [
+        "_leading.yaml",
+        "trailing_.yaml",
+        "double__underscore.yaml",
+        "bad-hyphen.yaml",
+        f"{'a' * 65}.yaml",
+        "index.yaml",
+    ],
+)
+def test_scaffold_rule_rejects_invalid_out_path_stem(
+    tmp_path: Path,
+    bad_out_filename: str,
+) -> None:
+    bad_out = tmp_path / "custom" / bad_out_filename
+    with pytest.raises(ScaffoldError):
+        scaffold_rule(
+            "secops",
+            "valid_rule_name",
+            project_root=tmp_path,
+            out_path=bad_out,
         )

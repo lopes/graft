@@ -124,7 +124,7 @@ def test_secops_diff_all_ignores_changed_files() -> None:
 
 def test_secops_diff_scoped_ignores_registered_managed_rule_changes() -> None:
     registered_managed_path = Path(
-        "rulesets/secops/managed/gcti_active_breach_network_indicators.yaml"
+        "rulesets/secops/managed/gcti_breach_network_indicator_matched.yaml"
     ).resolve()
     stdout_capture = io.StringIO()
     with (

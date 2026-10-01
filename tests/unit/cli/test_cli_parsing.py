@@ -41,10 +41,10 @@ def test_pyproject_release_metadata() -> None:
 def test_parse_lint_command() -> None:
     parser = build_parser()
     args = parser.parse_args(
-        ["lint", "rulesets/secops/custom/gcp_iam_service_account_key_create.yaml", "--fail-fast"]
+        ["lint", "rulesets/secops/custom/gcp_service_account_key_created.yaml", "--fail-fast"]
     )
     assert args.command == "lint"
-    assert args.paths == ["rulesets/secops/custom/gcp_iam_service_account_key_create.yaml"]
+    assert args.paths == ["rulesets/secops/custom/gcp_service_account_key_created.yaml"]
     assert args.fail_fast is True
 
 

@@ -163,7 +163,7 @@ def test_build_catalog_entry_from_registered_managed_rule() -> None:
     rule = RuleEnvelope(
         metadata=RuleMetadata(
             id="00000000-0000-0000-0000-000000000010",
-            name="gcti_active_breach_network_indicators",
+            name="gcti_breach_network_indicator_matched",
             description="Registers GCTI Active Breach Network Indicators ruleset.",
             owners=("Security Operations",),
             mitre={"command-and-control": ("T1071.001",)},
@@ -189,7 +189,7 @@ def test_build_catalog_entry_from_registered_managed_rule() -> None:
         adapter=mock_adapter,
         managed_state=mock_state,
     )
-    assert entry.name == "gcti_active_breach_network_indicators"
+    assert entry.name == "gcti_breach_network_indicator_matched"
     assert entry.rule_type == "managed"
     assert entry.status == "silent"
     assert entry.owner_count == 1

@@ -20,7 +20,7 @@ def test_main_no_args_shows_help(capsys: pytest.CaptureFixture[str]) -> None:
 
 
 def test_main_lint_clean(capsys: pytest.CaptureFixture[str]) -> None:
-    exit_code = main(["lint", "rulesets/secops/custom/gcp_iam_service_account_key_create.yaml"])
+    exit_code = main(["lint", "rulesets/secops/custom/gcp_service_account_key_created.yaml"])
     assert exit_code == 0
     captured = capsys.readouterr()
     assert "PASS" in captured.out or "clean" in captured.out.lower()
@@ -28,7 +28,7 @@ def test_main_lint_clean(capsys: pytest.CaptureFixture[str]) -> None:
 
 def test_main_lint_json_output(capsys: pytest.CaptureFixture[str]) -> None:
     exit_code = main(
-        ["--json", "lint", "rulesets/secops/custom/gcp_iam_service_account_key_create.yaml"]
+        ["--json", "lint", "rulesets/secops/custom/gcp_service_account_key_created.yaml"]
     )
     assert exit_code == 0
     captured = capsys.readouterr()
@@ -642,7 +642,7 @@ def test_main_configures_utc_iso8601_log_formatter() -> None:
     import time
 
     with patch("graft.cli.main.logging.basicConfig") as mock_basic_config:
-        exit_code = main(["lint", "rulesets/secops/custom/gcp_iam_service_account_key_create.yaml"])
+        exit_code = main(["lint", "rulesets/secops/custom/gcp_service_account_key_created.yaml"])
     assert exit_code == 0
     assert logging.Formatter.converter is time.gmtime
     mock_basic_config.assert_called_once_with(
@@ -785,7 +785,7 @@ def test_main_secops_verify_explicit_managed_rule_or_index_skips_cleanly(
             "--json",
             "secops",
             "verify",
-            "rulesets/secops/managed/gcti_active_breach_network_indicators.yaml",
+            "rulesets/secops/managed/gcti_breach_network_indicator_matched.yaml",
             "rulesets/secops/managed/index.yaml",
         ]
     )
@@ -819,3 +819,43 @@ def test_main_secops_test_explicit_managed_rule_skips_cleanly(
     assert data["success"] is True
     assert data["total"] == 0
     assert "skipped" not in data
+
+
+def test_main_lint_duplicate_file_stem_in_same_engine_fails(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    custom_dir = tmp_path / "rulesets" / "secops" / "custom"
+    custom_dir.mkdir(parents=True)
+    rule_yaml = custom_dir / "same_stem.yaml"
+    rule_yml = custom_dir / "same_stem.yml"
+
+    rule_yaml.write_text(
+        'metadata:\n  id: "11111111-1111-1111-1111-111111111111"\n  name: "first_rule_name"\n'
+        '  description: "First rule"\n  owners: ["SOC"]\n'
+        '  mitre:\n    execution:\n      - "T1059"\n'
+        '  tags: ["test"]\n  references: ["Internal reference"]\n'
+        'logic: |\n  events:\n    $e.metadata.event_type = "USER_LOGIN"\n  condition:\n    $e\n'
+        'deployment:\n  run_frequency: "live"\n'
+        "  enabled: true\n  alerting: true\n"
+        'runbook:\n  context: "Context"\n'
+        '  triage: "Triage"\n  response: "Response"\n'
+        "tests: []\n",
+        encoding="utf-8",
+    )
+    rule_yml.write_text(
+        'metadata:\n  id: "22222222-2222-2222-2222-222222222222"\n  name: "second_rule_name"\n'
+        '  description: "Second rule"\n  owners: ["SOC"]\n'
+        '  mitre:\n    execution:\n      - "T1059"\n'
+        '  tags: ["test"]\n  references: ["Internal reference"]\n'
+        'logic: |\n  events:\n    $e.metadata.event_type = "USER_LOGIN"\n  condition:\n    $e\n'
+        'deployment:\n  run_frequency: "live"\n'
+        "  enabled: true\n  alerting: true\n"
+        'runbook:\n  context: "Context"\n'
+        '  triage: "Triage"\n  response: "Response"\n'
+        "tests: []\n",
+        encoding="utf-8",
+    )
+
+    exit_code = main(["lint", "--rules-dir", str(tmp_path / "rulesets")])
+    assert exit_code == 1
+    assert "Duplicate rule filename stem 'same_stem'" in capsys.readouterr().err
