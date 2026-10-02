@@ -77,9 +77,10 @@ flowchart TD
 - Include internal documentation URLs, ticket references, or blog posts provided by the analyst.
 
 ### `values`
-- Required list of `1..1,000` unique, non-empty literal strings (`minLength: 1`, `maxLength: 256`, `uniqueItems: true`).
+- Required list of `0..1,000` unique, non-empty literal strings (`minLength: 1`, `maxLength: 256`, `uniqueItems: true`).
 - Raw YAML lines must not exceed `512` characters (`MAX_DATASET_RAW_LINE_LEN = 512`).
 - Use concise inline `#` YAML comments after quoted values to document provenance or context (e.g., `- "10.240.10.15"  # Primary US-East vulnerability scanner`); YAML comments are stripped during parsing and never sent to the SIEM.
+- **Auto-Expiring Values (`ttl:YYYY-MM-DD`):** When an analyst specifies an end date for a temporary entry (such as a penetration test or change window), append `ttl:YYYY-MM-DD` inside the inline `#` comment (e.g., `- "192.0.2.10"  # Q4 external pentest ttl:2026-10-15`). Values remain active through `YYYY-MM-DD` (UTC) and are omitted starting the next UTC day (`today_utc > ttl_date`). At most one valid ISO-8601 `ttl:YYYY-MM-DD` directive is permitted per line (`graft lint` rejects malformed or duplicate `ttl:` tokens).
 
 ---
 

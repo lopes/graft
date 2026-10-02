@@ -16,7 +16,7 @@ This cookbook provides practical, copy-pasteable recipes for everyday detection 
 8. [Recipe 8: Safely Disabling or Deprecating a Rule](#recipe-8-safely-disabling-or-deprecating-a-rule)
 9. [Recipe 9: Generating MITRE ATT&CK Matrices & Catalogs](#recipe-9-generating-mitre-attck-matrices--catalogs)
 10. [Recipe 10: Registering & Mapping a Vendor-Managed Rule](#recipe-10-registering--mapping-a-vendor-managed-rule)
-11. [Recipe 11: Creating & Referencing Reusable Datasets (`datasets/<name>.yaml`)](#recipe-11-creating--referencing-reusable-datasets-datasetsnameyaml)
+11. [Recipe 11: Creating, Expiring & Retiring Reusable Datasets (`datasets/<name>.yaml`)](#recipe-11-creating-expiring--retiring-reusable-datasets-datasetsnameyaml)
 
 ---
 
@@ -409,35 +409,35 @@ graft export matrix --format table
 
 ---
 
-## Recipe 11: Creating & Referencing Reusable Datasets (`datasets/<name>.yaml`)
+## Recipe 11: Creating, Expiring & Retiring Reusable Datasets (`datasets/<name>.yaml`)
 
 ### Objective
-Create a reusable, engine-agnostic string dataset (`datasets/<name>.yaml`) for authorized scanner or assessment IP addresses, reference it inside a YARA-L 2.0 detection rule (`%<name>.value`), validate offline via `graft lint`, and synchronize both to Google SecOps Data Tables.
+Create a reusable, engine-agnostic string dataset (`datasets/<name>.yaml`) for authorized scanner or assessment IP addresses, set automatic expiration dates (`ttl:YYYY-MM-DD`) on temporary entries, reference it inside a YARA-L 2.0 detection rule (`%<name>.value`), and safely archive or delete it when no longer needed.
 
 ### Step 1: Scaffold the Dataset
 Use a plural noun phrase (`<context>_<entity_plural>`) for the dataset name:
 ```bash
-graft new dataset known_scanner_ips
+graft new dataset security_assessment_ips
 ```
 
-### Step 2: Populate `metadata` and `values`
-Edit [`datasets/known_scanner_ips.yaml`](../../datasets/known_scanner_ips.yaml) (validated against [`base_dataset.schema.json`](../../src/graft/core/schemas/base_dataset.schema.json)):
+### Step 2: Populate `metadata`, `values`, and Optional `ttl:YYYY-MM-DD` Expirations
+Edit [`datasets/security_assessment_ips.yaml`](../../datasets/security_assessment_ips.yaml) (validated against [`base_dataset.schema.json`](../../src/graft/core/schemas/base_dataset.schema.json)). Append `ttl:YYYY-MM-DD` inside any inline `#` comment to automatically omit that entry after `YYYY-MM-DD` (UTC):
 ```yaml
 metadata:
-  name: "known_scanner_ips"
-  description: "Internal vulnerability management scanner IP addresses excluded from scan detections."
+  name: "security_assessment_ips"
+  description: "Authorized penetration testing and security assessment source IP addresses."
   owners:
     - "Detection Engineering"
   tags:
     - "network"
-    - "scanners"
+    - "pentest"
+    - "suppression"
   references:
     - "https://lopes.id/log/detection-rules-netscan-portscan/"
 
 values:
-  - "10.240.10.15"  # Primary US-East vulnerability scanner
-  - "10.240.10.16"  # Secondary US-West vulnerability scanner
-  - "172.16.100.50" # Internal DMZ compliance scanner
+  - "192.0.2.10"  # External red team assessment jumpbox (TEST-NET-1) ttl:2026-12-31
+  - "198.51.100.25"  # Authorized third-party pentest egress node (TEST-NET-2)
 ```
 
 ### Step 3: Reference `%<name>.value` in Detection Logic
@@ -465,7 +465,7 @@ logic: |
 
 ### Step 4: Validate, Verify & Synchronize
 ```bash
-# 1. Offline schema and dataset cross-reference validation (<100ms)
+# 1. Offline schema, ttl:YYYY-MM-DD syntax, and dataset cross-reference validation (<100ms)
 graft lint
 
 # 2. Dry-run YARA-L syntax (substitutes placeholder if dataset is not yet in SecOps)
@@ -475,3 +475,14 @@ graft secops verify rulesets/secops/custom/multiple_hosts_scanned.yaml
 graft secops diff --env production
 graft secops apply --env production
 ```
+
+### Step 5: Archiving & Deleting a Dataset Safely
+Never delete a Data Table directly in the SIEM while rules still reference `%<name>.value`. Follow this sequence:
+1. **Archive in Git:** Move the file to `datasets/_archived/`:
+   ```bash
+   mv datasets/security_assessment_ips.yaml datasets/_archived/
+   ```
+2. **Sync Deprecation:** Merge or run `graft secops apply --env production`. If the table exists on the SIEM, Graft clears its rows to `0` and updates its description to `"Deprecated on Graft"` so existing rules keep compiling without matching stale values.
+3. **Remove Rule References:** Remove `%security_assessment_ips.value` from your rules and deploy.
+4. **Delete on SIEM & Optional Git Cleanup:** Delete the `"Deprecated on Graft"` table in the SIEM console. Once deleted remotely (404), Graft ignores the archived file on future runs, and you may optionally delete `datasets/_archived/security_assessment_ips.yaml` from Git.
+

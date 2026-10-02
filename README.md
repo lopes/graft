@@ -60,22 +60,33 @@ Graft strictly decouples detection engineering logic from downstream SIEM and te
 - **Zero Core Cloud Dependencies:** The core substrate imports zero third-party SIEM SDKs or cloud libraries. It relies strictly on Python standard library modules (`urllib.request`, `dataclasses`, `argparse`, `subprocess`), guaranteeing fast, lightweight, and auditable execution.
 - **Engine Scaffolding in Seconds:** Adding a new SIEM target (e.g. Microsoft Sentinel, Splunk ES, Elastic) requires no core refactoring. Running `graft new engine <name>` generates the complete directory structure, schema definitions, unit test scaffolds, and documentation templates instantly.
 
-### 2. Actionable Detection Envelopes, Reusable Datasets & Factual Lifecycle
+### 2. Actionable Detection Envelopes & Factual Lifecycle
 Detection logic is only as effective as the context and operational response it enables:
 - **Normalized 5-Block Rule Envelope:** Detections are authored in a standardized YAML envelope separating `metadata`, `logic`, `deployment`, `runbook`, and `tests`.
-- **Engine-Agnostic Datasets (`datasets/<name>.yaml`):** Contextual allowlists, suppression lists, and known infrastructure indicators (e.g., `known_scanner_ips`, `security_assessment_ips`) live in a 2-block string-only YAML envelope (`metadata`, `values`) shared across engines and synchronized to SIEM-native tables (such as Google SecOps Data Tables with a canonical `.value` column) via additive coexistence.
 - **Embedded Operational Runbooks:** Every rule embeds mandatory, actionable triage playbooks directly alongside the detection logic (`context`, `triage`, and `response`), eliminating tribal knowledge and context switching for SOC analysts during live incident response.
 - **Factual Lifecycle vs. "Maturity Score" Theater:** Graft rejects arbitrary 0–100 maturity guesses and manual status tags that rapidly become stale. Instead, Graft empirically computes factual lifecycle indicators directly from Git version history (first committer `author`, UTC `YYYY-MM-DD` `created_at` and `last_modified_at`, `review_count`, and unique `contributor_count`) combined with accountable rule ownership (`owners`, `owner_count`) and active SIEM deployment health.
-- **Safe Archival & Zero Blind-Spot Governance:** Retiring a rule or dataset is as simple as moving it to `rulesets/<engine>/_archived/` or `datasets/_archived/`. Graft automatically excludes any underscore-prefixed directory from active sync, matrix exports, and linting, preserving full envelope context and test fixtures for audits without cluttering active deployments.
 
-### 3. Multi-Track GitOps Drift Reconciliation
+### 3. Reusable Datasets & Self-Expiring Suppressions (`ttl:YYYY-MM-DD`)
+Contextual allowlists and temporary suppressions are notoriously hard to keep clean—a two-week penetration test IP added to a lookup table often stays there for a year because everyone forgets to remove it after the engagement ends:
+- **Engine-Agnostic Datasets (`datasets/<name>.yaml`):** Track scanner IPs, assessment ranges, and privileged principals in a 2-block string-only YAML envelope (`metadata`, `values` of `0..1,000` literal strings) synchronized to SIEM lookup tables (e.g., Google SecOps Data Tables with a canonical `.value` column) via additive coexistence.
+- **Inline Auto-Expiration (`ttl:YYYY-MM-DD`):** Append `ttl:YYYY-MM-DD` inside any value's inline `#` comment. The entry stays active through `YYYY-MM-DD` (UTC); starting the next UTC day, Graft omits it and the daily scheduled deployment removes it from the SIEM automatically—while preserving the line in Git as an audit trail.
+- **Safe Deprecation (`datasets/_archived/`):** Moving a retired dataset to `datasets/_archived/` never breaks active rules referencing `%<name>.value`. Instead, Graft zeroes its rows on the SIEM and sets its remote description to `"Deprecated on Graft"` until you remove the rule references and delete the table remotely.
+
+```yaml
+# datasets/security_assessment_ips.yaml
+values:
+  - "192.0.2.10"  # External red team assessment jumpbox (TEST-NET-1) ttl:2026-12-31
+  - "198.51.100.25"  # Authorized third-party pentest egress node (TEST-NET-2)
+```
+
+### 4. Multi-Track GitOps Drift Reconciliation
 Modern SIEMs run a combination of contextual lookup tables, bespoke custom rules, and vendor-managed curated detections. Graft manages all three in strict dependency order (**1. Datasets $\rightarrow$ 2. Custom Rules $\rightarrow$ 3. Managed Content**) under unified version control:
-- **Additive Dataset Synchronization:** Authors maintain reusable string datasets in `datasets/<name>.yaml`. Graft synchronizes them to target engines (e.g., Google SecOps Data Tables) before rules are deployed, while coexisting peacefully with unmanaged SIEM tables (never flagging or deleting external tables).
+- **Additive Dataset Synchronization:** Graft synchronizes `datasets/<name>.yaml` before rules are deployed, recreating active datasets if accidentally deleted in the SIEM console while never flagging or deleting unmanaged external SIEM tables.
 - **Custom Rule Synchronization:** Authors maintain declarative custom rules in Git (`rulesets/<engine>/custom/`). Graft calculates precise diffs between local state and live tenant APIs, automating safe creates and updates.
 - **Vendor-Managed Curated Content Control & Registration:** Manage vendor curated rule sets (`rulesets/<engine>/managed/index.yaml`) directly in code. Operators can declare deployment tiers (e.g., `PRECISE` vs `BROAD` in Google SecOps), toggle alerting states, commit declarative rule exclusions (e.g., `findingsRefinements`), and optionally register managed rules (`rulesets/<engine>/managed/<rule_name>.yaml`) to map vendor coverage into MITRE ATT&CK matrices and catalogs.
 - **Dual-Mode Drift Reconciliation:**
   - **Scoped PR Reconciliation (Default):** Evaluates only files modified in the active Git branch against tenant state, enabling lightning-fast pull request validations in CI/CD.
-  - **Full Catalog Convergence (`--all`):** Scans the entire tenant catalog to detect and reconcile out-of-band console drift, enforcing Git as the authoritative Source of Truth.
+  - **Full Catalog Convergence (`--all`):** Scans the entire tenant catalog (on merge to `main` and daily at `00:00` UTC) to purge expired `ttl:YYYY-MM-DD` dataset entries and heal out-of-band console drift.
 - **Day 0 Brownfield Ingestion:** Teams can adopt Graft on existing SIEM instances in minutes without disruption. Running `graft <engine> pull` reverse-synchronizes live tenant custom rules and curated content into clean Git-managed envelopes (and `graft <engine> pull --target datasets` imports compatible 1-column `STRING` tables on demand).
 
 ```bash
@@ -95,7 +106,7 @@ $ graft secops diff --env production
 [-] Exclusion to delete: excl_temp_maintenance_window
 ```
 
-### 4. Threat Visibility, Audit-Ready Catalogs & ATT&CK v19.2 Layers
+### 5. Threat Visibility, Audit-Ready Catalogs & ATT&CK v19.2 Layers
 Bridge the gap between detection engineering code, SOC operations, and leadership reporting:
 - **Multi-Format Detection Catalogs:** Export unified catalogs in interactive terminal tables, CSV spreadsheets, Markdown documentation (`docs/RULE_CATALOG.md`), or JSON for ingestion into security data lakes, BigQuery, Polars, or BI dashboards.
 - **MITRE ATT&CK Enterprise v19.2 Matrix:** Built-in evaluation of tactics and sub-techniques (`TAxxxx:Tyyyy.zzz`) with automated cross-engine technique normalization and coverage analysis.
@@ -296,7 +307,7 @@ graft export catalog --format json
 
 >
 > **Rule & Dataset Decommissioning & Archiving:**
-> When retiring a rule or dataset, prefer moving it to `rulesets/<engine>/_archived/` or `datasets/_archived/` rather than deleting it. Graft automatically excludes any directory or file starting with an underscore (`_`) under a ruleset or `datasets/` (e.g. `_archived/`, `_deprecated/`, `_templates/`) from loading, linting, matrix exports, and CI/CD synchronization. This preserves full envelope history, context, and test vectors for audits without cluttering active deployments.
+> When retiring a rule or dataset, move it to `rulesets/<engine>/_archived/` or `datasets/_archived/` rather than immediately deleting it. Rules in `_archived/` are excluded from loading, linting, matrix exports, and sync. Datasets in `datasets/_archived/` are skipped by `graft lint` and automatically emptied (`0` rows) and marked `"Deprecated on Graft"` on the SIEM during `diff`/`apply`, ensuring rules referencing `%<name>.value` never break before you remove the reference and delete the remote table.
 
 ---
 

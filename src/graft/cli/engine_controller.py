@@ -12,12 +12,18 @@ from graft.cli.scaffold import scaffold_rule
 from graft.core.engine_registry import EngineRegistry
 from graft.core.git import get_changed_files
 from graft.core.loader import (
+    DatasetLoadError,
     dump_dataset_to_yaml,
     dump_rule_to_yaml,
     load_dataset_from_yaml,
     load_rule_from_yaml,
+    validate_dataset_identifier,
 )
-from graft.core.models.dataset import DatasetEnvelope
+from graft.core.models.dataset import (
+    DEPRECATED_DATASET_DESCRIPTION,
+    DatasetEnvelope,
+    DatasetMetadata,
+)
 from graft.core.models.engine import EngineManifest
 from graft.core.models.managed import ManagedState
 from graft.core.models.rule import RuleEnvelope
@@ -74,6 +80,12 @@ def _iter_dataset_yaml_files(directory: Path) -> list[Path]:
     return files
 
 
+def _iter_archived_dataset_yaml_files(archived_dir: Path) -> list[Path]:
+    files = sorted(f for f in archived_dir.rglob("*.yaml") if not f.name.startswith("_"))
+    files.extend(sorted(f for f in archived_dir.rglob("*.yml") if not f.name.startswith("_")))
+    return files
+
+
 class EngineCommandController:
     def __init__(self, manifest: EngineManifest, registry: EngineRegistry) -> None:
         self.manifest = manifest
@@ -86,8 +98,10 @@ class EngineCommandController:
     ) -> tuple[DatasetEnvelope, ...]:
         target_dir = datasets_dir or Path("datasets")
         datasets: list[DatasetEnvelope] = []
+        active_names: set[str] = set()
         if target_dir.is_dir():
             for ds_path in _iter_dataset_yaml_files(target_dir):
+                active_names.add(ds_path.stem)
                 if filter_paths is not None and (
                     ds_path.resolve() not in filter_paths and ds_path not in filter_paths
                 ):
@@ -95,11 +109,38 @@ class EngineCommandController:
                 try:
                     ds = load_dataset_from_yaml(ds_path)
                     datasets.append(ds)
+                    active_names.add(ds.metadata.name)
                 except Exception as exc:
                     logger.error("Failed loading dataset %s: %s", ds_path, exc)
                     err = RuntimeError(f"Failed loading dataset '{ds_path}': {exc}")
                     err._graft_logged = True  # type: ignore[attr-defined]
                     raise err from exc
+
+            archived_dir = target_dir / "_archived"
+            if archived_dir.is_dir():
+                for arch_path in _iter_archived_dataset_yaml_files(archived_dir):
+                    if filter_paths is not None and (
+                        arch_path.resolve() not in filter_paths and arch_path not in filter_paths
+                    ):
+                        continue
+                    try:
+                        validate_dataset_identifier(
+                            arch_path.stem, kind="archived dataset filename"
+                        )
+                    except DatasetLoadError:
+                        continue
+                    if arch_path.stem in active_names:
+                        continue
+                    datasets.append(
+                        DatasetEnvelope(
+                            metadata=DatasetMetadata(
+                                name=arch_path.stem,
+                                description=DEPRECATED_DATASET_DESCRIPTION,
+                            ),
+                            values=(),
+                            deprecated=True,
+                        )
+                    )
         return tuple(datasets)
 
     def _load_custom_rules(

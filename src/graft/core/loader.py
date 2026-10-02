@@ -1,4 +1,5 @@
 import re
+from datetime import UTC, date, datetime
 from pathlib import Path
 from typing import Any
 
@@ -19,6 +20,8 @@ from graft.core.validation.schema_validator import SchemaValidator
 
 RULE_IDENTIFIER_PATTERN = re.compile(r"^[a-z0-9]+(?:_[a-z0-9]+)*$")
 DATASET_IDENTIFIER_PATTERN = re.compile(r"^[a-z][a-z0-9]*(?:_[a-z0-9]+)*$")
+DATASET_TTL_COMMENT_PATTERN = re.compile(r"(?<!\S)ttl:(\S*)")
+DATASET_TTL_DATE_PATTERN = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 MAX_RULE_IDENTIFIER_LEN = 64
 MAX_DATASET_RAW_LINE_LEN = 512
 
@@ -250,11 +253,69 @@ def dump_rule_to_yaml(rule: RuleEnvelope, path: Path | str) -> None:
     dest_path.write_text(dumped, encoding="utf-8")
 
 
+def _extract_active_dataset_values(
+    content: str,
+    raw_lines: list[str],
+    fallback_values: tuple[str, ...],
+    effective_date: date,
+) -> tuple[str, ...]:
+    root_node = yaml.compose(content)
+    if not isinstance(root_node, yaml.MappingNode):
+        return fallback_values
+
+    values_node: yaml.SequenceNode | None = None
+    for key_node, val_node in root_node.value:
+        if isinstance(key_node, yaml.ScalarNode) and key_node.value == "values":
+            if isinstance(val_node, yaml.SequenceNode):
+                values_node = val_node
+            break
+
+    if values_node is None:
+        return fallback_values
+
+    active_values: list[str] = []
+    for item_node in values_node.value:
+        if not isinstance(item_node, yaml.ScalarNode):
+            continue
+        val_str = str(item_node.value)
+        end_line_idx = item_node.end_mark.line
+        line_no = end_line_idx + 1
+        if 0 <= end_line_idx < len(raw_lines):
+            trailing = raw_lines[end_line_idx][item_node.end_mark.column :]
+            if "#" in trailing:
+                comment_text = trailing.split("#", 1)[1]
+                ttl_matches = DATASET_TTL_COMMENT_PATTERN.findall(comment_text)
+                if len(ttl_matches) > 1:
+                    raise DatasetLoadError(
+                        f"Line {line_no}: multiple 'ttl:' directives found in comment"
+                    )
+                if len(ttl_matches) == 1:
+                    ttl_raw = ttl_matches[0]
+                    if not DATASET_TTL_DATE_PATTERN.match(ttl_raw):
+                        raise DatasetLoadError(
+                            f"Line {line_no}: invalid 'ttl:{ttl_raw}' directive "
+                            "(expected YYYY-MM-DD calendar date)"
+                        )
+                    try:
+                        ttl_date = date.fromisoformat(ttl_raw)
+                    except ValueError as exc:
+                        raise DatasetLoadError(
+                            f"Line {line_no}: invalid 'ttl:{ttl_raw}' calendar date: {exc}"
+                        ) from exc
+                    if effective_date > ttl_date:
+                        continue
+        active_values.append(val_str)
+
+    return tuple(active_values)
+
+
 def load_dataset_from_str(
     content: str,
     schema_name: str = "base_dataset",
+    reference_date: date | None = None,
 ) -> DatasetEnvelope:
-    for line_no, raw_line in enumerate(content.splitlines(), start=1):
+    raw_lines = content.splitlines()
+    for line_no, raw_line in enumerate(raw_lines, start=1):
         if len(raw_line) > MAX_DATASET_RAW_LINE_LEN:
             raise DatasetLoadError(
                 f"Line {line_no} length ({len(raw_line)} chars) exceeds maximum length "
@@ -288,7 +349,14 @@ def load_dataset_from_str(
     )
 
     values_raw = data.get("values", ())
-    values = tuple(str(v) for v in values_raw)
+    fallback_values = tuple(str(v) for v in values_raw)
+    effective_date = reference_date if reference_date is not None else datetime.now(UTC).date()
+    values = _extract_active_dataset_values(
+        content=content,
+        raw_lines=raw_lines,
+        fallback_values=fallback_values,
+        effective_date=effective_date,
+    )
 
     return DatasetEnvelope(
         metadata=metadata,
@@ -299,13 +367,18 @@ def load_dataset_from_str(
 def load_dataset_from_yaml(
     path: Path | str,
     schema_name: str = "base_dataset",
+    reference_date: date | None = None,
 ) -> DatasetEnvelope:
     file_path = Path(path)
     if not file_path.is_file():
         raise DatasetLoadError(f"Dataset file not found: {file_path}")
     validate_dataset_identifier(file_path.stem, kind="dataset filename")
     content = file_path.read_text(encoding="utf-8")
-    dataset = load_dataset_from_str(content, schema_name=schema_name)
+    dataset = load_dataset_from_str(
+        content,
+        schema_name=schema_name,
+        reference_date=reference_date,
+    )
     if dataset.metadata.name != file_path.stem:
         raise DatasetLoadError(
             f"Dataset metadata.name '{dataset.metadata.name}' must match "

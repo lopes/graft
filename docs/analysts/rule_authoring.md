@@ -467,7 +467,7 @@ Every dataset file in `datasets/<name>.yaml` is validated against [`base_dataset
 flowchart TD
     ROOT["Dataset Envelope (datasets/&lt;name&gt;.yaml)"]
     ROOT --> B1["<b>1. metadata</b><br/>Name, Description, Owners, Tags, References"]
-    ROOT --> B2["<b>2. values</b><br/>1-D List of 1..1,000 Unique Non-Empty Strings (max 256 chars)"]
+    ROOT --> B2["<b>2. values</b><br/>1-D List of 0..1,000 Unique Non-Empty Strings (max 256 chars)"]
 ```
 
 - **`metadata`**:
@@ -477,11 +477,27 @@ flowchart TD
   - `tags` *(list of strings, required, 1..32 unique items)*: Lowercase categorical labels (`^[a-z0-9_/\\-]+$`).
   - `references` *(list of strings, required, 1..32 unique items)*: Non-blank strings citing ticket links, internal inventory docs, or runbooks.
 - **`values`**:
-  - Required 1-D list of `1..1,000` unique, non-empty literal strings (`minLength: 1`, `maxLength: 256`, `uniqueItems: true`).
-  - Raw YAML lines inside `datasets/<name>.yaml` may be up to `512` characters long (`MAX_DATASET_RAW_LINE_LEN = 512`) so operators can annotate entries with inline `#` YAML comments (e.g., `- "10.240.10.15"  # Primary US-East Qualys appliance`) without inflating the parsed string sent to the SIEM.
-  - **Intentional String-Only Design:** Graft datasets intentionally omit a `type` field (`cidr`, `regex`, multi-column schemas). All values are synchronized as literal strings into a single canonical column named **`value`**. Multi-column CMDB tables or CIDR/regex lookup tables can live directly on the SIEM; Graft's additive coexistence model never flags or deletes unmanaged SIEM tables.
+  - Required 1-D list of `0..1,000` unique, non-empty literal strings (`minLength: 1`, `maxLength: 256`, `uniqueItems: true`). Empty datasets (`values: []` or datasets where all entries have expired) remain provisioned on the SIEM with `0` rows so rules referencing `%<name>.value` never fail compilation.
+  - Raw YAML lines inside `datasets/<name>.yaml` may be up to `512` characters long (`MAX_DATASET_RAW_LINE_LEN = 512`) so analysts can annotate entries with inline `#` YAML comments (e.g., `- "10.240.10.15"  # Primary US-East Qualys appliance`) without inflating the parsed string sent to the SIEM.
+  - **Intentional String-Only Scope:** Graft datasets are deliberately restricted to 1-D literal strings (`0..1,000` items) synchronized into a single canonical column named **`value`**. Complex multi-column schemas, CIDR/regex evaluation modes, and large feed tables differ wildly across SIEM APIs and cannot be replaced atomically without partial-sync failure modes. Keep those native to the SIEM; Graft's additive coexistence model never flags or deletes unmanaged SIEM tables.
 
-### 2. Dataset Naming Convention: Plural Noun Phrase (`<context>_<entity_plural>`)
+### 2. Auto-Expiring Values (`ttl:YYYY-MM-DD`)
+
+Temporary exclusions—such as penetration testing source IPs, red-team jumpboxes, or short-lived maintenance windows—are a common source of detection drift when engineers forget to remove them after an engagement ends.
+
+Add `ttl:YYYY-MM-DD` inside the inline `#` comment of any entry in `values` to expire it automatically:
+
+```yaml
+# datasets/security_assessment_ips.yaml
+values:
+  - "192.0.2.10"  # External red team assessment jumpbox (TEST-NET-1) ttl:2026-12-31
+  - "198.51.100.25"  # Authorized third-party pentest egress node (TEST-NET-2)
+```
+
+- **UTC Cutover (`today_utc > YYYY-MM-DD`):** The entry remains active throughout the entire `YYYY-MM-DD` UTC calendar day. Starting at `00:00:00Z` on the following day, Graft omits the value when loading the dataset, and the daily UTC production deployment workflow (`deploy-production.yml`) removes it from the SIEM automatically—even if no Git commits occur that day. The line remains in the YAML file as an audit trail until you clean it up.
+- **Offline Linter Guardrails:** `graft lint` validates every `ttl:` token in `values:` comments. Malformed dates (`ttl:2026-02-30`, `ttl:20261015`, `ttl:tomorrow`) or multiple `ttl:` tokens on the same line fail linting with the exact line number.
+
+### 3. Dataset Naming Convention: Plural Noun Phrase (`<context>_<entity_plural>`)
 
 While detection rules describe an empirical event and follow `<subject>_<fact>` ending in a past-tense verb (`multiple_hosts_scanned`), a dataset represents a **collection of entities or indicators**. Datasets therefore follow a **plural noun phrase (`<context>_<entity_plural>`)** convention:
 
@@ -493,7 +509,7 @@ While detection rules describe an empirical event and follow `<subject>_<fact>` 
 | `<context>_domains` | `partner_federated_domains` | Trusted B2B partner email and authentication domains. |
 | `<context>_hosts` | `jumpbox_bastion_hosts` | Authorized administrative jumpbox hostnames. |
 
-### 3. Referencing Datasets in Rules & Offline Cross-Validation (`graft lint`)
+### 4. Referencing Datasets in Rules & Offline Cross-Validation (`graft lint`)
 
 In Google SecOps YARA-L 2.0 rules, Graft datasets are synchronized as Data Tables with a single `STRING` column named `value` and referenced using `%<dataset_name>.value`:
 
@@ -539,43 +555,46 @@ logic: |
     $net and $unique_target_ip_count > 10
 ```
 
-During `graft lint`, Graft cross-validates custom rule logic against all local datasets in `datasets/`:
+During `graft lint`, Graft cross-validates custom rule logic against all active local datasets in `datasets/`:
 - **Column Check:** If `<name>` exists in `datasets/<name>.yaml`, any `%<name>` reference in rule logic must access `.value` (`%<name>.value`). Bare `%<name>` or unknown columns (`%<name>.ip`) fail linting immediately.
 - **Operator Check:** Because Graft datasets are literal `STRING` lists, referencing a local Graft dataset with `in cidr %<name>...` or `in regex %<name>...` fails linting with a clear diagnostic.
-- **Additive Coexistence for Unmanaged SIEM Tables:** If a rule references `%external_cmdb_table.cidr_range` and `external_cmdb_table` is *not* in `datasets/`, `graft lint` passes silently so rules can freely reference complex native SIEM Data Tables managed outside Graft.
+- **Additive Coexistence for Unmanaged or Archived Tables:** If a rule references `%external_cmdb_table.cidr_range` (or a dataset moved to `datasets/_archived/`) that is not an active file in `datasets/`, `graft lint` passes silently.
 
 ---
 
 ## 7. Decommissioning Rules & Datasets & Underscore Convention
 
-When a detection rule or dataset is retired, superseded, or taken offline, **do not hard-delete the file**. Deleting artifacts destroys version history context, runbook guidance, and synthetic test payloads that may be needed for historic incident triage, post-mortems, or compliance audits.
+When a detection rule or dataset is retired, superseded, or taken offline, **do not immediately hard-delete the file**. Moving artifacts to `_archived/` preserves version history and prevents active SIEM rules from breaking on missing table references.
 
-### The `_archived` Standard
+### 1. Archiving & Deleting a Dataset Safely
 
-Instead, move decommissioned rules or datasets into the standardized `_archived/` directory:
+Because deleting a Data Table on the SIEM while any active rule still references `%<name>.value` will break rule compilation and execution, Graft separates **dataset deprecation** from **remote table deletion**:
 
 ```bash
-# Decommission a rule by moving it to rulesets/<engine>/_archived/
-mv rulesets/secops/custom/workspace_nrd_email_opened.yaml rulesets/secops/_archived/
-
-# Decommission a dataset by moving it to datasets/_archived/
+# Step 1: Move the dataset into datasets/_archived/
 mv datasets/security_assessment_ips.yaml datasets/_archived/
 ```
 
-### The Underscore (`_`) Exclusion Rule
+1. **Archive in Git (`datasets/_archived/<name>.yaml`):** Moving the file to `datasets/_archived/` excludes it from local `graft lint` checks.
+2. **Automatic Remote Deprecation (`diff` / `apply`):** On the next `graft <engine> apply`, Graft checks whether `<name>` still exists on the SIEM. If it does (and still has rows or its old description), Graft logs a deprecation notice, clears all rows to `0`, and updates the remote table description to `"Deprecated on Graft"`. Any rule still referencing `%<name>.value` continues running cleanly against an empty list.
+3. **Remove Rule References:** Update any custom rules that still reference `%<name>.value` and deploy them.
+4. **Delete Remotely on the SIEM:** Once no rules reference the table, delete the `"Deprecated on Graft"` table in the SIEM console (or via API). On subsequent runs, Graft sees `404 Not Found` for the archived dataset and does nothing.
+5. **Optional Git Cleanup:** Keep `datasets/_archived/<name>.yaml` for historical context, or delete the file from `_archived/` once the remote SIEM table has been removed.
 
-Graft's loader and linter automatically ignore **any directory or file starting with an underscore (`_`)** within `rulesets/<engine>/` and `datasets/`.
+> [!NOTE]
+> By contrast, if an **active** dataset (`datasets/<name>.yaml`) is accidentally deleted in the SIEM console, `graft <engine> diff / apply` detects it as missing and **recreates it automatically**.
 
-This provides operators with flexible organizational options:
-- `rulesets/<engine>/_archived/` & `datasets/_archived/`: Standardized resting places for decommissioned or obsolete rules and datasets.
-- `rulesets/<engine>/_deprecated/`: Alternative folder for rules pending planned sunset or migration.
-- `rulesets/<engine>/_templates/`: Reusable rule scaffolding templates or partial snippets.
-- `rulesets/<engine>/_drafts/`: Work-in-progress detection experiments not yet ready for linting or CI/CD gates.
+### 2. Archiving a Detection Rule & the Underscore (`_`) Exclusion Rule
 
-Artifacts located in underscore-prefixed directories are completely skipped during:
-- Rule and dataset discovery and loading (`load_rules_for_engine`, `load_datasets`).
+To retire a detection rule, move it into `rulesets/<engine>/_archived/`:
+
+```bash
+mv rulesets/secops/custom/workspace_nrd_email_opened.yaml rulesets/secops/_archived/
+```
+
+Graft's loader and linter ignore **any directory or file starting with an underscore (`_`)** within `rulesets/<engine>/` and `datasets/` during:
+- Rule and active dataset discovery (`load_rules_for_engine`, `load_datasets`).
 - Schema, MITRE taxonomy, and dataset cross-reference linting (`graft lint`).
-- Threat coverage matrix generation (`graft export matrix`).
-- Visibility catalog exports (`graft export catalog`).
-- GitOps reconciliation and deployment (`graft <engine> diff / apply`).
+- Threat coverage matrix generation (`graft export matrix`) and catalog exports (`graft export catalog`).
+- Custom rule GitOps reconciliation (`graft <engine> diff / apply` for `rulesets/<engine>/_archived/`).
 

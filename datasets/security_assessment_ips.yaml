@@ -11,5 +11,5 @@ metadata:
     - "https://lopes.id/log/detection-rules-netscan-portscan/"
 
 values:
-  - "192.0.2.10"  # External red team assessment jumpbox (TEST-NET-1)
+  - "192.0.2.10"  # External red team assessment jumpbox (TEST-NET-1) ttl:2026-12-31
   - "198.51.100.25"  # Authorized third-party pentest egress node (TEST-NET-2)

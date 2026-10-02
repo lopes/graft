@@ -533,7 +533,13 @@ class DatasetsReconciliationDiff:
         for ds in self.datasets_to_create:
             lines.append(f"[+] Dataset to create: {ds.metadata.name} ({len(ds.values)} values)")
         for ds in self.datasets_to_update:
-            lines.append(f"[~] Dataset to update: {ds.metadata.name} ({len(ds.values)} values)")
+            if ds.deprecated:
+                lines.append(
+                    f"[~] Dataset to deprecate: {ds.metadata.name} "
+                    f"(0 values, '{ds.metadata.description}')"
+                )
+            else:
+                lines.append(f"[~] Dataset to update: {ds.metadata.name} ({len(ds.values)} values)")
         if not lines:
             return "No dataset changes detected. Datasets are synchronized with tenant."
         return "\n".join(lines)
@@ -551,6 +557,17 @@ class DatasetReconciler:
 
         for des_ds in desired:
             curr_ds = current_by_name.get(des_ds.metadata.name)
+            if des_ds.deprecated:
+                if curr_ds is None:
+                    continue
+                values_equal = len(curr_ds.values) == 0
+                description_equal = (
+                    curr_ds.metadata.description.strip() == des_ds.metadata.description.strip()
+                )
+                if not values_equal or not description_equal:
+                    datasets_to_update.append(des_ds)
+                continue
+
             if curr_ds is None:
                 datasets_to_create.append(des_ds)
                 continue
@@ -613,15 +630,27 @@ class DatasetReconciler:
             logger.info("Created dataset '%s' in tenant", ds.metadata.name)
 
         for ds in reconcile_diff.datasets_to_update:
-            logger.info("Updating dataset '%s' in tenant", ds.metadata.name)
+            if ds.deprecated:
+                logger.info(
+                    "Deprecating archived dataset '%s' in tenant "
+                    "(clearing values and setting description to '%s')",
+                    ds.metadata.name,
+                    ds.metadata.description,
+                )
+            else:
+                logger.info("Updating dataset '%s' in tenant", ds.metadata.name)
             try:
                 port.update_dataset(ds)
             except Exception as exc:
-                logger.error("Failed updating dataset '%s': %s", ds.metadata.name, exc)
+                action = "deprecating archived" if ds.deprecated else "updating"
+                logger.error("Failed %s dataset '%s': %s", action, ds.metadata.name, exc)
                 _log_dataset_abort(ds.metadata.name, exc)
                 raise
             applied_names.append(ds.metadata.name)
-            logger.info("Updated dataset '%s' in tenant", ds.metadata.name)
+            if ds.deprecated:
+                logger.info("Deprecated archived dataset '%s' in tenant", ds.metadata.name)
+            else:
+                logger.info("Updated dataset '%s' in tenant", ds.metadata.name)
 
         logger.info(
             "Datasets reconciliation complete. %d creations, %d updates.",

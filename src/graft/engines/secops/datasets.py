@@ -189,6 +189,41 @@ class SecOpsDatasetAdapter(DatasetPort):
             api_version="v1",
         )
 
+    def _clear_rows(self, table_name: str) -> None:
+        row_ids: list[str] = []
+        page_token: str | None = None
+        while True:
+            params: dict[str, str] = {"pageSize": str(_MAX_DATASET_ROWS)}
+            if page_token:
+                params["pageToken"] = page_token
+            resp = self._client.request(
+                "GET",
+                f"dataTables/{table_name}/dataTableRows",
+                params=params,
+                api_version="v1",
+            )
+            raw_rows = resp.get("dataTableRows", [])
+            if isinstance(raw_rows, list):
+                for item in raw_rows:
+                    if isinstance(item, dict):
+                        raw_row_name = item.get("name")
+                        if isinstance(raw_row_name, str) and raw_row_name.strip():
+                            row_id = raw_row_name.rsplit("/dataTableRows/", 1)[-1].strip()
+                            if row_id:
+                                row_ids.append(row_id)
+            next_tok = resp.get("nextPageToken")
+            if isinstance(next_tok, str) and next_tok.strip():
+                page_token = next_tok.strip()
+            else:
+                break
+
+        for row_id in row_ids:
+            self._client.request(
+                "DELETE",
+                f"dataTables/{table_name}/dataTableRows/{row_id}",
+                api_version="v1",
+            )
+
     def create_dataset(self, dataset: DatasetEnvelope) -> str:
         name = dataset.metadata.name
         logger.debug("Creating SecOps Data Table '%s' header", name)
@@ -208,6 +243,8 @@ class SecOpsDatasetAdapter(DatasetPort):
             },
             api_version="v1",
         )
+        if not dataset.values:
+            return name
         try:
             logger.debug(
                 "Populating %d rows in SecOps Data Table '%s' via bulkReplace",
@@ -236,16 +273,20 @@ class SecOpsDatasetAdapter(DatasetPort):
             api_version="v1",
         )
         try:
-            logger.debug(
-                "Replacing %d rows in SecOps Data Table '%s' via bulkReplace",
-                len(dataset.values),
-                name,
-            )
-            self._bulk_replace_rows(name, dataset.values)
+            if dataset.values:
+                logger.debug(
+                    "Replacing %d rows in SecOps Data Table '%s' via bulkReplace",
+                    len(dataset.values),
+                    name,
+                )
+                self._bulk_replace_rows(name, dataset.values)
+            else:
+                logger.debug("Clearing all rows in SecOps Data Table '%s'", name)
+                self._clear_rows(name)
         except Exception as exc:
             logger.warning(
                 "Two-stage partial mutation: Data Table '%s' description was updated, "
-                "but dataTableRows:bulkReplace failed: %s",
+                "but row synchronization failed: %s",
                 name,
                 exc,
             )

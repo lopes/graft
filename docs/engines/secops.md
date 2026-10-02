@@ -642,20 +642,19 @@ For full architectural details, see the **[Engine Adoption & Lifecycle Guide](..
 
 ## 11. Google SecOps Data Tables & Dataset Synchronization (`datasets/<name>.yaml`)
 
-Google SecOps deprecated legacy Reference Lists in favor of **Data Tables** (`dataTables`). Graft integrates engine-agnostic string datasets (`datasets/<name>.yaml`) directly with the Chronicle `v1alpha` Data Tables REST API via [`SecOpsDatasetAdapter`](../../src/graft/engines/secops/datasets.py).
+Google SecOps deprecated legacy Reference Lists in favor of **Data Tables** (`dataTables`). Graft integrates engine-agnostic string datasets (`datasets/<name>.yaml`) directly with the Chronicle `v1` Data Tables REST API via [`SecOpsDatasetAdapter`](../../src/graft/engines/secops/datasets.py).
 
 ```mermaid
 sequenceDiagram
     autonumber
     participant Core as DatasetReconciler
     participant Adapter as SecOpsDatasetAdapter
-    participant API as Chronicle DataTableService (v1alpha)
+    participant API as Chronicle DataTableService (v1)
 
-    Note over Core,API: 1. Fetch & Filter Compatible Tables
-    Core->>Adapter: list_datasets()
-    Adapter->>API: GET dataTables (paginated)
-    API-->>Adapter: All tenant Data Tables
-    Note over Adapter: Filter to 1-column STRING tables<br/>where originalColumn == "value" and rows <= 1,000
+    Note over Core,API: 1. Fetch Target Tables by Name (or Discover All on Pull)
+    Core->>Adapter: list_datasets(names=...)
+    Adapter->>API: GET dataTables/{name}
+    API-->>Adapter: Table metadata (1 STRING column: "value")
     Adapter->>API: GET dataTables/{name}/dataTableRows (paginated)
     API-->>Adapter: Row values
     Adapter-->>Core: Tuple of DatasetEnvelopes
@@ -663,31 +662,39 @@ sequenceDiagram
     alt New Dataset (Create)
         Core->>Adapter: create_dataset(dataset)
         Adapter->>API: POST dataTables?dataTableId={name}
-        Note over Adapter: Wait 10s for backend propagation
-        Adapter->>API: POST dataTables/{name}/dataTableRows:bulkCreate
-    else Modified Dataset (Update)
+        opt dataset.values is non-empty
+            Adapter->>API: POST dataTables/{name}/dataTableRows:bulkReplace
+        end
+    else Modified or Deprecated Dataset (Update)
         Core->>Adapter: update_dataset(dataset)
-        Adapter->>API: PATCH dataTables/{name}?updateMask=description (if changed)
-        Adapter->>API: POST dataTables/{name}/dataTableRows:bulkReplace
+        Adapter->>API: PATCH dataTables/{name}?updateMask=description
+        alt dataset.values is non-empty
+            Adapter->>API: POST dataTables/{name}/dataTableRows:bulkReplace
+        else dataset.values is empty (all TTLs expired or archived)
+            Adapter->>API: GET dataTables/{name}/dataTableRows
+            Adapter->>API: DELETE dataTables/{name}/dataTableRows/{row_id}
+        end
     end
 ```
 
-### 1. Canonical Single-Column `value` Mapping
+### 1. Canonical Single-Column `value` Mapping & Empty Table Handling
 - Every Graft dataset in `datasets/<name>.yaml` is provisioned in Google SecOps with:
   - `dataTableId`: `metadata.name` (`^[a-z][a-z0-9]*(?:_[a-z0-9]+)*$`).
-  - `description`: `metadata.description`.
+  - `description`: `metadata.description` (or `"Deprecated on Graft"` when archived under `datasets/_archived/`).
   - `columnInfo`: `[{"columnIndex": 0, "originalColumn": "value", "columnType": "STRING"}]`.
 - In YARA-L 2.0 rules, analysts reference the dataset using `%<name>.value` (e.g., `not $net.principal.ip in %known_scanner_ips.value`).
-- **Atomic 1,000-Row Ceiling:** Chronicle's `:bulkCreateDataTableRows` and `:bulkReplaceDataTableRows` endpoints accept a maximum of `1,000` rows per atomic request. Graft enforces `maxItems: 1000` in [`base_dataset.schema.json`](../../src/graft/core/schemas/base_dataset.schema.json) so every dataset update executes as a single atomic replacement without partial-sync risk.
-- **10-Second Propagation Delay on Creation:** When a new Data Table resource is created via `POST dataTables`, Google SecOps requires up to 10 seconds before row mutations (`:bulkCreate`) succeed reliably. `SecOpsDatasetAdapter` automatically waits `10` seconds (`CREATION_PROPAGATION_DELAY_SECONDS`) between table creation and initial row population.
+- **Atomic 1,000-Row Ceiling (`0..1,000` Values):** Chronicle's `dataTableRows:bulkReplace` endpoint accepts a maximum of `1,000` rows per atomic request. Graft enforces `maxItems: 1000` in [`base_dataset.schema.json`](../../src/graft/core/schemas/base_dataset.schema.json) so every non-empty dataset update executes as a single atomic replacement.
+- **Empty & Deprecated Datasets (`0` Rows):** Because Chronicle's `dataTableRows:bulkReplace` rejects empty `requests: []` payloads with `400 INVALID_ARGUMENT`, `SecOpsDatasetAdapter` skips `bulkReplace` when creating an empty table and clears existing rows via `GET dataTables/{name}/dataTableRows` + `DELETE dataTables/{name}/dataTableRows/{row_id}` when updating a dataset whose `ttl:YYYY-MM-DD` values have all expired or that has been moved to `datasets/_archived/`.
 
-### 2. Additive Coexistence with Native SIEM Data Tables
-- `SecOpsDatasetAdapter.list_datasets()` ignores any Data Table on the tenant that has multiple columns, a column name other than `"value"`, a `columnType` other than `"STRING"`, or $> 1,000$ rows.
-- `DatasetReconciler` never reports unmanaged SIEM Data Tables as `[?] Untracked` and never deletes tables from the tenant. Teams can maintain large multi-column CMDB or CIDR tables directly in SecOps alongside Graft-managed `datasets/<name>.yaml` files.
+### 2. Additive Coexistence & Safe Archival
+- During `diff` and `apply`, `SecOpsDatasetAdapter.list_datasets(names=...)` queries only the dataset names tracked in `datasets/` and `datasets/_archived/`. Unmanaged SIEM Data Tables (such as multi-column CMDB exports or CIDR tables) are never queried, flagged as `[?] Untracked`, or deleted.
+- If an active dataset in `datasets/<name>.yaml` is deleted in the SecOps console (`404`), `diff` / `apply` recreates it automatically.
+- If a dataset is moved to `datasets/_archived/<name>.yaml` and still exists in SecOps, `diff` / `apply` clears its rows to `0` and updates its description to `"Deprecated on Graft"` so rules referencing `%<name>.value` do not break before an operator removes the rule reference and deletes the table in SecOps.
 
 ### 3. Pre-Merge `verify` & Staging `test` Handling
-- **Pre-Merge Syntax Dry-Run (`graft secops verify`):** When a pull request adds both a new `datasets/<name>.yaml` and a rule referencing `%<name>.value`, the Data Table does not yet exist on the remote tenant. If `:verifyRuleText` returns a compilation diagnostic indicating `data table (<name>) does not exist` for a dataset that exists locally in `datasets/<name>.yaml`, [`SecOpsCompilerAdapter.verify_rule`](../../src/graft/engines/secops/compiler.py) automatically substitutes `"graft_verify_placeholder"` for `%<name>.value` in memory and re-verifies the YARA-L syntax.
-- **Staging Replay Testing (`graft secops test`):** Before executing `:run` for a rule in Staging, [`SecOpsReplayEngine`](../../src/graft/engines/secops/replay.py) inspects `rule.logic` for `%<name>.value` references and pre-synchronizes any matching local `datasets/<name>.yaml` files to the Staging tenant so positive and negative exclusion tests evaluate against the exact dataset values in Git.
+- **Pre-Merge Syntax Dry-Run (`graft secops verify`):** When a pull request adds both a new `datasets/<name>.yaml` and a rule referencing `%<name>.value`, the Data Table does not yet exist on the remote tenant. If `:verifyRuleText` returns a compilation diagnostic indicating `metadata unavailable for data table <name>` for a dataset that exists locally in `datasets/<name>.yaml`, [`SecOpsCompilerAdapter.verify_rule`](../../src/graft/engines/secops/compiler.py) automatically substitutes `"graft_verify_placeholder"` for `%<name>.value` in memory and re-verifies the YARA-L syntax.
+- **Staging Replay Testing (`graft secops test`):** Before executing `:run` for a rule in Staging, [`SecOpsReplayAdapter`](../../src/graft/engines/secops/replay.py) inspects `rule.logic` for `%<name>.value` references and pre-synchronizes any matching local `datasets/<name>.yaml` files to the Staging tenant so positive and negative exclusion tests evaluate against the active dataset values in Git.
+
 
 
 

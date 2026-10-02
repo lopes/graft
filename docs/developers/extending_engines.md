@@ -413,7 +413,45 @@ def resolve_deployment_status(
 
 ---
 
-## 10. Step 9: Write In-Tree Tests
+## 10. Step 9 (Optional): Supporting Reusable Datasets & `ttl:YYYY-MM-DD` Expiration (`datasets/<name>.yaml`)
+
+If your target SIEM provides lookup tables or reference lists (e.g., Google SecOps Data Tables, Microsoft Sentinel Watchlists) and you set `datasets: true` in `engine.yaml`, implement [`DatasetPort`](../../src/graft/core/ports/dataset.py) and return it from `EngineAdapter.get_dataset()`.
+
+> [!IMPORTANT]
+> **Engine Programmer Directive: Supporting `ttl:YYYY-MM-DD` Expiration & `0`-Row / Deprecated Tables**
+> Core's loader evaluates inline `# ... ttl:YYYY-MM-DD` comments in UTC (`today_utc > ttl_date`) and strips expired values *before* passing `DatasetEnvelope` to your adapter. Similarly, datasets moved to `datasets/_archived/` are passed with `dataset.values == ()`, `dataset.metadata.description == "Deprecated on Graft"`, and `dataset.deprecated == True`.
+>
+> Because all `ttl:YYYY-MM-DD` entries in a dataset can expire (leaving `0` active values) and archived datasets must be emptied on the SIEM without deleting the table resource, **your adapter must never assume `dataset.values` is non-empty**:
+> 1. **`create_dataset(dataset)`:** Create the table header with a single `STRING` column named `value`. Only invoke your bulk-insert/replace API when `dataset.values` is non-empty (many SIEM bulk endpoints reject `[]` with `HTTP 400`).
+> 2. **`update_dataset(dataset)`:** Update the remote table description (`dataset.metadata.description`). When `dataset.values` is non-empty, replace the rows atomically; when `not dataset.values`, explicitly fetch and delete all existing rows so expired `ttl:` entries and `"Deprecated on Graft"` tables are actually purged on the SIEM.
+> 3. **Compiler & Replay Hooks:** In `RuleCompilerPort.verify_rule`, substitute a string placeholder in memory if a newly added local dataset does not exist on the remote tenant yet. In `ReplayHarnessPort.run_test_vector`, pre-sync referenced local datasets to staging so replay tests run against the current TTL-filtered values.
+
+Reference pattern (modeled after [`SecOpsDatasetAdapter`](../../src/graft/engines/secops/datasets.py)):
+
+```python
+def create_dataset(self, dataset: DatasetEnvelope) -> str:
+    name = dataset.metadata.name
+    self._create_table_header(name, description=dataset.metadata.description)
+    if dataset.values:
+        self._bulk_replace_rows(name, dataset.values)
+    return name
+
+
+def update_dataset(self, dataset: DatasetEnvelope) -> None:
+    name = dataset.metadata.name
+    self._update_table_description(name, description=dataset.metadata.description)
+    if dataset.values:
+        self._bulk_replace_rows(name, dataset.values)
+    else:
+        self._clear_all_rows(name)
+```
+
+- **Why Graft Restricts Datasets to 1-D Strings (`0..1,000` Items):**
+  - Multi-column schemas, CIDR/regex column types, and multi-megabyte threat feeds vary incompatibly across SIEM APIs and cannot be replaced atomically in a single request. Keeping Graft datasets to `0..1,000` literal strings in a single `value` column guarantees deterministic, atomic reconciliation across every engine while letting complex tables coexist untouched on the SIEM.
+
+---
+
+## 11. Step 10: Write In-Tree Tests
 
 In Graft, engine tests live in `tests/engines/<engine>/`. Root `tests/unit/core/` is reserved strictly for engine-agnostic core logic and CLI routing.
 
@@ -440,12 +478,13 @@ uv run pytest tests/engines/sentinel
 
 ---
 
-## 11. Summary Verification Checklist
+## 12. Summary Verification Checklist
 
 Before submitting an engine PR:
 - [ ] Manifest `engine.yaml` is valid according to `src/graft/core/schemas/engine_manifest.schema.json`.
 - [ ] Custom rule schema `schemas/custom.schema.json` (extending `base_custom.schema.json`) validates example custom rules.
 - [ ] If `managed_rules: true`, `schemas/managed.schema.json` validates `rulesets/<engine>/managed/index.yaml`, every managed rule/ruleset entry exposes a unique `id`, and `has_managed_rule_id` + `resolve_deployment_status` are implemented and tested.
+- [ ] If `datasets: true`, `DatasetPort` (`list_datasets`, `create_dataset`, `update_dataset`) handles both populated (`1..1,000` rows) and empty/deprecated (`0` rows) datasets cleanly.
 - [ ] All HTTP interactions use `urllib.request` (zero third-party dependencies).
 - [ ] Module loggers use `graft.<engine>.<module>`, emit `WARNING` on transient retries (`429`/`503`) or two-stage partial mutations, and format API exceptions with HTTP status code, vendor status, method, and endpoint path.
 - [ ] Adapter passes `isinstance(adapter, EngineAdapter)` protocol checks.

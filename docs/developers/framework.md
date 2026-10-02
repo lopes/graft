@@ -85,7 +85,7 @@ To maintain strict architectural boundaries, responsibilities are cleanly divide
 | Capability / Concern | Handled by Driving Core | Handled by Driven Adapter |
 | :--- | :--- | :--- |
 | **Rule Representation** | Provides universal `RuleEnvelope` model (5-block custom rules and 4-block registered managed rules) and base JSON schemas (`base_custom.schema.json`, `base_managed.schema.json`). | Maps custom envelope fields (`metadata`, `logic`, `deployment`) to engine-native payload formats, and resolves registered managed rule status from `managed/index.yaml`. |
-| **Reusable Datasets** | Provides `DatasetEnvelope` model (`datasets/<name>.yaml`), `base_dataset.schema.json`, `%<name>.value` rule cross-validation, and additive `DatasetReconciler`. | Implements `DatasetPort` (`list_datasets`, `create_dataset`, `update_dataset`) mapping 1-D string lists to SIEM-native lookup tables (e.g., Google SecOps Data Tables with a single `STRING` column named `value`). |
+| **Reusable Datasets & TTL Expiration** | Provides `DatasetEnvelope` model (`datasets/<name>.yaml`), `base_dataset.schema.json` (`0..1,000` strings), UTC `ttl:YYYY-MM-DD` inline comment evaluation, `datasets/_archived/` deprecation (`deprecated=True`, `description="Deprecated on Graft"`), `%<name>.value` rule cross-validation, and additive `DatasetReconciler`. | Implements `DatasetPort` (`list_datasets`, `create_dataset`, `update_dataset`) mapping 1-D string lists to SIEM-native lookup tables (single `STRING` column named `value`), including explicit `0`-row creation and row-clearing logic when all `ttl:` entries expire or a dataset is archived. |
 | **Detection Rule Schema** | Loads and validates base envelope structures (`base_custom.schema.json` for `custom/*.yaml`, `base_managed.schema.json` for `managed/<rule>.yaml`, and `base_dataset.schema.json` for `datasets/*.yaml`). | Provides `schemas/custom.schema.json` (extending `base_custom.schema.json`) for custom rules and `schemas/managed.schema.json` for `managed/index.yaml`. |
 | **Reconciliation Logic** | Computes diffs, evaluates Scoped vs. Full Catalog scopes, and enforces execution order (`Datasets` $\rightarrow$ `Custom Rules` $\rightarrow$ `Managed Content`). | Executes atomic remote API calls (`create_dataset`, `update_dataset`, `create_rule`, `update_rule`, `set_rule_state`, `set_ruleset_deployment`). |
 | **Authentication & HTTP** | Manages environment variable resolution and `.env` loading. | Establishes authenticated sessions (STS/WIF, OAuth2, API tokens) and issues HTTP requests via `urllib.request`. |
@@ -128,7 +128,7 @@ class EngineAdapter(Protocol):
 
     def get_replay(self) -> ReplayHarnessPort | None: ...
 
-    def get_datasets(self) -> DatasetPort | None: ...
+    def get_dataset(self) -> DatasetPort | None: ...
 
     def resolve_deployment_status(
         self,
@@ -148,7 +148,7 @@ class EngineAdapter(Protocol):
 ```
 
 The composite adapter acts as a capabilities factory and lifecycle hook provider:
-- **Port Factories (`get_compiler`, `get_deployer`, `get_managed`, `get_replay`, `get_datasets`):** Return the concrete port implementation or `None` when a capability is unsupported.
+- **Port Factories (`get_compiler`, `get_deployer`, `get_managed`, `get_replay`, `get_dataset`):** Return the concrete port implementation or `None` when a capability is unsupported.
 - **`resolve_deployment_status(rule, managed_state)`:** Translates engine-specific deployment toggles into an engine-agnostic status (`enabled`, `silent`, `disabled`). For custom rules (`rule.is_managed == False`), it inspects `rule.deployment`; for registered managed rules (`rule.is_managed == True`), it resolves the live deployment status from `managed_state` (`rulesets/<engine>/managed/index.yaml`).
 - **`are_rules_equal(desired, remote)`:** Compares a desired Git `RuleEnvelope` against a remote tenant `RuleEnvelope` during `diff`/`apply` (defaults to trimmed `logic` comparison; engines that compile metadata into the query payload, such as `SecOpsAdapter`, override this to compare compiled payloads).
 - **`deconstruct_rule(remote_rule)`:** Extracts embedded metadata from a raw remote rule during `pull` (defaults to returning `remote_rule` unchanged).
@@ -167,14 +167,22 @@ from graft.core.models.dataset import DatasetEnvelope
 
 @runtime_checkable
 class DatasetPort(Protocol):
-    def list_datasets(self) -> tuple[DatasetEnvelope, ...]: ...
+    def list_datasets(
+        self,
+        names: tuple[str, ...] | None = None,
+    ) -> tuple[DatasetEnvelope, ...]: ...
 
     def create_dataset(self, dataset: DatasetEnvelope) -> str: ...
 
     def update_dataset(self, dataset: DatasetEnvelope) -> None: ...
 ```
 
-Note that `DatasetPort` intentionally omits `delete_dataset`: Graft reconciles datasets under strict additive coexistence so unmanaged SIEM tables are never deleted.
+Engine adapters implementing `DatasetPort` (`datasets: true` in `engine.yaml`) must adhere to three behavioral guarantees:
+1. **Additive Coexistence (No `delete_dataset`):** `DatasetPort` intentionally omits `delete_dataset` so unmanaged SIEM tables are never deleted. When `names` is passed (`diff` / `apply`), query only those named tables (`404` means absent on tenant); when `names is None` (`pull --target datasets`), discover compatible 1-column `STRING` tables (`originalColumn == "value"`, `1..1,000` rows).
+2. **Supporting `ttl:YYYY-MM-DD` Expiration & `0`-Row Updates:** Core evaluates inline `# ... ttl:YYYY-MM-DD` comments in UTC (`today_utc > ttl_date`) and strips expired entries before passing `DatasetEnvelope` to `DatasetPort`. When every temporary entry in a dataset expires—or when a dataset is moved to `datasets/_archived/` (`deprecated=True`, `description="Deprecated on Graft"`, `values=()`)—`dataset.values` is an empty tuple `()`. Because many SIEM bulk-replace endpoints reject empty row lists (`requests: []`) with `HTTP 400`, **adapter implementations must explicitly handle `not dataset.values`**:
+   - In `create_dataset`: create the table header and skip bulk row population if `not dataset.values`.
+   - In `update_dataset`: update the table description and, if `not dataset.values`, explicitly clear existing remote rows (e.g., by listing row IDs and deleting them) so expired `ttl:` suppressions and deprecated datasets are actually purged on the SIEM.
+3. **Compiler & Replay Integration:** In `RuleCompilerPort.verify_rule`, substitute a string literal placeholder in memory if a rule references a local `datasets/<name>.yaml` that has not yet been created on the remote tenant. In `ReplayHarnessPort.run_test_vector`, pre-sync referenced local datasets to the staging tenant so replay tests evaluate against the current non-expired values.
 
 ---
 
