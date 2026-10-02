@@ -161,6 +161,85 @@ def test_update_dataset_patches_description_and_bulk_replaces_rows_with_partial_
     assert "partial" in caplog.text.lower() or "bulkReplace" in caplog.text
 
 
+def test_create_empty_dataset_posts_table_header_and_skips_bulk_replace() -> None:
+    client = MockSecOpsClient()
+    client.queue_response(
+        {"name": "projects/p/locations/us/instances/i/dataTables/security_assessment_ips"}
+    )
+
+    adapter = SecOpsDatasetAdapter(client=client)
+    empty_ds = DatasetEnvelope(
+        metadata=DatasetMetadata(
+            name="security_assessment_ips",
+            description="Authorized penetration testing source IPs.",
+            owners=("SOC",),
+            tags=("network", "pentest"),
+            references=("https://lopes.id/log/detection-rules-netscan-portscan/",),
+        ),
+        values=(),
+    )
+    created_name = adapter.create_dataset(empty_ds)
+
+    assert created_name == "security_assessment_ips"
+    assert len(client.calls) == 1
+    assert client.calls[0]["method"] == "POST"
+    assert client.calls[0]["path"] == "dataTables"
+    assert client.calls[0]["params"] == {"dataTableId": "security_assessment_ips"}
+
+
+def test_update_empty_dataset_patches_description_and_deletes_existing_rows() -> None:
+    client = MockSecOpsClient()
+    # 1. PATCH dataTables/security_assessment_ips
+    client.queue_response(
+        {"name": "projects/p/locations/us/instances/i/dataTables/security_assessment_ips"}
+    )
+    # 2. GET dataTables/security_assessment_ips/dataTableRows
+    client.queue_response(
+        {
+            "dataTableRows": [
+                {
+                    "name": (
+                        "projects/p/locations/us/instances/i/dataTables/"
+                        "security_assessment_ips/dataTableRows/row_1"
+                    ),
+                    "values": ["192.0.2.10"],
+                },
+                {
+                    "name": (
+                        "projects/p/locations/us/instances/i/dataTables/"
+                        "security_assessment_ips/dataTableRows/row_2"
+                    ),
+                    "values": ["198.51.100.25"],
+                },
+            ]
+        }
+    )
+    # 3. DELETE row_1 and row_2
+    client.queue_response({})
+    client.queue_response({})
+
+    adapter = SecOpsDatasetAdapter(client=client)
+    deprecated_ds = DatasetEnvelope(
+        metadata=DatasetMetadata(
+            name="security_assessment_ips",
+            description="Deprecated on Graft",
+            owners=("SOC",),
+            tags=("network", "pentest"),
+            references=("https://lopes.id/log/detection-rules-netscan-portscan/",),
+        ),
+        values=(),
+        deprecated=True,
+    )
+    adapter.update_dataset(deprecated_ds)
+
+    assert [c["method"] for c in client.calls] == ["PATCH", "GET", "DELETE", "DELETE"]
+    assert client.calls[0]["path"] == "dataTables/security_assessment_ips"
+    assert client.calls[0]["body"] == {"description": "Deprecated on Graft"}
+    assert client.calls[1]["path"] == "dataTables/security_assessment_ips/dataTableRows"
+    assert client.calls[2]["path"] == "dataTables/security_assessment_ips/dataTableRows/row_1"
+    assert client.calls[3]["path"] == "dataTables/security_assessment_ips/dataTableRows/row_2"
+
+
 def test_list_datasets_by_names_handles_existing_and_404_missing() -> None:
     client = MockSecOpsClient()
     # 1st dataset exists

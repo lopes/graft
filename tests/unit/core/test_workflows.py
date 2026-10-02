@@ -35,6 +35,7 @@ def test_pr_validation_workflow_structure() -> None:
     assert "pull_request" in triggers, "Workflow must trigger on pull_request"
     pr_paths = triggers["pull_request"].get("paths", [])
     assert "schemas/**" not in pr_paths, "Stale top-level schemas/** path filter must be removed"
+    assert "datasets/**" in pr_paths, "Must trigger on datasets/** changes"
     assert ".github/dependabot.yml" in pr_paths, "Must trigger on .github/dependabot.yml changes"
 
     # 2. Least-privilege permissions
@@ -102,6 +103,11 @@ def test_deploy_production_workflow_structure() -> None:
     assert "push" in triggers, "Workflow must trigger on push to main"
     push_paths = triggers["push"].get("paths", [])
     assert "schemas/**" not in push_paths, "Stale top-level schemas/** path filter must be removed"
+    assert "datasets/**" in push_paths, "Must trigger on datasets/** changes"
+    schedule = triggers.get("schedule", [])
+    assert isinstance(schedule, list) and any(
+        isinstance(item, dict) and item.get("cron") == "0 0 * * *" for item in schedule
+    ), "deploy-production.yml must include a daily UTC cron schedule ('0 0 * * *') for TTL expiry"
 
     # 2. Least-privilege permissions
     permissions = data.get("permissions", {})

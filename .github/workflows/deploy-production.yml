@@ -6,11 +6,14 @@ name: Deploy Production & Publish Catalogs
       - main
     paths:
       - "src/**"
+      - "datasets/**"
       - "rulesets/**"
       - "tests/**"
       - "pyproject.toml"
       - "uv.lock"
       - ".github/workflows/deploy-production.yml"
+  schedule:
+    - cron: "0 0 * * *"
 
 permissions:
   contents: read
