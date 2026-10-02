@@ -38,29 +38,27 @@ flowchart TD
         OFFLINE --> CLOUD
     end
 
-    subgraph PROD["2. Mainline Production Deployment (.github/workflows/deploy-production.yml)"]
+    subgraph PROD["2. Mainline Deployment & Daily TTL Sync (.github/workflows/deploy-production.yml)"]
         direction TB
-        MERGE["Merge to main"]
+        MERGE["Merge to main OR Daily Schedule (cron '0 0 * * *')"]
         WIF_PROD["WIF Token Exchange"]
         LINT_SANITY["graft lint Sanity Check"]
-        APPLY_ALL["graft secops apply --env production --all<br/>(Full Catalog Convergence)"]
+        APPLY_ALL["graft secops apply --env production --all<br/>(Datasets + Custom Rules + Managed Convergence)"]
         EXPORTS["Generate MITRE Navigator Layer & Rule Catalogs"]
         ARTIFACTS["Publish Governance Release Artifacts"]
         
         MERGE --> WIF_PROD --> LINT_SANITY --> APPLY_ALL --> EXPORTS --> ARTIFACTS
     end
 
-    subgraph CRON["3. Scheduled Drift Governance (Nightly Cron)"]
+    subgraph CRON["3. Optional Read-Only Drift Audit"]
         direction TB
-        TIMER["Schedule: cron '0 2 * * *'"]
+        TIMER["Custom Schedule"]
         DIFF_ALL["graft secops diff --env production --all"]
         ALERT{"Drift Detected?<br/>(Exit Code 2)"}
         REPORT["Create Issue / Alert SOC"]
-        HEAL["Optional: Auto-heal with apply --all"]
         
         TIMER --> DIFF_ALL --> ALERT
         ALERT -- Yes --> REPORT
-        ALERT -- Auto-Heal --> HEAL
     end
 
     PR --> PROD
@@ -79,19 +77,19 @@ Runs on standard `ubuntu-latest` without requiring cloud credentials:
 - **Gate 2 (Linting):** `uv run ruff check .` verifies code health and catches unused imports or forbidden constructs.
 - **Gate 3 (Static Typing):** `uv run mypy --strict src tests` guarantees 100% type safety with zero `Any` leakage.
 - **Gate 4 (Unit & Engine Tests):** `uv run pytest` executes all isolated unit tests in sub-seconds.
-- **Gate 5 (Rules & Schemas):** `uv run graft lint` validates custom rules and managed manifests against Draft 2020-12 schemas and verifies MITRE ATT&CK technique IDs.
+- **Gate 5 (Rules, Datasets & Schemas):** `uv run graft lint` validates datasets (`datasets/*.yaml`, including `ttl:YYYY-MM-DD` inline comment directives), custom rules (`%<name>.value` cross-references), and managed manifests against Draft 2020-12 schemas and MITRE ATT&CK technique IDs.
 
 ### 2. Cloud Gates (`secops-cloud-gates`)
 Requires WIF credentials and runs only on trusted internal branches:
 - **Gate 6 (Compiler Dry-Run):** `uv run graft secops verify --env staging` invokes Chronicle's `:verifyRuleText` endpoint to ensure YARA-L logic compiles cleanly against the live tenant schema without saving or deploying anything.
 - **Gate 7 (Synthetic Replay):** `uv run graft secops test` runs synthetic test fixtures against staging infrastructure (or non-alerting quarantine).
-- **Gate 8 (Scoped Reconciliation Diff):** `uv run graft secops diff --env production` computes a Scoped diff of rules modified in the branch and posts the plan directly to the PR discussion.
+- **Gate 8 (Scoped Reconciliation Diff):** `uv run graft secops diff --env production` computes a Scoped diff of datasets and rules modified in the branch and posts the plan directly to the PR discussion.
 
 ---
 
-## 3. Mainline Production Deployment (`deploy-production.yml`)
+## 3. Mainline Production Deployment & Daily TTL Sync (`deploy-production.yml`)
 
-When a pull request is merged into `main`, the deployment workflow executes authoritative forward synchronization:
+When a pull request is merged into `main`—or at `00:00` UTC every day (`schedule: - cron: "0 0 * * *"`)—the deployment workflow executes authoritative forward synchronization:
 
 1. **Full History Checkout:** Checks out with `fetch-depth: 0` so that `src/graft/core/blame.py` can extract accurate Git lifecycle metrics (creation timestamp, last modified timestamp, commit count, and contributor count) to inject into generated catalog metadata.
 2. **Offline Sanity Check:** Executes `uv run graft lint` to guarantee repository integrity before touching remote APIs.
@@ -100,7 +98,7 @@ When a pull request is merged into `main`, the deployment workflow executes auth
    ```bash
    uv run graft secops apply --env production --all
    ```
-   Enforces full convergence across both custom detection rules and vendor-managed curated content, automatically healing any out-of-band console drift.
+   Enforces full convergence across reusable datasets (`datasets/*.yaml` and `datasets/_archived/*.yaml`), custom detection rules, and vendor-managed curated content. Running daily at `00:00` UTC guarantees that dataset values whose `ttl:YYYY-MM-DD` expiration date passed the previous UTC day are automatically removed from the SIEM even on days without Git commits, while also healing any out-of-band console drift.
 5. **Governance Artifact Generation:**
    ```bash
    mkdir -p exports layers
@@ -114,11 +112,12 @@ When a pull request is merged into `main`, the deployment workflow executes auth
 
 ## 4. CI/CD Workflow Path Filtering
 
-To optimize runner efficiency and prevent unnecessary cloud API calls, both workflows enforce strict path filtering:
+To optimize runner efficiency and prevent unnecessary cloud API calls on push/PR events, both workflows enforce strict path filtering:
 
 ```yaml
 paths:
   - "src/**"
+  - "datasets/**"
   - "rulesets/**"
   - "tests/**"
   - "pyproject.toml"
@@ -127,7 +126,7 @@ paths:
 ```
 
 ### Path Filtering Directives
-- **Triggered:** Any commit modifying core platform code (`src/`), detection rules (`rulesets/`), test fixtures (`tests/`), dependencies, or workflow definitions triggers full CI/CD execution.
+- **Triggered:** Any commit modifying core platform code (`src/`), reusable datasets (`datasets/`), detection rules (`rulesets/`), test fixtures (`tests/`), dependencies, or workflow definitions triggers full CI/CD execution.
 - **Skipped:** Commits modifying exclusively documentation (`docs/`, `*.md`) or static visual assets (`assets/`) intentionally skip workflow execution.
 
 ---
