@@ -1,5 +1,9 @@
 from graft.core.models.compiler import CompilationDiagnostic, CompilationResult
-from graft.core.models.dataset import DatasetEnvelope, DatasetMetadata
+from graft.core.models.dataset import (
+    DEPRECATED_DATASET_DESCRIPTION,
+    DatasetEnvelope,
+    DatasetMetadata,
+)
 from graft.core.models.engine import EngineCapabilities, EngineManifest
 from graft.core.models.managed import (
     ManagedDeployment,
@@ -18,6 +22,7 @@ from graft.core.models.rule import (
 )
 
 __all__ = [
+    "DEPRECATED_DATASET_DESCRIPTION",
     "BaseDeploymentConfig",
     "CompilationDiagnostic",
     "CompilationResult",

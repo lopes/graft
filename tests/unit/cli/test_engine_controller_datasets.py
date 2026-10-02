@@ -378,3 +378,59 @@ def test_register_engine_commands_includes_datasets_target() -> None:
 
     parsed_pull = parser.parse_args(["secops", "pull", "--target", "datasets"])
     assert parsed_pull.target == "datasets"
+
+
+def test_archived_dataset_zeroed_and_deprecated_on_scoped_and_all_apply(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    _setup_workspace(tmp_path, monkeypatch)
+    archived_dir = tmp_path / "datasets" / "_archived"
+    archived_dir.mkdir(parents=True)
+    archived_file = archived_dir / "old_pentest_ips.yaml"
+    archived_file.write_text(
+        """metadata:
+  name: "old_pentest_ips"
+  description: "Decommissioned Q3 pentest IPs."
+  owners: ["SOC"]
+  tags: ["network"]
+  references: ["https://lopes.id/log/detection-rules-netscan-portscan/"]
+values:
+  - "192.0.2.99"
+""",
+        encoding="utf-8",
+    )
+
+    remote_old = DatasetEnvelope(
+        metadata=DatasetMetadata(
+            name="old_pentest_ips",
+            description="Decommissioned Q3 pentest IPs.",
+            owners=("SOC",),
+            tags=("network",),
+            references=("https://lopes.id/log/detection-rules-netscan-portscan/",),
+        ),
+        values=("192.0.2.99",),
+    )
+    monkeypatch.setattr(
+        "graft.cli.engine_controller.get_changed_files",
+        lambda: {archived_file.resolve()},
+    )
+
+    call_order: list[str] = []
+    adapter = RecordingOrderAdapter(call_order, remote_datasets=(remote_old,))
+    reg = EngineRegistry()
+    monkeypatch.setattr(reg, "load_adapter", lambda name, env="production": adapter)
+    controller = EngineCommandController(_make_manifest(), reg)
+
+    args = argparse.Namespace(
+        engine_command="apply",
+        env="production",
+        target="datasets",
+        all_rules=False,
+    )
+    rc = controller.execute(args, json_output=True)
+    assert rc == 0
+    assert call_order == ["datasets:list", "datasets:update:old_pentest_ips"]
+    out = json.loads(capsys.readouterr().out)
+    assert out["datasets"]["updated"] == 1

@@ -164,6 +164,83 @@ def test_dataset_reconciler_apply_logs_partial_abort_on_failure(
     ) in caplog.text
 
 
+def test_dataset_reconciler_archived_dataset_zeroes_and_deprecates_existing_remote_table(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    caplog.set_level(logging.INFO, logger="graft.reconciler")
+    remote_existing = _make_dataset(
+        "old_assessment_ips",
+        ("192.0.2.10", "198.51.100.25"),
+        description="Authorized pentest IPs.",
+    )
+    adapter = FakeDatasetAdapter(initial=(remote_existing,))
+
+    desired_archived = DatasetEnvelope(
+        metadata=DatasetMetadata(
+            name="old_assessment_ips",
+            description="Deprecated on Graft",
+            owners=("SOC",),
+            tags=("network",),
+            references=("https://lopes.id/log/detection-rules-netscan-portscan/",),
+        ),
+        values=(),
+        deprecated=True,
+    )
+
+    reconciler = DatasetReconciler()
+    diff = reconciler.diff(current=(remote_existing,), desired=(desired_archived,))
+    assert diff.has_changes is True
+    assert diff.datasets_to_create == ()
+    assert diff.datasets_to_update == (desired_archived,)
+    assert (
+        "[~] Dataset to deprecate: old_assessment_ips (0 values, 'Deprecated on Graft')"
+        in diff.render_summary()
+    )
+
+    applied_diff = reconciler.apply(desired=(desired_archived,), port=adapter)
+    assert applied_diff.has_changes is True
+    assert adapter.created == []
+    assert adapter.updated == ["old_assessment_ips"]
+    assert adapter.remote["old_assessment_ips"].values == ()
+    assert adapter.remote["old_assessment_ips"].metadata.description == "Deprecated on Graft"
+    assert "Deprecating archived dataset 'old_assessment_ips' in tenant" in caplog.text
+
+
+def test_dataset_reconciler_archived_dataset_ignored_when_absent_or_already_deprecated() -> None:
+    reconciler = DatasetReconciler()
+    desired_archived = DatasetEnvelope(
+        metadata=DatasetMetadata(
+            name="old_assessment_ips",
+            description="Deprecated on Graft",
+            owners=("SOC",),
+            tags=("network",),
+            references=("https://lopes.id/log/detection-rules-netscan-portscan/",),
+        ),
+        values=(),
+        deprecated=True,
+    )
+
+    # 1. Not present on remote -> must not create
+    diff_missing = reconciler.diff(current=(), desired=(desired_archived,))
+    assert diff_missing.has_changes is False
+    assert diff_missing.datasets_to_create == ()
+    assert diff_missing.datasets_to_update == ()
+
+    # 2. Present on remote and already zeroed + "Deprecated on Graft" -> no changes
+    remote_already_deprecated = _make_dataset(
+        "old_assessment_ips",
+        values=(),
+        description="Deprecated on Graft",
+    )
+    diff_already = reconciler.diff(
+        current=(remote_already_deprecated,),
+        desired=(desired_archived,),
+    )
+    assert diff_already.has_changes is False
+    assert diff_already.datasets_to_create == ()
+    assert diff_already.datasets_to_update == ()
+
+
 def test_engine_manifest_supports_datasets_capability(tmp_path: Path) -> None:
     eng_dir = tmp_path / "mock_eng"
     eng_dir.mkdir(parents=True)

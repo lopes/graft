@@ -1,4 +1,5 @@
 from dataclasses import FrozenInstanceError
+from datetime import date
 from pathlib import Path
 
 import pytest
@@ -159,7 +160,7 @@ values:
         load_dataset_from_str(invalid_raw_line_len)
 
 
-def test_load_dataset_rejects_empty_duplicate_or_over_1000_values() -> None:
+def test_load_dataset_allows_empty_values_and_rejects_duplicate_or_over_1000_values() -> None:
     empty_values = """metadata:
   name: "empty_dataset"
   description: "Empty values list."
@@ -168,8 +169,8 @@ def test_load_dataset_rejects_empty_duplicate_or_over_1000_values() -> None:
   references: ["ref"]
 values: []
 """
-    with pytest.raises(DatasetLoadError, match="Schema validation failed"):
-        load_dataset_from_str(empty_values)
+    ds = load_dataset_from_str(empty_values)
+    assert ds.values == ()
 
     duplicate_values = """metadata:
   name: "dup_dataset"
@@ -196,6 +197,71 @@ values:
 """
     with pytest.raises(DatasetLoadError, match="Schema validation failed"):
         load_dataset_from_str(over_1000_values)
+
+
+def test_load_dataset_ttl_filters_expired_values_strictly_greater_than() -> None:
+    yaml_text = """metadata:
+  name: "security_assessment_ips"
+  description: "Authorized penetration testing source IP addresses."
+  owners: ["SOC"]
+  tags: ["network", "pentest"]
+  references: ["https://lopes.id/log/detection-rules-netscan-portscan/"]
+values:
+  - "192.0.2.1"  # Expired yesterday ttl:2026-10-01
+  - "192.0.2.2"  # Expires today (still active!) ttl:2026-10-02
+  - "192.0.2.3"  # Expires tomorrow ttl:2026-10-03
+  - "192.0.2.4"  # Permanent jumpbox without ttl
+  - "val # fake ttl:1999-01-01"  # Quoted hash ignored, real comment active ttl:2026-10-05
+  - "val # fake ttl:2099-01-01"  # Quoted hash ignored, real comment expired ttl:2026-10-01
+"""
+    ds = load_dataset_from_str(yaml_text, reference_date=date(2026, 10, 2))
+    assert ds.values == (
+        "192.0.2.2",
+        "192.0.2.3",
+        "192.0.2.4",
+        "val # fake ttl:1999-01-01",
+    )
+
+
+def test_load_dataset_all_values_expired_returns_empty_tuple() -> None:
+    yaml_text = """metadata:
+  name: "security_assessment_ips"
+  description: "Authorized penetration testing source IP addresses."
+  owners: ["SOC"]
+  tags: ["network", "pentest"]
+  references: ["https://lopes.id/log/detection-rules-netscan-portscan/"]
+values:
+  - "192.0.2.10"  # Pentest wave 1 ttl:2026-09-15
+  - "198.51.100.25"  # Pentest wave 2 ttl:2026-10-01
+"""
+    ds = load_dataset_from_str(yaml_text, reference_date=date(2026, 10, 2))
+    assert ds.values == ()
+
+
+@pytest.mark.parametrize(
+    "bad_comment",
+    [
+        "ttl:2026-02-30",
+        "ttl:2026-13-01",
+        "ttl:20261015",
+        "ttl:10-15-2026",
+        "ttl:tomorrow",
+        "ttl:",
+        "first ttl:2026-10-15 second ttl:2026-10-20",
+    ],
+)
+def test_load_dataset_rejects_malformed_or_duplicate_ttl_directives(bad_comment: str) -> None:
+    yaml_text = f"""metadata:
+  name: "bad_ttl_dataset"
+  description: "Dataset with invalid ttl comment."
+  owners: ["SOC"]
+  tags: ["test"]
+  references: ["ref"]
+values:
+  - "10.0.0.1"  # {bad_comment}
+"""
+    with pytest.raises(DatasetLoadError, match="ttl"):
+        load_dataset_from_str(yaml_text, reference_date=date(2026, 10, 2))
 
 
 def test_load_dataset_rejects_extra_blocks_like_type() -> None:

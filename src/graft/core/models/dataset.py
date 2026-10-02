@@ -1,5 +1,7 @@
 from dataclasses import dataclass, field
 
+DEPRECATED_DATASET_DESCRIPTION = "Deprecated on Graft"
+
 
 @dataclass(frozen=True)
 class DatasetMetadata:
@@ -14,3 +16,4 @@ class DatasetMetadata:
 class DatasetEnvelope:
     metadata: DatasetMetadata
     values: tuple[str, ...] = field(default_factory=tuple)
+    deprecated: bool = False
