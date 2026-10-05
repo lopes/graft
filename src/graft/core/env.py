@@ -1,17 +1,17 @@
 import os
 from pathlib import Path
 
+_DEFAULT_ENGINES_DIR = Path(__file__).resolve().parent.parent / "engines"
 
-def load_env_file(path: Path | str | None = None) -> dict[str, str]:
-    target = Path(path) if path is not None else Path(".env")
+
+def _load_single_env_file(target: Path, loaded: dict[str, str]) -> None:
     if not target.is_file():
-        return {}
+        return
 
-    loaded: dict[str, str] = {}
     try:
         content = target.read_text(encoding="utf-8")
     except OSError:
-        return {}
+        return
 
     for raw_line in content.splitlines():
         line = raw_line.strip()
@@ -28,7 +28,6 @@ def load_env_file(path: Path | str | None = None) -> dict[str, str]:
         key = key.strip()
         val = val.strip()
 
-        # Strip enclosing single or double quotes
         if (val.startswith('"') and val.endswith('"')) or (
             val.startswith("'") and val.endswith("'")
         ):
@@ -37,5 +36,23 @@ def load_env_file(path: Path | str | None = None) -> dict[str, str]:
         if key and key not in os.environ:
             os.environ[key] = val
             loaded[key] = val
+
+
+def load_env_file(
+    path: Path | str | None = None,
+    engines_dir: Path | str | None = None,
+) -> dict[str, str]:
+    loaded: dict[str, str] = {}
+    if path is not None:
+        _load_single_env_file(Path(path), loaded)
+        return loaded
+
+    _load_single_env_file(Path(".env"), loaded)
+
+    resolved_engines_dir = Path(engines_dir) if engines_dir is not None else _DEFAULT_ENGINES_DIR
+    if resolved_engines_dir.is_dir():
+        for child in sorted(resolved_engines_dir.iterdir()):
+            if child.is_dir() and not child.name.startswith("_"):
+                _load_single_env_file(child / ".env", loaded)
 
     return loaded

@@ -152,3 +152,65 @@ def test_secops_adapter_managed_rule_validation_and_status_resolution() -> None:
     assert adapter.resolve_deployment_status(_make_managed("rs-disabled"), state) == "disabled"
     assert adapter.resolve_deployment_status(_make_managed("rs-missing"), state) == "disabled"
     assert adapter.resolve_deployment_status(_make_managed("rs-enabled"), None) == "disabled"
+
+
+def test_secops_adapter_default_rule_logic() -> None:
+    adapter = SecOpsAdapter()
+    logic = adapter.get_default_rule_logic("suspicious_login")
+    assert "$e.metadata.event_type" in logic
+    assert "condition:" in logic
+
+
+def test_secops_adapter_validate_rule_dataset_references() -> None:
+    from graft.core.models.rule import BaseDeploymentConfig, RuleEnvelope, RuleMetadata, Runbook
+
+    adapter = SecOpsAdapter()
+
+    def _rule_with_logic(logic: str) -> RuleEnvelope:
+        return RuleEnvelope(
+            metadata=RuleMetadata(
+                id="c4e9b8f2-89b1-4f81-9b16-928d54128f73",
+                name="scanner_rule",
+                description="desc",
+            ),
+            logic=logic,
+            deployment=BaseDeploymentConfig(enabled=True, alerting=True),
+            runbook=Runbook(context="c", triage="t", response="r"),
+            tests=(),
+        )
+
+    adapter.validate_rule_dataset_references(
+        _rule_with_logic(
+            "events:\n  $e.principal.ip in %known_scanner_ips.value\n"
+            "  // $e.principal.ip in cidr %known_scanner_ips\n"
+            "  /* $e.principal.ip in %known_scanner_ips.ip */\n"
+            "condition:\n  $e"
+        ),
+        {"known_scanner_ips"},
+    )
+
+    with pytest.raises(ValueError, match=r"must be referenced as '%known_scanner_ips\.value'"):
+        adapter.validate_rule_dataset_references(
+            _rule_with_logic(
+                "events:\n  $e.principal.ip in %known_scanner_ips.ip\ncondition:\n  $e"
+            ),
+            {"known_scanner_ips"},
+        )
+
+    with pytest.raises(ValueError, match="uses 'in cidr' with local dataset"):
+        adapter.validate_rule_dataset_references(
+            _rule_with_logic(
+                "events:\n  $e.principal.ip in cidr %known_scanner_ips.value\ncondition:\n  $e"
+            ),
+            {"known_scanner_ips"},
+        )
+
+    with pytest.raises(ValueError, match="uses 'in regex' with local dataset"):
+        adapter.validate_rule_dataset_references(
+            _rule_with_logic(
+                "events:\n"
+                "  $e.principal.hostname in regex %known_scanner_ips.value\n"
+                "condition:\n  $e"
+            ),
+            {"known_scanner_ips"},
+        )

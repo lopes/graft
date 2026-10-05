@@ -30,6 +30,8 @@ def test_scaffold_engine_creates_structure_and_files(tmp_path: Path) -> None:
     assert (engine_dir / "compiler.py").exists()
     assert (engine_dir / "deployer.py").exists()
     assert (engine_dir / "README.md").exists()
+    assert (engine_dir / "docs").is_dir()
+    assert (engine_dir / ".env.example").is_file()
 
     # 2. Co-located schemas in src/graft/engines/sentinel/schemas/
     custom_schema_file = engine_dir / "schemas" / "custom.schema.json"
@@ -60,8 +62,9 @@ def test_scaffold_engine_creates_structure_and_files(tmp_path: Path) -> None:
     assert manifest.display_name == "Sentinel"
     assert manifest.capabilities.custom_rules is True
 
-    # 6. .env.example updated with engine section
-    assert "# ENGINE: SENTINEL" in env_example.read_text(encoding="utf-8")
+    # 6. Engine-scoped .env.example created while root .env.example remains core-only
+    assert "# ENGINE: SENTINEL" in (engine_dir / ".env.example").read_text(encoding="utf-8")
+    assert "# ENGINE: SENTINEL" not in env_example.read_text(encoding="utf-8")
 
     # 7. Generated adapter implements status/ID hooks and deployer wires logging
     adapter_code = (engine_dir / "adapter.py").read_text(encoding="utf-8")

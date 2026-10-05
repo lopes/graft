@@ -29,7 +29,7 @@ dmypy.json
 .ruff_cache/
 .cache/
 
-# Secrets, environment variables & cloud credentials
+# Secrets, environment variables & cloud credentials (root and src/graft/engines/*/)
 .env*
 !.env.example
 .envrc

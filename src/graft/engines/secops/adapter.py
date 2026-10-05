@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import re
 from pathlib import Path
 from typing import Literal
 
@@ -29,6 +30,8 @@ from graft.engines.secops.managed_loader import (
 from graft.engines.secops.replay import SecOpsReplayAdapter
 
 logger = logging.getLogger("graft.secops.adapter")
+
+_DATASET_REF_RE = re.compile(r"%(?P<name>[a-zA-Z0-9_]+)(?:\.(?P<col>[a-zA-Z0-9_]+))?")
 
 
 def secops_rule_content_matches(desired: RuleEnvelope, remote: RuleEnvelope) -> bool:
@@ -146,6 +149,47 @@ class SecOpsAdapter(EngineAdapter):
 
     def dump_managed_manifest(self, state: ManagedState, path: Path) -> None:
         dump_managed_manifest_to_yaml(state, path)
+
+    def get_default_rule_logic(self, rule_name: str) -> str:
+        return """events:
+  $e.metadata.event_type = "USER_LOGIN"
+condition:
+  $e"""
+
+    def validate_rule_dataset_references(
+        self,
+        rule: RuleEnvelope,
+        local_dataset_names: set[str],
+    ) -> None:
+        if not rule.logic or not local_dataset_names:
+            return
+        uncommented_lines = [re.sub(r"//.*$", "", line) for line in rule.logic.splitlines()]
+        uncommented_logic = "\n".join(uncommented_lines)
+        uncommented_logic = re.sub(r"/\*.*?\*/", "", uncommented_logic, flags=re.DOTALL)
+
+        for match in _DATASET_REF_RE.finditer(uncommented_logic):
+            ds_name = match.group("name")
+            if ds_name not in local_dataset_names:
+                continue
+            col = match.group("col")
+            if col != "value":
+                raise ValueError(
+                    f"Rule '{rule.metadata.name}' references local dataset '{ds_name}' as "
+                    f"'{match.group(0)}'; Graft datasets are single-column string lists and "
+                    f"must be referenced as '%{ds_name}.value'"
+                )
+            op_match = re.search(
+                rf"\bin\s+(?P<op>cidr|regex)\s+%{re.escape(ds_name)}(?:\.[a-zA-Z0-9_]+)?\b",
+                uncommented_logic,
+                flags=re.IGNORECASE,
+            )
+            if op_match:
+                op = op_match.group("op")
+                raise ValueError(
+                    f"Rule '{rule.metadata.name}' uses 'in {op}' with local dataset "
+                    f"'%{ds_name}.value'; Graft datasets are literal string lists and only "
+                    f"support string membership ('in %{ds_name}.value')"
+                )
 
     def deconstruct_rule(self, remote_rule: RuleEnvelope) -> RuleEnvelope:
         metadata, logic = deconstruct_yaral_rule(
