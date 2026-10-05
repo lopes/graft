@@ -35,7 +35,7 @@
   - `rulesets/<engine>/managed/<rule_name>.yaml`: Optional 4-block registered managed rule envelopes (`metadata`, `managed`, `runbook`, `tests`) validated against `base_managed.schema.json` so vendor-managed coverage is included in MITRE ATT&CK matrices and catalogs. `graft lint` enforces that `managed.id` exists in `managed/index.yaml` and does not overlap across files (strict 1-to-1 mapping).
   - `rulesets/<engine>/_archived/`: Standardized directory for decommissioned rules. Any folder or file prefix starting with an underscore (`_`) under a ruleset is excluded from loading, linting, matrix exports, and sync operations.
 - **Environment Topologies:**
-  - All SecOps credentials and tenant coordinates are split into Staging and Production according to `docs/engines/secops.md`.
+  - All SecOps credentials and tenant coordinates are split into Staging and Production according to `src/graft/engines/secops/docs/README.md` (with engine-scoped `.env` templates under `src/graft/engines/<engine>/.env.example`).
 - **Three-Epoch Engine Lifecycle & Ingestion Protocol:**
   - **Epoch 1 (Discovery & Reverse Sync):** When bootstrapping an existing SIEM tenant, the SIEM is the temporary initial Source of Truth. Run `graft <engine> pull` to extract live custom rules and managed curated configurations into local YAML artifacts (and optionally `graft <engine> pull --target datasets` to import compatible 1-column `STRING` tables).
   - **Epoch 2 (Baseline Enrichment & Validation):** Operators document runbooks, map MITRE ATT&CK techniques, add test vectors, validate via `graft lint`, and commit the baseline to Git.

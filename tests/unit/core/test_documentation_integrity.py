@@ -139,6 +139,37 @@ def test_unit_tests_have_no_secops_references() -> None:
     )
 
 
+def test_engine_docs_co_located_in_engine_packages() -> None:
+    engines_docs_dir = Path("docs/engines")
+    if engines_docs_dir.is_dir():
+        extra_files = [p.name for p in sorted(engines_docs_dir.iterdir()) if p.name != "README.md"]
+        assert not extra_files, (
+            "Engine-specific documentation must live under src/graft/engines/<engine>/docs/, "
+            f"not docs/engines/: {extra_files}"
+        )
+
+    for manifest_path in sorted(Path("src/graft/engines").glob("*/engine.yaml")):
+        engine_dir = manifest_path.parent
+        engine_docs_readme = engine_dir / "docs" / "README.md"
+        assert engine_docs_readme.is_file(), (
+            f"Missing co-located engine documentation hub: {engine_docs_readme}"
+        )
+
+    for operator_doc in (
+        Path("docs/operators/cicd_and_infrastructure.md"),
+        Path("docs/operators/security.md"),
+    ):
+        content = operator_doc.read_text(encoding="utf-8")
+        assert "gcloud iam workload-identity-pools" not in content, (
+            f"{operator_doc} contains SecOps-specific gcloud WIF provisioning commands "
+            "(move to src/graft/engines/secops/docs/)"
+        )
+        assert "gcloud iam service-accounts" not in content, (
+            f"{operator_doc} contains SecOps-specific gcloud SA provisioning commands "
+            "(move to src/graft/engines/secops/docs/)"
+        )
+
+
 def test_agent_skills_frontmatter_and_structure() -> None:
     expected_skills = ("scaffold-dataset", "scaffold-rule", "scaffold-tests", "review-rule")
     skills_root = Path(".agents/skills")

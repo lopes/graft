@@ -149,7 +149,7 @@ For the complete architectural overview and philosophy, visit the **[Graft Docum
 ### Prerequisites
 - **Python >= 3.13**
 - **[uv](https://docs.astral.sh/uv/)** (Fast Python package and project manager)
-- **Google Cloud SDK (`gcloud`)** with access to a Google SecOps tenant instance (see [docs/engines/secops.md](docs/engines/secops.md))
+- **Google Cloud SDK (`gcloud`)** with access to a Google SecOps tenant instance (see [src/graft/engines/secops/docs/README.md](src/graft/engines/secops/docs/README.md))
 
 ### Installation & Quality Verification
 
