@@ -103,13 +103,39 @@ def test_core_and_cli_have_no_hardcoded_secops_coupled_branches() -> None:
             f"Driving Core file {core_py} contains engine-specific 'secops' reference"
         )
 
-    commands_core = Path("src/graft/cli/commands_core.py").read_text(encoding="utf-8")
-    assert 'engine = "secops"' not in commands_core, (
-        "commands_core.py must not hardcode engine = 'secops' fallback"
-    )
+    for cli_py in sorted(Path("src/graft/cli").rglob("*.py")):
+        if cli_py.name == "main.py":
+            continue
+        content = cli_py.read_text(encoding="utf-8")
+        assert "secops" not in content.lower(), (
+            f"Driving CLI file {cli_py} contains engine-specific 'secops' reference"
+        )
+
     engine_controller = Path("src/graft/cli/engine_controller.py").read_text(encoding="utf-8")
     assert "adapter: Any" not in engine_controller, (
         "engine_controller.py must type adapter as EngineAdapter, not Any"
+    )
+
+    root_env_example = Path(".env.example").read_text(encoding="utf-8")
+    assert "secops" not in root_env_example.lower(), (
+        "Root .env.example must remain core-only; engine templates belong in "
+        "src/graft/engines/<engine>/.env.example"
+    )
+
+
+def test_unit_tests_have_no_secops_references() -> None:
+    self_rel = Path("tests/unit/core/test_documentation_integrity.py")
+    violations: list[str] = []
+    for test_py in sorted(Path("tests/unit").rglob("*.py")):
+        if test_py == self_rel:
+            continue
+        content = test_py.read_text(encoding="utf-8")
+        if "secops" in content.lower():
+            violations.append(str(test_py))
+
+    assert not violations, (
+        "Engine-specific 'secops' references found in tests/unit/ "
+        "(move SecOps tests to tests/engines/secops/):\n" + "\n".join(violations)
     )
 
 

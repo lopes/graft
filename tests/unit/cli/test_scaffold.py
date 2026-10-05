@@ -92,15 +92,13 @@ def test_scaffold_engine_already_exists(tmp_path: Path) -> None:
 
 
 def test_scaffold_rule_success(tmp_path: Path) -> None:
-    from graft.engines.secops.compiler import synthesize_yaral_rule
-
-    rule_path = scaffold_rule("secops", "suspicious_powershell_execution", project_root=tmp_path)
+    rule_path = scaffold_rule("sentinel", "suspicious_powershell_execution", project_root=tmp_path)
 
     assert rule_path.exists()
     assert rule_path.name == "suspicious_powershell_execution.yaml"
 
     # Verify that the generated rule loads cleanly and validates against the schema
-    envelope = load_rule_from_yaml(rule_path, schema_name="secops_custom")
+    envelope = load_rule_from_yaml(rule_path, schema_name="base_custom")
     assert envelope.metadata.name == "suspicious_powershell_execution"
     assert envelope.metadata.id is not None
     assert len(envelope.metadata.owners) >= 1
@@ -109,19 +107,15 @@ def test_scaffold_rule_success(tmp_path: Path) -> None:
     assert envelope.deployment.enabled is False
     assert len(envelope.tests) >= 1
 
-    # Synthesizing YARA-L must produce exactly one rule block (not double-wrapped)
-    synth_text, _ = synthesize_yaral_rule(envelope)
-    assert synth_text.count("rule suspicious_powershell_execution {") == 1
-
 
 def test_scaffold_rule_invalid_name(tmp_path: Path) -> None:
     with pytest.raises(ScaffoldError, match="Invalid rule name"):
-        scaffold_rule("secops", "Invalid Rule Name!", project_root=tmp_path)
+        scaffold_rule("sentinel", "Invalid Rule Name!", project_root=tmp_path)
 
 
 def test_scaffold_rule_custom_destination(tmp_path: Path) -> None:
     custom_out = tmp_path / "custom_dir" / "my_rule.yaml"
-    rule_path = scaffold_rule("secops", "custom_rule", project_root=tmp_path, out_path=custom_out)
+    rule_path = scaffold_rule("sentinel", "custom_rule", project_root=tmp_path, out_path=custom_out)
     assert rule_path == custom_out
     assert custom_out.exists()
 
@@ -129,7 +123,7 @@ def test_scaffold_rule_custom_destination(tmp_path: Path) -> None:
 def test_scaffold_rule_custom_destination_string(tmp_path: Path) -> None:
     custom_out_str = str(tmp_path / "str_dir" / "my_str_rule.yaml")
     rule_path = scaffold_rule(
-        "secops", "custom_rule_str", project_root=tmp_path, out_path=custom_out_str
+        "sentinel", "custom_rule_str", project_root=tmp_path, out_path=custom_out_str
     )
     assert str(rule_path) == custom_out_str
     assert rule_path.exists()
@@ -138,14 +132,14 @@ def test_scaffold_rule_custom_destination_string(tmp_path: Path) -> None:
 def test_scaffold_managed_rule_requires_managed_id(tmp_path: Path) -> None:
     with pytest.raises(ScaffoldError, match="requires a non-empty managed rule ID"):
         scaffold_rule(
-            "secops",
+            "sentinel",
             "gcti_active_breach_host_indicators",
             project_root=tmp_path,
             managed=True,
         )
     with pytest.raises(ScaffoldError, match="requires a non-empty managed rule ID"):
         scaffold_rule(
-            "secops",
+            "sentinel",
             "gcti_active_breach_host_indicators",
             project_root=tmp_path,
             managed=True,
@@ -155,14 +149,18 @@ def test_scaffold_managed_rule_requires_managed_id(tmp_path: Path) -> None:
 
 def test_scaffold_managed_rule_with_explicit_id(tmp_path: Path) -> None:
     rule_path = scaffold_rule(
-        "secops",
+        "sentinel",
         "gcti_breach_network_indicator_matched",
         project_root=tmp_path,
         managed=True,
         managed_id="433faf9e-4d51-f284-c35b-009528ecff05",
     )
     assert rule_path == (
-        tmp_path / "rulesets" / "secops" / "managed" / "gcti_breach_network_indicator_matched.yaml"
+        tmp_path
+        / "rulesets"
+        / "sentinel"
+        / "managed"
+        / "gcti_breach_network_indicator_matched.yaml"
     )
     envelope = load_rule_from_yaml(rule_path)
     assert envelope.is_managed is True
@@ -175,10 +173,10 @@ def test_scaffold_managed_rule_with_explicit_id(tmp_path: Path) -> None:
 
 def test_scaffold_rule_rejects_reserved_index_name(tmp_path: Path) -> None:
     with pytest.raises(ScaffoldError, match="reserved"):
-        scaffold_rule("secops", "index", project_root=tmp_path)
+        scaffold_rule("sentinel", "index", project_root=tmp_path)
     with pytest.raises(ScaffoldError, match="reserved"):
         scaffold_rule(
-            "secops",
+            "sentinel",
             "index",
             project_root=tmp_path,
             managed=True,
@@ -200,7 +198,7 @@ def test_scaffold_rule_and_engine_reject_underscore_and_length_violations(
     bad_name: str,
 ) -> None:
     with pytest.raises(ScaffoldError, match="Invalid rule name"):
-        scaffold_rule("secops", bad_name, project_root=tmp_path)
+        scaffold_rule("sentinel", bad_name, project_root=tmp_path)
     with pytest.raises(ScaffoldError, match="Invalid engine name"):
         scaffold_engine(bad_name, project_root=tmp_path)
 
@@ -223,7 +221,7 @@ def test_scaffold_rule_rejects_invalid_out_path_stem(
     bad_out = tmp_path / "custom" / bad_out_filename
     with pytest.raises(ScaffoldError):
         scaffold_rule(
-            "secops",
+            "sentinel",
             "valid_rule_name",
             project_root=tmp_path,
             out_path=bad_out,
@@ -288,12 +286,12 @@ def test_scaffold_rule_populates_resolved_owner_for_custom_and_managed(
         lambda cwd=None: "Alice Security",
     )
 
-    custom_path = scaffold_rule("secops", "workspace_nrd_email_opened", project_root=tmp_path)
-    custom_env = load_rule_from_yaml(custom_path, schema_name="secops_custom")
+    custom_path = scaffold_rule("sentinel", "workspace_nrd_email_opened", project_root=tmp_path)
+    custom_env = load_rule_from_yaml(custom_path, schema_name="base_custom")
     assert custom_env.metadata.owners == ("Alice Security",)
 
     managed_path = scaffold_rule(
-        "secops",
+        "sentinel",
         "gcti_breach_network_indicator_matched",
         project_root=tmp_path,
         managed=True,

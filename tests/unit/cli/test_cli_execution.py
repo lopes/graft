@@ -1,15 +1,54 @@
+import argparse
 import json
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
 
+from graft.cli.engine_controller import EngineCommandController
 from graft.cli.main import main
+from graft.core.engine_registry import EngineRegistry
+from graft.core.models.engine import EngineCapabilities, EngineManifest
 from graft.core.models.managed import (
     ManagedDeployment,
     ManagedRuleSet,
     ManagedState,
 )
+
+
+def _write_clean_rule(
+    tmp_path: Path, engine: str = "siem_alpha", name: str = "sample_rule"
+) -> Path:
+    rule_path = tmp_path / "rulesets" / engine / "custom" / f"{name}.yaml"
+    rule_path.parent.mkdir(parents=True, exist_ok=True)
+    rule_path.write_text(
+        f"""metadata:
+  id: "11111111-2222-3333-4444-555555555555"
+  name: "{name}"
+  description: "Sample detection rule."
+  owners:
+    - "SOC"
+  mitre:
+    execution:
+      - "T1059"
+  tags:
+    - "test"
+  references:
+    - "https://attack.mitre.org/techniques/T1059/"
+logic: "event_type == 'PROCESS_LAUNCH'"
+deployment:
+  enabled: true
+  alerting: true
+  run_frequency: "live"
+runbook:
+  context: "Context"
+  triage: "Triage"
+  response: "Response"
+tests: []
+""",
+        encoding="utf-8",
+    )
+    return rule_path
 
 
 def test_main_no_args_shows_help(capsys: pytest.CaptureFixture[str]) -> None:
@@ -19,17 +58,17 @@ def test_main_no_args_shows_help(capsys: pytest.CaptureFixture[str]) -> None:
     assert "usage:" in captured.out or "usage:" in captured.err
 
 
-def test_main_lint_clean(capsys: pytest.CaptureFixture[str]) -> None:
-    exit_code = main(["lint", "rulesets/secops/custom/gcp_service_account_key_created.yaml"])
+def test_main_lint_clean(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    rule_path = _write_clean_rule(tmp_path)
+    exit_code = main(["lint", str(rule_path), "--rules-dir", str(tmp_path / "rulesets")])
     assert exit_code == 0
     captured = capsys.readouterr()
     assert "PASS" in captured.out or "clean" in captured.out.lower()
 
 
-def test_main_lint_json_output(capsys: pytest.CaptureFixture[str]) -> None:
-    exit_code = main(
-        ["--json", "lint", "rulesets/secops/custom/gcp_service_account_key_created.yaml"]
-    )
+def test_main_lint_json_output(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    rule_path = _write_clean_rule(tmp_path)
+    exit_code = main(["--json", "lint", str(rule_path), "--rules-dir", str(tmp_path / "rulesets")])
     assert exit_code == 0
     captured = capsys.readouterr()
     data = json.loads(captured.out)
@@ -47,7 +86,7 @@ def test_main_lint_error(tmp_path: Path) -> None:
 def test_main_lint_duplicate_id_across_engines_fails(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    rule1 = tmp_path / "rulesets" / "secops" / "custom" / "r1.yaml"
+    rule1 = tmp_path / "rulesets" / "siem_alpha" / "custom" / "r1.yaml"
     rule2 = tmp_path / "rulesets" / "crowdstrike" / "custom" / "r2.yaml"
     rule1.parent.mkdir(parents=True)
     rule2.parent.mkdir(parents=True)
@@ -88,8 +127,8 @@ def test_main_lint_duplicate_id_across_engines_fails(
 def test_main_lint_duplicate_name_in_same_engine_fails(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    rule1 = tmp_path / "rules" / "secops" / "custom" / "r1.yaml"
-    rule2 = tmp_path / "rules" / "secops" / "custom" / "r2.yaml"
+    rule1 = tmp_path / "rules" / "siem_alpha" / "custom" / "r1.yaml"
+    rule2 = tmp_path / "rules" / "siem_alpha" / "custom" / "r2.yaml"
     rule1.parent.mkdir(parents=True)
 
     meta_extra = (
@@ -128,7 +167,7 @@ def test_main_lint_duplicate_name_in_same_engine_fails(
 def test_main_lint_same_name_across_different_engines_passes(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    rule1 = tmp_path / "rules" / "secops" / "custom" / "r1.yaml"
+    rule1 = tmp_path / "rules" / "siem_alpha" / "custom" / "r1.yaml"
     rule2 = tmp_path / "rules" / "crowdstrike" / "custom" / "r2.yaml"
     rule1.parent.mkdir(parents=True)
     rule2.parent.mkdir(parents=True)
@@ -183,47 +222,18 @@ def test_main_new_engine(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Non
     assert (engine_dir / "adapter.py").is_file()
 
 
-def test_main_secops_new_rule(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    base_schema_content = Path("src/graft/core/schemas/base_custom.schema.json").read_text(
-        encoding="utf-8"
-    )
-    secops_schema_content = Path("src/graft/engines/secops/schemas/custom.schema.json").read_text(
-        encoding="utf-8"
-    )
-    monkeypatch.chdir(tmp_path)
-    (tmp_path / "src" / "graft" / "core" / "schemas").mkdir(parents=True)
-    (tmp_path / "src" / "graft" / "engines" / "secops" / "schemas").mkdir(parents=True)
-    (tmp_path / "src" / "graft" / "core" / "schemas" / "base_custom.schema.json").write_text(
-        base_schema_content, encoding="utf-8"
-    )
-    Path("src/graft/engines/secops/schemas/custom.schema.json").write_text(
-        secops_schema_content, encoding="utf-8"
-    )
-    exit_code = main(["secops", "new", "test_login_anomaly"])
-    assert exit_code == 0
-    rule_file = tmp_path / "rulesets" / "secops" / "custom" / "test_login_anomaly.yaml"
-    assert rule_file.exists()
-
-
 def test_main_new_rule_via_root_command(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     base_schema_content = Path("src/graft/core/schemas/base_custom.schema.json").read_text(
         encoding="utf-8"
     )
-    secops_schema_content = Path("src/graft/engines/secops/schemas/custom.schema.json").read_text(
-        encoding="utf-8"
-    )
     monkeypatch.chdir(tmp_path)
     (tmp_path / "src" / "graft" / "core" / "schemas").mkdir(parents=True)
-    (tmp_path / "src" / "graft" / "engines" / "secops" / "schemas").mkdir(parents=True)
     (tmp_path / "src" / "graft" / "core" / "schemas" / "base_custom.schema.json").write_text(
         base_schema_content, encoding="utf-8"
     )
-    Path("src/graft/engines/secops/schemas/custom.schema.json").write_text(
-        secops_schema_content, encoding="utf-8"
-    )
-    exit_code = main(["new", "rule", "test_root_new_rule", "--engine", "secops"])
+    exit_code = main(["new", "rule", "test_root_new_rule", "--engine", "sentinel"])
     assert exit_code == 0
-    rule_file = tmp_path / "rulesets" / "secops" / "custom" / "test_root_new_rule.yaml"
+    rule_file = tmp_path / "rulesets" / "sentinel" / "custom" / "test_root_new_rule.yaml"
     assert rule_file.exists()
 
 
@@ -234,8 +244,11 @@ def test_main_update_mitre(capsys: pytest.CaptureFixture[str]) -> None:
     assert "MITRE" in captured.out
 
 
-def test_main_export(capsys: pytest.CaptureFixture[str]) -> None:
-    exit_code = main(["export", "metadata", "--format", "json"])
+def test_main_export(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    _write_clean_rule(tmp_path)
+    exit_code = main(
+        ["export", "metadata", "--format", "json", "--rules-dir", str(tmp_path / "rulesets")]
+    )
     assert exit_code == 0
     captured = capsys.readouterr()
     data = json.loads(captured.out)
@@ -243,126 +256,10 @@ def test_main_export(capsys: pytest.CaptureFixture[str]) -> None:
     assert len(data) >= 1
 
 
-def test_main_secops_managed_diff_returns_2_on_drift() -> None:
-    with (
-        patch("graft.engines.secops.adapter.SecOpsClient"),
-        patch("graft.engines.secops.adapter.SecOpsManagedAdapter") as mock_adapter_cls,
-    ):
-        mock_adapter = MagicMock()
-        mock_adapter.fetch_managed_state.return_value = ManagedState(
-            rulesets=(
-                ManagedRuleSet(
-                    id="rs-cloud-threats",
-                    name="Cloud Threat Detections",
-                    category="CLOUD",
-                    deployments=(
-                        ManagedDeployment(type="PRECISE", enabled=False, alerting=False),
-                        ManagedDeployment(type="BROAD", enabled=False, alerting=False),
-                    ),
-                ),
-            ),
-            exclusions=(),
-        )
-        mock_adapter_cls.return_value = mock_adapter
-
-        exit_code = main(["secops", "managed", "diff", "--env", "staging"])
-        assert exit_code == 2
-
-
-def test_main_secops_managed_diff_returns_0_when_in_sync() -> None:
-    with (
-        patch("graft.engines.secops.adapter.SecOpsClient"),
-        patch("graft.engines.secops.adapter.SecOpsManagedAdapter") as mock_adapter_cls,
-    ):
-        from graft.engines.secops.managed_loader import load_managed_manifest_from_yaml
-
-        live_state = load_managed_manifest_from_yaml("rulesets/secops/managed/index.yaml")
-        mock_adapter = MagicMock()
-        mock_adapter.fetch_managed_state.return_value = live_state
-        mock_adapter_cls.return_value = mock_adapter
-
-        exit_code = main(["secops", "managed", "diff", "--env", "staging"])
-        assert exit_code == 0
-
-
-def test_main_secops_diff_custom_target_returns_2_when_drift() -> None:
-    with (
-        patch("graft.engines.secops.adapter.SecOpsClient"),
-        patch("graft.engines.secops.adapter.SecOpsDeployerAdapter") as mock_deployer_cls,
-    ):
-        mock_deployer = MagicMock()
-        mock_deployer.list_rules.return_value = ()
-        mock_deployer_cls.return_value = mock_deployer
-
-        exit_code = main(["secops", "diff", "--all", "--target", "custom", "--env", "staging"])
-        assert exit_code == 2
-
-
-def test_main_secops_diff_custom_target_returns_0_when_in_sync() -> None:
-    with (
-        patch("graft.engines.secops.adapter.SecOpsClient"),
-        patch("graft.engines.secops.adapter.SecOpsDeployerAdapter") as mock_deployer_cls,
-    ):
-        from graft.core.loader import load_rule_from_yaml
-
-        local_rules = [
-            load_rule_from_yaml(p, schema_name="secops_custom")
-            for p in sorted(Path("rulesets/secops/custom").rglob("*.yaml"))
-        ]
-        mock_deployer = MagicMock()
-        mock_deployer.list_rules.return_value = tuple(local_rules)
-        mock_deployer_cls.return_value = mock_deployer
-
-        exit_code = main(["secops", "diff", "--all", "--target", "custom", "--env", "staging"])
-        assert exit_code == 0
-
-
-def test_main_secops_apply_all_targets() -> None:
-    with (
-        patch("graft.engines.secops.adapter.SecOpsClient"),
-        patch("graft.engines.secops.adapter.SecOpsDeployerAdapter") as mock_deployer_cls,
-        patch("graft.engines.secops.adapter.SecOpsManagedAdapter") as mock_managed_cls,
-    ):
-        mock_deployer = MagicMock()
-        mock_deployer.list_rules.return_value = ()
-        mock_deployer_cls.return_value = mock_deployer
-
-        mock_managed = MagicMock()
-        mock_managed.fetch_managed_state.return_value = ManagedState(rulesets=())
-        mock_managed_cls.return_value = mock_managed
-
-        exit_code = main(["secops", "apply", "--all", "--env", "staging"])
-        assert exit_code == 0
-        assert mock_deployer.create_rule.call_count > 0
-        assert mock_managed.fetch_managed_state.call_count == 1
-
-
-def test_main_secops_diff_all_targets_drift() -> None:
-    with (
-        patch("graft.engines.secops.adapter.SecOpsClient"),
-        patch("graft.engines.secops.adapter.SecOpsDeployerAdapter") as mock_deployer_cls,
-        patch("graft.engines.secops.adapter.SecOpsManagedAdapter") as mock_managed_cls,
-    ):
-        mock_deployer = MagicMock()
-        mock_deployer.list_rules.return_value = ()
-        mock_deployer_cls.return_value = mock_deployer
-
-        from graft.engines.secops.managed_loader import load_managed_manifest_from_yaml
-
-        mock_managed = MagicMock()
-        mock_managed.fetch_managed_state.return_value = load_managed_manifest_from_yaml(
-            "rulesets/secops/managed/index.yaml"
-        )
-        mock_managed_cls.return_value = mock_managed
-
-        exit_code = main(["secops", "diff", "--all", "--env", "staging"])
-        assert exit_code == 2
-
-
 def test_main_new_rule_execution(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
     custom_target = tmp_path / "custom_out.yaml"
     exit_code = main(
-        ["new", "rule", "my_new_rule", "--engine", "secops", "--out", str(custom_target)]
+        ["new", "rule", "my_new_rule", "--engine", "sentinel", "--out", str(custom_target)]
     )
     assert exit_code == 0
     assert custom_target.exists()
@@ -373,7 +270,7 @@ def test_main_new_rule_execution(tmp_path: Path, capsys: pytest.CaptureFixture[s
 def test_main_new_rule_json_output(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
     custom_target = tmp_path / "custom_out.yaml"
     exit_code = main(
-        ["--json", "new", "rule", "json_rule", "--engine", "secops", "--out", str(custom_target)]
+        ["--json", "new", "rule", "json_rule", "--engine", "sentinel", "--out", str(custom_target)]
     )
     assert exit_code == 0
     assert custom_target.exists()
@@ -383,35 +280,12 @@ def test_main_new_rule_json_output(tmp_path: Path, capsys: pytest.CaptureFixture
     assert data["path"] == str(custom_target)
 
 
-def test_main_secops_new_managed_rule(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    base_managed_content = Path("src/graft/core/schemas/base_managed.schema.json").read_text(
-        encoding="utf-8"
-    )
-    monkeypatch.chdir(tmp_path)
-    (tmp_path / "src" / "graft" / "core" / "schemas").mkdir(parents=True)
-    (tmp_path / "src" / "graft" / "core" / "schemas" / "base_managed.schema.json").write_text(
-        base_managed_content, encoding="utf-8"
-    )
-    exit_code = main(
-        [
-            "secops",
-            "new",
-            "gcti_active_breach_host_indicators",
-            "--managed",
-            "f5533b66-9327-9880-93e6-75a738ac2345",
-        ]
-    )
-    assert exit_code == 0
-    rule_file = (
-        tmp_path / "rulesets" / "secops" / "managed" / "gcti_active_breach_host_indicators.yaml"
-    )
-    assert rule_file.exists()
-
-
 def test_main_lint_registered_managed_rule_validates_against_index_yaml(
-    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
-    managed_dir = tmp_path / "rulesets" / "secops" / "managed"
+    managed_dir = tmp_path / "rulesets" / "siem_alpha" / "managed"
     managed_dir.mkdir(parents=True)
 
     index_file = managed_dir / "index.yaml"
@@ -441,8 +315,8 @@ exclusions: []
   owners: ["SOC"]
   mitre:
     command-and-control: ["T1071.001"]
-  tags: ["secops", "managed"]
-  references: ["https://docs.cloud.google.com/chronicle/docs/detection/curated-detections"]
+  tags: ["siem_alpha", "managed"]
+  references: ["https://example.com/docs/curated-detections"]
 managed:
   id: "f5533b66-9327-9880-93e6-75a738ac2345"
 runbook:
@@ -454,32 +328,47 @@ tests: []
         encoding="utf-8",
     )
 
-    exit_code = main(["lint", "--rules-dir", str(tmp_path / "rulesets")])
+    mock_adapter = MagicMock()
+    mock_adapter.load_managed_manifest.return_value = ManagedState(
+        rulesets=(
+            ManagedRuleSet(
+                id="f5533b66-9327-9880-93e6-75a738ac2345",
+                name="Active Breach Priority Host Indicators",
+                category="Applied Threat Intelligence",
+                deployments=(ManagedDeployment(type="PRECISE", enabled=True, alerting=False),),
+            ),
+        ),
+        exclusions=(),
+    )
+    mock_adapter.has_managed_rule_id.side_effect = lambda managed_id, state: (
+        managed_id == "f5533b66-9327-9880-93e6-75a738ac2345"
+    )
+    mock_adapter.validate_rule_dataset_references.return_value = []
+    monkeypatch.setattr(
+        "graft.cli.commands_core.EngineRegistry.get",
+        lambda self, name: MagicMock(name=name),
+    )
+    monkeypatch.setattr(
+        "graft.cli.commands_core.EngineRegistry.load_adapter",
+        lambda self, name, env="staging": mock_adapter,
+    )
+
+    exit_code = main(["lint", str(rule_file), "--rules-dir", str(tmp_path / "rulesets")])
     assert exit_code == 0
     captured = capsys.readouterr()
-    assert "2 passed, 0 failed" in captured.out
+    assert "1 passed, 0 failed" in captured.out
 
 
 def test_main_lint_registered_managed_rule_unknown_id_in_index_fails(
-    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
-    managed_dir = tmp_path / "rulesets" / "secops" / "managed"
+    managed_dir = tmp_path / "rulesets" / "siem_alpha" / "managed"
     managed_dir.mkdir(parents=True)
 
     index_file = managed_dir / "index.yaml"
-    index_file.write_text(
-        """rulesets:
-  - id: "f5533b66-9327-9880-93e6-75a738ac2345"
-    name: "Active Breach Priority Host Indicators"
-    category: "Applied Threat Intelligence"
-    deployments:
-      - type: "PRECISE"
-        enabled: true
-        alerting: false
-exclusions: []
-""",
-        encoding="utf-8",
-    )
+    index_file.write_text("rulesets: []\nexclusions: []\n", encoding="utf-8")
 
     rule_file = managed_dir / "gcti_unknown.yaml"
     rule_file.write_text(
@@ -490,8 +379,8 @@ exclusions: []
   owners: ["SOC"]
   mitre:
     command-and-control: ["T1071.001"]
-  tags: ["secops", "managed"]
-  references: ["https://docs.cloud.google.com/chronicle/docs/detection/curated-detections"]
+  tags: ["siem_alpha", "managed"]
+  references: ["https://example.com/docs/curated-detections"]
 managed:
   id: "nonexistent-ruleset-id-999"
 runbook:
@@ -503,6 +392,18 @@ tests: []
         encoding="utf-8",
     )
 
+    mock_adapter = MagicMock()
+    mock_adapter.load_managed_manifest.return_value = ManagedState(rulesets=(), exclusions=())
+    mock_adapter.has_managed_rule_id.return_value = False
+    monkeypatch.setattr(
+        "graft.cli.commands_core.EngineRegistry.get",
+        lambda self, name: MagicMock(name=name),
+    )
+    monkeypatch.setattr(
+        "graft.cli.commands_core.EngineRegistry.load_adapter",
+        lambda self, name, env="staging": mock_adapter,
+    )
+
     exit_code = main(["lint", "--rules-dir", str(tmp_path / "rulesets")])
     assert exit_code == 1
     captured = capsys.readouterr()
@@ -511,25 +412,15 @@ tests: []
 
 
 def test_main_lint_duplicate_managed_id_in_same_engine_fails(
-    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
-    managed_dir = tmp_path / "rulesets" / "secops" / "managed"
+    managed_dir = tmp_path / "rulesets" / "siem_alpha" / "managed"
     managed_dir.mkdir(parents=True)
 
     index_file = managed_dir / "index.yaml"
-    index_file.write_text(
-        """rulesets:
-  - id: "f5533b66-9327-9880-93e6-75a738ac2345"
-    name: "Active Breach Priority Host Indicators"
-    category: "Applied Threat Intelligence"
-    deployments:
-      - type: "PRECISE"
-        enabled: true
-        alerting: false
-exclusions: []
-""",
-        encoding="utf-8",
-    )
+    index_file.write_text("rulesets: []\nexclusions: []\n", encoding="utf-8")
 
     rule1 = managed_dir / "r1.yaml"
     rule2 = managed_dir / "r2.yaml"
@@ -541,7 +432,7 @@ exclusions: []
   owners: ["SOC"]
   mitre:
     command-and-control: ["T1071.001"]
-  tags: ["secops", "managed"]
+  tags: ["siem_alpha", "managed"]
   references: ["ref"]
 managed:
   id: "f5533b66-9327-9880-93e6-75a738ac2345"
@@ -561,7 +452,7 @@ tests: []
   owners: ["SOC"]
   mitre:
     command-and-control: ["T1071.001"]
-  tags: ["secops", "managed"]
+  tags: ["siem_alpha", "managed"]
   references: ["ref"]
 managed:
   id: "f5533b66-9327-9880-93e6-75a738ac2345"
@@ -574,6 +465,18 @@ tests: []
         encoding="utf-8",
     )
 
+    mock_adapter = MagicMock()
+    mock_adapter.load_managed_manifest.return_value = ManagedState(rulesets=(), exclusions=())
+    mock_adapter.has_managed_rule_id.return_value = True
+    monkeypatch.setattr(
+        "graft.cli.commands_core.EngineRegistry.get",
+        lambda self, name: MagicMock(name=name),
+    )
+    monkeypatch.setattr(
+        "graft.cli.commands_core.EngineRegistry.load_adapter",
+        lambda self, name, env="staging": mock_adapter,
+    )
+
     exit_code = main(["lint", "--rules-dir", str(tmp_path / "rulesets")])
     assert exit_code == 1
     captured = capsys.readouterr()
@@ -582,12 +485,11 @@ tests: []
 
 def test_main_lint_ignores_archived_and_underscore_folders(tmp_path: Path) -> None:
     rulesets_dir = tmp_path / "rulesets"
-    archived_dir = rulesets_dir / "secops" / "_archived"
-    custom_dir = rulesets_dir / "secops" / "custom"
+    archived_dir = rulesets_dir / "siem_alpha" / "_archived"
+    custom_dir = rulesets_dir / "siem_alpha" / "custom"
     archived_dir.mkdir(parents=True)
     custom_dir.mkdir(parents=True)
 
-    # Valid rule in custom
     valid_rule = custom_dir / "valid.yaml"
     valid_rule.write_text(
         'metadata:\n  id: "11111111-2222-3333-4444-555555555555"\n  name: "valid_rule"\n'
@@ -604,11 +506,9 @@ def test_main_lint_ignores_archived_and_underscore_folders(tmp_path: Path) -> No
         encoding="utf-8",
     )
 
-    # Corrupted / invalid rule placed in _archived
     corrupted_archived = archived_dir / "broken_archived.yaml"
     corrupted_archived.write_text("invalid: [broken yaml content", encoding="utf-8")
 
-    # Lint scanning the root directory should ignore _archived and return 0
     exit_code = main(["lint", "--rules-dir", str(rulesets_dir)])
     assert exit_code == 0
 
@@ -637,63 +537,19 @@ def test_main_update_mitre_json_output(capsys: pytest.CaptureFixture[str]) -> No
     assert data["version"] == "19.2"
 
 
-def test_main_configures_utc_iso8601_log_formatter() -> None:
+def test_main_configures_utc_iso8601_log_formatter(tmp_path: Path) -> None:
     import logging
     import time
 
+    rule_path = _write_clean_rule(tmp_path)
     with patch("graft.cli.main.logging.basicConfig") as mock_basic_config:
-        exit_code = main(["lint", "rulesets/secops/custom/gcp_service_account_key_created.yaml"])
+        exit_code = main(["lint", str(rule_path), "--rules-dir", str(tmp_path / "rulesets")])
     assert exit_code == 0
     assert logging.Formatter.converter is time.gmtime
     mock_basic_config.assert_called_once_with(
         level=logging.INFO,
         format="%(asctime)s [%(levelname)s] %(message)s",
         datefmt="%Y-%m-%dT%H:%M:%SZ",
-    )
-
-
-def test_main_apply_failure_logs_rule_context_and_skips_managed(
-    caplog: pytest.LogCaptureFixture,
-    capsys: pytest.CaptureFixture[str],
-) -> None:
-    import logging
-
-    from graft.engines.secops.client import SecOpsApiError
-
-    with (
-        patch("graft.engines.secops.adapter.SecOpsClient"),
-        patch("graft.engines.secops.adapter.SecOpsDeployerAdapter") as mock_deployer_cls,
-        patch("graft.engines.secops.adapter.SecOpsManagedAdapter") as mock_managed_cls,
-    ):
-        mock_deployer = MagicMock()
-        mock_deployer.list_rules.return_value = ()
-        mock_deployer.create_rule.side_effect = SecOpsApiError(
-            "Invalid syntax",
-            400,
-            status="INVALID_ARGUMENT",
-            method="POST",
-            path="rules",
-        )
-        mock_deployer_cls.return_value = mock_deployer
-
-        mock_managed = MagicMock()
-        mock_managed_cls.return_value = mock_managed
-
-        with caplog.at_level(logging.INFO):
-            exit_code = main(["secops", "apply", "--all", "--env", "staging"])
-
-    assert exit_code == 1
-    captured = capsys.readouterr()
-    assert "Unexpected error:" not in captured.err
-    messages = [r.message for r in caplog.records]
-    assert any(
-        "Failed creating custom rule" in m
-        and "SecOps API Error 400 (INVALID_ARGUMENT) on POST rules: Invalid syntax" in m
-        for m in messages
-    )
-    assert any("Custom rules reconciliation aborted:" in m for m in messages)
-    assert any(
-        "Skipping managed state reconciliation due to custom rules failure" in m for m in messages
     )
 
 
@@ -719,7 +575,7 @@ def test_main_uncaught_exception_logged_via_logger_error(
 
 
 def test_main_lint_treats_rule_named_managed_yaml_as_custom_rule(tmp_path: Path) -> None:
-    custom_dir = tmp_path / "rulesets" / "secops" / "custom"
+    custom_dir = tmp_path / "rulesets" / "siem_alpha" / "custom"
     custom_dir.mkdir(parents=True)
     rule_file = custom_dir / "managed.yaml"
     rule_file.write_text(
@@ -742,7 +598,7 @@ def test_main_lint_treats_rule_named_managed_yaml_as_custom_rule(tmp_path: Path)
 def test_main_lint_and_export_discover_yml_files(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    custom_dir = tmp_path / "rulesets" / "secops" / "custom"
+    custom_dir = tmp_path / "rulesets" / "siem_alpha" / "custom"
     custom_dir.mkdir(parents=True)
     rule_yml = custom_dir / "rule_one.yml"
     rule_yaml = custom_dir / "rule_two.yaml"
@@ -761,7 +617,6 @@ def test_main_lint_and_export_discover_yml_files(
     )
     rule_yml.write_text(shared_body, encoding="utf-8")
 
-    # Export should discover the .yml rule
     exit_code_export = main(
         ["export", "catalog", "--format", "json", "--rules-dir", str(tmp_path / "rulesets")]
     )
@@ -770,35 +625,16 @@ def test_main_lint_and_export_discover_yml_files(
     assert len(exported) == 1
     assert exported[0]["name"] == "dup_yml_rule"
 
-    # Linting a single .yaml file should pre-scan existing .yml files and catch duplicate IDs
     rule_yaml.write_text(shared_body, encoding="utf-8")
     exit_code_lint = main(["lint", str(rule_yaml), "--rules-dir", str(tmp_path / "rulesets")])
     assert exit_code_lint == 1
     assert "Duplicate rule metadata.id" in capsys.readouterr().err
 
 
-def test_main_secops_verify_explicit_managed_rule_or_index_skips_cleanly(
-    capsys: pytest.CaptureFixture[str],
-) -> None:
-    exit_code = main(
-        [
-            "--json",
-            "secops",
-            "verify",
-            "rulesets/secops/managed/gcti_breach_network_indicator_matched.yaml",
-            "rulesets/secops/managed/index.yaml",
-        ]
-    )
-    assert exit_code == 0
-    data = json.loads(capsys.readouterr().out)
-    assert data["success"] is True
-    assert data["total"] == 0
-
-
-def test_main_secops_test_explicit_managed_rule_skips_cleanly(
+def test_engine_test_explicit_managed_rule_skips_cleanly(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    managed_dir = tmp_path / "rulesets" / "secops" / "managed"
+    managed_dir = tmp_path / "rulesets" / "siem_alpha" / "managed"
     managed_dir.mkdir(parents=True)
     managed_rule = managed_dir / "managed_with_tests.yaml"
     managed_rule.write_text(
@@ -813,7 +649,27 @@ def test_main_secops_test_explicit_managed_rule_skips_cleanly(
         '      - timestamp: "2026-09-18T00:00:00Z"\n        payload:\n          k: "v"\n',
         encoding="utf-8",
     )
-    exit_code = main(["--json", "secops", "test", "--require-staging", str(managed_rule)])
+    manifest = EngineManifest(
+        name="siem_alpha",
+        display_name="SIEM Alpha",
+        description="SIEM Alpha Engine",
+        adapter_class="graft.engines.siem_alpha.adapter:SiemAlphaAdapter",
+        capabilities=EngineCapabilities(
+            custom_rules=True,
+            datasets=True,
+            syntax_verification=True,
+            managed_rules=True,
+            replay_testing=True,
+        ),
+    )
+    controller = EngineCommandController(manifest, EngineRegistry())
+    args = argparse.Namespace(
+        engine_command="test",
+        paths=[str(managed_rule)],
+        require_staging=True,
+        changed_only=False,
+    )
+    exit_code = controller.execute(args, json_output=True)
     assert exit_code == 0
     data = json.loads(capsys.readouterr().out)
     assert data["success"] is True
@@ -824,7 +680,7 @@ def test_main_secops_test_explicit_managed_rule_skips_cleanly(
 def test_main_lint_duplicate_file_stem_in_same_engine_fails(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    custom_dir = tmp_path / "rulesets" / "secops" / "custom"
+    custom_dir = tmp_path / "rulesets" / "siem_alpha" / "custom"
     custom_dir.mkdir(parents=True)
     rule_yaml = custom_dir / "same_stem.yaml"
     rule_yml = custom_dir / "same_stem.yml"

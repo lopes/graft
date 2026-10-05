@@ -53,7 +53,7 @@ def test_calculate_mitre_coverage_aggregation() -> None:
 def test_export_navigator_layer_structure() -> None:
     rule = make_dummy_rule("rule_gcp", {"persistence": ("T1098.001",)})
     report = calculate_mitre_coverage(
-        [(rule, "secops", Path("rulesets/secops/custom/rule_gcp.yaml"))]
+        [(rule, "siem_alpha", Path("rulesets/siem_alpha/custom/rule_gcp.yaml"))]
     )
     layer = export_navigator_layer(report, layer_name="Test Layer")
 
@@ -80,7 +80,7 @@ def test_export_navigator_layer_structure() -> None:
     assert "runbook" not in meta_names
 
     assert len(t0["links"]) == 1
-    assert "rulesets/secops/custom/rule_gcp.yaml" in t0["links"][0]["url"]
+    assert "rulesets/siem_alpha/custom/rule_gcp.yaml" in t0["links"][0]["url"]
 
 
 def test_export_navigator_layer_custom_color() -> None:
@@ -114,7 +114,7 @@ def test_export_navigator_layer_silent_status() -> None:
         tests=(),
     )
     report = calculate_mitre_coverage(
-        [(silent_rule, "secops", Path("rulesets/secops/custom/silent_rule.yaml"))]
+        [(silent_rule, "siem_alpha", Path("rulesets/siem_alpha/custom/silent_rule.yaml"))]
     )
     layer = export_navigator_layer(report)
     t0 = layer["techniques"][0]
@@ -142,8 +142,8 @@ def test_export_navigator_layer_managed_rule_type_and_explicit_status() -> None:
         [
             (
                 managed_rule,
-                "secops",
-                Path("rulesets/secops/managed/gcti_breach_network_indicator_matched.yaml"),
+                "siem_alpha",
+                Path("rulesets/siem_alpha/managed/gcti_breach_network_indicator_matched.yaml"),
                 "silent",
             )
         ]

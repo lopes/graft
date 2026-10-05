@@ -162,14 +162,6 @@ tests:
         load_rule_from_str(invalid_mitre_yaml)
 
 
-def test_load_reference_example_rule() -> None:
-    example_path = Path("rulesets/secops/custom/workspace_nrd_email_opened.yaml")
-    envelope = load_rule_from_yaml(example_path)
-    assert envelope.metadata.name == "workspace_nrd_email_opened"
-    assert envelope.deployment.run_frequency == "live"
-    assert len(envelope.tests) == 2
-
-
 def test_dump_rule_and_roundtrip(valid_yaml_content: str, tmp_path: Path) -> None:
     original = load_rule_from_str(valid_yaml_content)
     dump_target = tmp_path / "dumped_rule.yaml"
@@ -232,65 +224,25 @@ def test_rule_to_dict_always_emits_all_metadata_keys_even_when_empty(tmp_path: P
         load_rule_from_yaml(dumped_path)
 
 
-def test_load_rule_from_yaml_resolves_engine_schema_from_rulesets_dir(tmp_path: Path) -> None:
-    rule_dir = tmp_path / "rulesets" / "secops" / "custom"
-    rule_dir.mkdir(parents=True)
-    rule_file = rule_dir / "invalid_freq.yaml"
-    rule_file.write_text(
-        """metadata:
-  id: "c4e9b8f2-89b1-4f81-9b16-928d54128f73"
-  name: "bad_frequency_rule"
-  description: "Detects bad frequency"
-  owners:
-    - "SecOps"
-  mitre:
-    execution:
-      - "T1059.001"
-  tags:
-    - "secops"
-  references:
-    - "Internal"
-logic: |
-  events:
-    $e.metadata.event_type = "USER_LOGIN"
-  condition:
-    $e
-deployment:
-  enabled: true
-  alerting: true
-  run_frequency: "invalid_frequency_value"
-runbook:
-  context: "c"
-  triage: "t"
-  response: "r"
-tests: []
-""",
-        encoding="utf-8",
-    )
-
-    with pytest.raises(RuleLoadError, match="Schema validation failed"):
-        load_rule_from_yaml(rule_file)
-
-
 def test_load_and_roundtrip_registered_managed_rule(tmp_path: Path) -> None:
-    managed_dir = tmp_path / "rulesets" / "secops" / "managed"
+    managed_dir = tmp_path / "rulesets" / "siem_alpha" / "managed"
     managed_dir.mkdir(parents=True)
-    rule_file = managed_dir / "gcti_active_breach_host_indicators.yaml"
+    rule_file = managed_dir / "active_breach_host_indicators.yaml"
     rule_file.write_text(
         """metadata:
   id: "c4e9b8f2-89b1-4f81-9b16-928d54128f73"
-  name: "gcti_active_breach_host_indicators"
-  description: "Registers GCTI Active Breach Priority Host Indicators ruleset."
+  name: "active_breach_host_indicators"
+  description: "Registers Active Breach Priority Host Indicators ruleset."
   owners:
     - "Security Operations"
   mitre:
     command-and-control:
       - "T1071.001"
   tags:
-    - "secops"
+    - "siem_alpha"
     - "managed"
   references:
-    - "https://docs.cloud.google.com/chronicle/docs/detection/curated-detections"
+    - "https://attack.mitre.org/techniques/T1071/001/"
 managed:
   id: "f5533b66-9327-9880-93e6-75a738ac2345"
 runbook:
@@ -321,7 +273,7 @@ tests: []
 
 
 def test_custom_rule_in_managed_dir_fails_schema_validation(tmp_path: Path) -> None:
-    managed_dir = tmp_path / "rulesets" / "secops" / "managed"
+    managed_dir = tmp_path / "rulesets" / "siem_alpha" / "managed"
     managed_dir.mkdir(parents=True)
     bad_file = managed_dir / "custom_in_managed.yaml"
     bad_file.write_text(
@@ -330,12 +282,12 @@ def test_custom_rule_in_managed_dir_fails_schema_validation(tmp_path: Path) -> N
   name: "custom_in_managed"
   description: "Custom rule placed in managed folder"
   owners:
-    - "SecOps"
+    - "Detection Engineering"
   mitre:
     execution:
       - "T1059.001"
   tags:
-    - "secops"
+    - "siem_alpha"
   references:
     - "Internal"
 logic: |

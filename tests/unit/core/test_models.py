@@ -60,7 +60,7 @@ def test_rule_envelope_structure() -> None:
         id="c4e9b8f2-89b1-4f81-9b16-928d54128f73",
         name="powershell_encoded",
         description="Detects suspicious PowerShell command lines",
-        owners=("SecOps",),
+        owners=("Detection Engineering",),
         mitre={"execution": ("T1059.001",)},
         tags=("powershell",),
         references=("Internal Threat Research",),
@@ -91,7 +91,7 @@ def test_rule_envelope_structure() -> None:
     )
 
     assert envelope.metadata.id == "c4e9b8f2-89b1-4f81-9b16-928d54128f73"
-    assert envelope.metadata.owners == ("SecOps",)
+    assert envelope.metadata.owners == ("Detection Engineering",)
     assert envelope.deployment.enabled is True
     assert envelope.deployment.run_frequency == "live"
     assert envelope.runbook.triage.startswith("1. Decode")
@@ -143,12 +143,12 @@ def test_managed_rule_envelope_structure() -> None:
 
     meta = RuleMetadata(
         id="c4e9b8f2-89b1-4f81-9b16-928d54128f73",
-        name="secops_curated_suspicious_exec",
-        description="Registers Google SecOps Malware Signals curated ruleset",
-        owners=("SecOps",),
+        name="curated_suspicious_exec",
+        description="Registers Malware Signals curated ruleset",
+        owners=("Detection Engineering",),
         mitre={"execution": ("T1059.001",)},
-        tags=("secops", "managed"),
-        references=("https://cloud.google.com/chronicle/docs/detection/curated-detections",),
+        tags=("siem_alpha", "managed"),
+        references=("https://attack.mitre.org/techniques/T1059/001/",),
     )
     managed_ref = ManagedRuleRef(id="1c4ab1f6-d801-d6a9-1177-3ec3dd5bcbe9")
     runbook = Runbook(

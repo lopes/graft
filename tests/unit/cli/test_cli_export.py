@@ -6,8 +6,99 @@ import pytest
 from graft.cli.main import main
 
 
-def test_export_matrix_table_stdout(capsys: pytest.CaptureFixture[str]) -> None:
-    exit_code = main(["export", "matrix", "--format", "table"])
+def _write_sample_rulesets(tmp_path: Path) -> Path:
+    rules_dir = tmp_path / "rulesets"
+    custom_dir = rules_dir / "siem_alpha" / "custom"
+    managed_dir = rules_dir / "siem_alpha" / "managed"
+    custom_dir.mkdir(parents=True, exist_ok=True)
+    managed_dir.mkdir(parents=True, exist_ok=True)
+
+    (custom_dir / "workspace_nrd_email_opened.yaml").write_text(
+        """metadata:
+  id: "11111111-1111-1111-1111-111111111111"
+  name: "workspace_nrd_email_opened"
+  description: "Detects newly registered domain email opened."
+  owners:
+    - "Joe Lopes"
+  mitre:
+    initial-access:
+      - "T1566.002"
+  tags:
+    - "email"
+  references:
+    - "https://attack.mitre.org/techniques/T1566/002/"
+logic: "event_type == 'EMAIL_OPENED'"
+deployment:
+  enabled: true
+  alerting: true
+  run_frequency: "live"
+runbook:
+  context: "Context"
+  triage: "Triage"
+  response: "Response"
+tests: []
+""",
+        encoding="utf-8",
+    )
+
+    (custom_dir / "gcp_service_account_key_created.yaml").write_text(
+        """metadata:
+  id: "22222222-2222-2222-2222-222222222222"
+  name: "gcp_service_account_key_created"
+  description: "Detects service account key creation."
+  owners:
+    - "Joe Lopes"
+  mitre:
+    persistence:
+      - "T1098.001"
+  tags:
+    - "iam"
+  references:
+    - "https://attack.mitre.org/techniques/T1098/001/"
+logic: "event_type == 'CREATE_SERVICE_ACCOUNT_KEY'"
+deployment:
+  enabled: true
+  alerting: false
+  run_frequency: "live"
+runbook:
+  context: "Context"
+  triage: "Triage"
+  response: "Response"
+tests: []
+""",
+        encoding="utf-8",
+    )
+
+    (managed_dir / "gcti_breach_network_indicator_matched.yaml").write_text(
+        """metadata:
+  id: "33333333-3333-3333-3333-333333333333"
+  name: "gcti_breach_network_indicator_matched"
+  description: "Detects network breach indicator matches."
+  owners:
+    - "Joe Lopes"
+  mitre:
+    command-and-control:
+      - "T1071.001"
+  tags:
+    - "managed"
+  references:
+    - "https://attack.mitre.org/techniques/T1071/001/"
+managed:
+  id: "433faf9e-4d51-f284-c35b-009528ecff05"
+runbook:
+  context: "Context"
+  triage: "Triage"
+  response: "Response"
+tests: []
+""",
+        encoding="utf-8",
+    )
+    return rules_dir
+
+
+def test_export_matrix_table_stdout(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    rules_dir = _write_sample_rulesets(tmp_path)
+    exit_code = main(["export", "matrix", "--format", "table", "--rules-dir", str(rules_dir)])
     assert exit_code == 0
     captured = capsys.readouterr()
     assert "MITRE ATT&CK Detection Matrix" in captured.out
@@ -15,8 +106,11 @@ def test_export_matrix_table_stdout(capsys: pytest.CaptureFixture[str]) -> None:
     assert "T1098.001" in captured.out
 
 
-def test_export_matrix_navigator_json_stdout(capsys: pytest.CaptureFixture[str]) -> None:
-    exit_code = main(["export", "matrix", "--format", "navigator"])
+def test_export_matrix_navigator_json_stdout(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    rules_dir = _write_sample_rulesets(tmp_path)
+    exit_code = main(["export", "matrix", "--format", "navigator", "--rules-dir", str(rules_dir)])
     assert exit_code == 0
     captured = capsys.readouterr()
     data = json.loads(captured.out)
@@ -29,31 +123,60 @@ def test_export_matrix_navigator_json_stdout(capsys: pytest.CaptureFixture[str])
     assert "T1566.002" in tech_ids
 
 
-def test_export_matrix_engine_and_color_flags(capsys: pytest.CaptureFixture[str]) -> None:
-    exit_code = main(["export", "matrix", "--engine", "secops", "--color", "#2e7d32"])
+def test_export_matrix_engine_and_color_flags(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    rules_dir = _write_sample_rulesets(tmp_path)
+    exit_code = main(
+        [
+            "export",
+            "matrix",
+            "--engine",
+            "siem_alpha",
+            "--color",
+            "#2e7d32",
+            "--rules-dir",
+            str(rules_dir),
+        ]
+    )
     assert exit_code == 0
     captured = capsys.readouterr()
     data = json.loads(captured.out)
-    assert data["name"] == "Graft Detection Coverage (secops)"
+    assert data["name"] == "Graft Detection Coverage (siem_alpha)"
     assert data["gradient"]["colors"] == ["#ffffff", "#2e7d32"]
     assert len(data["techniques"]) >= 1
     t0 = data["techniques"][0]
     assert t0["tactic"] != ""
-    assert any(m["name"] == "engine" and "secops" in m["value"] for m in t0["metadata"])
+    assert any(m["name"] == "engine" and "siem_alpha" in m["value"] for m in t0["metadata"])
     assert len(t0["links"]) >= 1
 
 
-def test_export_matrix_out_file(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+def test_export_matrix_out_file(tmp_path: Path) -> None:
+    rules_dir = _write_sample_rulesets(tmp_path)
     out_file = tmp_path / "matrix.json"
-    exit_code = main(["export", "matrix", "--format", "navigator", "--out", str(out_file)])
+    exit_code = main(
+        [
+            "export",
+            "matrix",
+            "--format",
+            "navigator",
+            "--rules-dir",
+            str(rules_dir),
+            "--out",
+            str(out_file),
+        ]
+    )
     assert exit_code == 0
     assert out_file.is_file()
     data = json.loads(out_file.read_text(encoding="utf-8"))
     assert data["domain"] == "enterprise-attack"
 
 
-def test_export_catalog_table_default_stdout(capsys: pytest.CaptureFixture[str]) -> None:
-    exit_code = main(["export", "catalog"])
+def test_export_catalog_table_default_stdout(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    rules_dir = _write_sample_rulesets(tmp_path)
+    exit_code = main(["export", "catalog", "--rules-dir", str(rules_dir)])
     assert exit_code == 0
     captured = capsys.readouterr()
     assert "Rule Name" in captured.out
@@ -62,15 +185,16 @@ def test_export_catalog_table_default_stdout(capsys: pytest.CaptureFixture[str])
     assert "Runbook" not in captured.out
     assert "workspace_nrd_email_opened" in captured.out
     assert "gcti_breach_network_indicator_matched" in captured.out
-    assert "secops" in captured.out
+    assert "siem_alpha" in captured.out
     assert "custom" in captured.out
     assert "managed" in captured.out
     assert "enabled" in captured.out
     assert "silent" in captured.out
 
 
-def test_export_catalog_markdown_stdout(capsys: pytest.CaptureFixture[str]) -> None:
-    exit_code = main(["export", "catalog", "--format", "markdown"])
+def test_export_catalog_markdown_stdout(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    rules_dir = _write_sample_rulesets(tmp_path)
+    exit_code = main(["export", "catalog", "--format", "markdown", "--rules-dir", str(rules_dir)])
     assert exit_code == 0
     captured = capsys.readouterr()
     assert (
@@ -84,8 +208,9 @@ def test_export_catalog_markdown_stdout(capsys: pytest.CaptureFixture[str]) -> N
     assert "Joe Lopes" in captured.out
 
 
-def test_export_catalog_csv_stdout(capsys: pytest.CaptureFixture[str]) -> None:
-    exit_code = main(["export", "catalog", "--format", "csv"])
+def test_export_catalog_csv_stdout(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    rules_dir = _write_sample_rulesets(tmp_path)
+    exit_code = main(["export", "catalog", "--format", "csv", "--rules-dir", str(rules_dir)])
     assert exit_code == 0
     captured = capsys.readouterr()
     assert (
@@ -98,8 +223,9 @@ def test_export_catalog_csv_stdout(capsys: pytest.CaptureFixture[str]) -> None:
     assert "TA0001:T1566.002" in captured.out
 
 
-def test_export_catalog_json_stdout(capsys: pytest.CaptureFixture[str]) -> None:
-    exit_code = main(["export", "catalog", "--format", "json"])
+def test_export_catalog_json_stdout(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    rules_dir = _write_sample_rulesets(tmp_path)
+    exit_code = main(["export", "catalog", "--format", "json", "--rules-dir", str(rules_dir)])
     assert exit_code == 0
     captured = capsys.readouterr()
     data = json.loads(captured.out)
@@ -124,8 +250,20 @@ def test_export_catalog_json_stdout(capsys: pytest.CaptureFixture[str]) -> None:
 
 
 def test_export_catalog_out_file(tmp_path: Path) -> None:
+    rules_dir = _write_sample_rulesets(tmp_path)
     out_file = tmp_path / "catalog.csv"
-    exit_code = main(["export", "catalog", "--format", "csv", "--out", str(out_file)])
+    exit_code = main(
+        [
+            "export",
+            "catalog",
+            "--format",
+            "csv",
+            "--rules-dir",
+            str(rules_dir),
+            "--out",
+            str(out_file),
+        ]
+    )
     assert exit_code == 0
     assert out_file.is_file()
     content = out_file.read_text(encoding="utf-8")

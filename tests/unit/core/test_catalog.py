@@ -95,9 +95,9 @@ def test_build_catalog_entry_from_rule() -> None:
         tests=(),
     )
 
-    entry = build_catalog_entry_from_rule(rule=rule, engine="secops")
+    entry = build_catalog_entry_from_rule(rule=rule, engine="siem_alpha")
     assert entry.name == "workspace_nrd_phishing"
-    assert entry.engine == "secops"
+    assert entry.engine == "siem_alpha"
     assert entry.rule_type == "custom"
     assert entry.status == "enabled"
     assert entry.mitre_attack == ("TA0001:T1566.002",)
@@ -141,7 +141,7 @@ def test_build_catalog_entry_with_git(tmp_path: Path) -> None:
     )
 
     with patch("graft.core.catalog.extract_git_metadata", return_value=mock_git):
-        entry = build_catalog_entry_from_rule(rule=rule, engine="secops", path=rule_file)
+        entry = build_catalog_entry_from_rule(rule=rule, engine="siem_alpha", path=rule_file)
 
     assert entry.status == "silent"
     assert entry.author == "Alice Smith"
@@ -164,13 +164,11 @@ def test_build_catalog_entry_from_registered_managed_rule() -> None:
         metadata=RuleMetadata(
             id="00000000-0000-0000-0000-000000000010",
             name="gcti_breach_network_indicator_matched",
-            description="Registers GCTI Active Breach Network Indicators ruleset.",
+            description="Registers Active Breach Network Indicators ruleset.",
             owners=("Security Operations",),
             mitre={"command-and-control": ("T1071.001",)},
-            tags=("secops", "managed"),
-            references=(
-                "https://docs.cloud.google.com/chronicle/docs/detection/curated-detections",
-            ),
+            tags=("siem_alpha", "managed"),
+            references=("https://attack.mitre.org/techniques/T1071/001/",),
         ),
         logic="",
         deployment=BaseDeploymentConfig(enabled=False, alerting=False),
@@ -185,7 +183,7 @@ def test_build_catalog_entry_from_registered_managed_rule() -> None:
 
     entry = build_catalog_entry_from_rule(
         rule=rule,
-        engine="secops",
+        engine="siem_alpha",
         adapter=mock_adapter,
         managed_state=mock_state,
     )
@@ -200,7 +198,7 @@ def test_render_catalog_table() -> None:
     entry = CatalogEntry(
         id="00000000-0000-0000-0000-000000000001",
         name="workspace_nrd_phishing",
-        engine="secops",
+        engine="siem_alpha",
         rule_type="custom",
         status="enabled",
         description="A test rule",
@@ -226,7 +224,7 @@ def test_render_catalog_table() -> None:
     assert "Updated" in table
     assert "Runbook" not in table
     assert "workspace_nrd_phishing" in table
-    assert "secops" in table
+    assert "siem_alpha" in table
     assert "custom" in table
     assert "enabled" in table
     assert "TA0001:T1566.002" in table
@@ -237,14 +235,14 @@ def test_export_catalog_markdown() -> None:
     entry = CatalogEntry(
         id="00000000-0000-0000-0000-000000000001",
         name="test_rule",
-        engine="secops",
+        engine="siem_alpha",
         rule_type="custom",
         status="enabled",
         description="A test rule",
         mitre_attack=("TA0001:T1566.002",),
         tags=("workspace",),
         author="Joe Lopes",
-        owners=("Joe Lopes", "SecOps Team"),
+        owners=("Joe Lopes", "SOC Team"),
         owner_count=2,
         created_at="2026-01-01",
         last_modified_at="2026-09-22",
@@ -258,8 +256,8 @@ def test_export_catalog_markdown() -> None:
         in md
     )
     expected_row = (
-        "| `test_rule` | secops | custom | enabled | TA0001:T1566.002 "
-        "| Joe Lopes | Joe Lopes, SecOps Team | 2 |"
+        "| `test_rule` | siem_alpha | custom | enabled | TA0001:T1566.002 "
+        "| Joe Lopes | Joe Lopes, SOC Team | 2 |"
     )
     assert expected_row in md
 
@@ -272,14 +270,14 @@ def test_export_catalog_csv() -> None:
     entry = CatalogEntry(
         id="00000000-0000-0000-0000-000000000001",
         name="test_rule",
-        engine="secops",
+        engine="siem_alpha",
         rule_type="custom",
         status="enabled",
         description="A test rule",
         mitre_attack=("TA0001:T1566.002",),
         tags=("workspace", "phishing"),
         author="Joe Lopes",
-        owners=("Joe Lopes", "SecOps Team"),
+        owners=("Joe Lopes", "SOC Team"),
         owner_count=2,
         created_at="2026-01-01",
         last_modified_at="2026-09-22",
@@ -292,12 +290,12 @@ def test_export_catalog_csv() -> None:
     rows = list(reader)
     assert len(rows) == 1
     assert rows[0]["name"] == "test_rule"
-    assert rows[0]["engine"] == "secops"
+    assert rows[0]["engine"] == "siem_alpha"
     assert rows[0]["status"] == "enabled"
     assert rows[0]["mitre_attack"] == "TA0001:T1566.002"
     assert rows[0]["tags"] == "workspace;phishing"
     assert rows[0]["author"] == "Joe Lopes"
-    assert rows[0]["owners"] == "Joe Lopes;SecOps Team"
+    assert rows[0]["owners"] == "Joe Lopes;SOC Team"
     assert rows[0]["owner_count"] == "2"
     assert rows[0]["created_at"] == "2026-01-01"
     assert rows[0]["last_modified_at"] == "2026-09-22"
@@ -312,14 +310,14 @@ def test_export_catalog_json() -> None:
     entry = CatalogEntry(
         id="00000000-0000-0000-0000-000000000001",
         name="test_rule",
-        engine="secops",
+        engine="siem_alpha",
         rule_type="custom",
         status="enabled",
         description="A test rule",
         mitre_attack=("TA0001:T1566.002",),
         tags=("workspace",),
         author="Joe Lopes",
-        owners=("Joe Lopes", "SecOps Team"),
+        owners=("Joe Lopes", "SOC Team"),
         owner_count=2,
         created_at="2026-01-01",
         last_modified_at="2026-09-22",
@@ -330,11 +328,11 @@ def test_export_catalog_json() -> None:
     payload = export_catalog_json([entry])
     assert len(payload) == 1
     assert payload[0]["name"] == "test_rule"
-    assert payload[0]["engine"] == "secops"
+    assert payload[0]["engine"] == "siem_alpha"
     assert payload[0]["status"] == "enabled"
     assert payload[0]["mitre_attack"] == ["TA0001:T1566.002"]
     assert payload[0]["author"] == "Joe Lopes"
-    assert payload[0]["owners"] == ["Joe Lopes", "SecOps Team"]
+    assert payload[0]["owners"] == ["Joe Lopes", "SOC Team"]
     assert payload[0]["owner_count"] == 2
     assert payload[0]["created_at"] == "2026-01-01"
     assert payload[0]["last_modified_at"] == "2026-09-22"

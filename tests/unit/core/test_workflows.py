@@ -46,22 +46,6 @@ def test_pr_validation_workflow_structure() -> None:
     jobs = data.get("jobs", {})
     assert len(jobs) >= 1, "Workflow must define at least one job"
 
-    cloud_job = jobs.get("secops-cloud-gates", {})
-    assert "dependabot[bot]" in str(cloud_job.get("if", "")), (
-        "secops-cloud-gates must skip dependabot[bot] PRs "
-        "because Actions secrets are not exposed to Dependabot"
-    )
-    cloud_perms = cloud_job.get("permissions", {})
-    assert cloud_perms.get("id-token") == "write", (
-        "secops-cloud-gates must declare id-token: write for WIF OIDC"
-    )
-    assert cloud_perms.get("pull-requests") == "write", (
-        "secops-cloud-gates must declare pull-requests: write for PR diff comments"
-    )
-    assert cloud_perms.get("issues") == "write", (
-        "secops-cloud-gates must declare issues: write for PR diff comments"
-    )
-
     # 3. Step verification
     all_steps: list[dict[str, Any]] = []
     for job in jobs.values():
@@ -82,14 +66,6 @@ def test_pr_validation_workflow_structure() -> None:
 
     assert any("actions/checkout@v7" in u for u in step_uses), "Must use actions/checkout@v7"
     assert any("astral-sh/setup-uv@v7" in u for u in step_uses), "Must use astral-sh/setup-uv@v7"
-    assert any("google-github-actions/auth@v3" in u for u in step_uses), (
-        "Must use google-github-actions/auth@v3 for WIF"
-    )
-    assert any("graft secops verify --env staging" in r for r in step_runs), (
-        "Must execute graft secops verify --env staging to match staging/fallback SA token"
-    )
-    assert any("graft secops test" in r for r in step_runs), "Must execute graft secops test"
-    assert any("graft secops diff" in r for r in step_runs), "Must execute graft secops diff"
 
 
 def test_deploy_production_workflow_structure() -> None:
@@ -118,7 +94,7 @@ def test_deploy_production_workflow_structure() -> None:
     has_id_token = permissions.get("id-token") == "write" or any(
         j.get("permissions", {}).get("id-token") == "write" for j in jobs.values()
     )
-    assert has_id_token, "Workflow must declare id-token: write for WIF OIDC"
+    assert has_id_token, "Workflow must declare id-token: write for OIDC federation"
 
     # 3. Steps
     all_steps: list[dict[str, Any]] = []
@@ -134,10 +110,6 @@ def test_deploy_production_workflow_structure() -> None:
     )
     assert any("actions/checkout@v7" in u for u in step_uses), "Must use actions/checkout@v7"
     assert any("astral-sh/setup-uv@v7" in u for u in step_uses), "Must use astral-sh/setup-uv@v7"
-    assert any("google-github-actions/auth@v3" in u for u in step_uses), (
-        "Must use google-github-actions/auth@v3"
-    )
-    assert any("graft secops apply" in r for r in step_runs), "Must execute graft secops apply"
     assert any("graft export matrix" in r for r in step_runs), "Must export threat matrix layer"
     assert any("graft export catalog" in r for r in step_runs), "Must export catalog"
     assert any("actions/upload-artifact@v7" in u for u in step_uses), (
