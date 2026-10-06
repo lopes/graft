@@ -150,3 +150,42 @@ def test_replay_harness_port_conformance() -> None:
     res = harness.run_test_vector(envelope, vec)
     assert res.passed is True
     assert res.test_id == "test_1"
+
+
+def test_engine_adapter_default_rule_logic_and_dataset_validation() -> None:
+    from graft.core.ports.engine import EngineAdapter
+
+    class DummyAdapter(EngineAdapter):
+        def __init__(self, env: str = "production") -> None:
+            self.env = env
+
+        def get_compiler(self) -> RuleCompilerPort | None:
+            return None
+
+        def get_deployer(self) -> RuleDeployerPort | None:
+            return None
+
+        def get_managed(self) -> ManagedEnginePort | None:
+            return None
+
+        def get_replay(self) -> ReplayHarnessPort | None:
+            return None
+
+    adapter = DummyAdapter()
+    assert (
+        adapter.get_default_rule_logic("login_spike")
+        == 'events | where rule_name == "login_spike" and event_type == "USER_LOGIN"'
+    )
+    meta = RuleMetadata(
+        id="c4e9b8f2-89b1-4f81-9b16-928d54128f73",
+        name="login_spike",
+        description="Desc",
+    )
+    envelope = RuleEnvelope(
+        metadata=meta,
+        logic="events | where src_ip in known_scanner_ips",
+        deployment=BaseDeploymentConfig(),
+        runbook=Runbook(),
+        tests=(),
+    )
+    adapter.validate_rule_dataset_references(envelope, {"known_scanner_ips"})

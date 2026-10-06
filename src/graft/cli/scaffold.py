@@ -6,6 +6,7 @@ from pathlib import Path
 
 import yaml
 
+from graft.core.engine_registry import EngineError, EngineRegistry
 from graft.core.validation.schema_validator import SchemaValidator
 
 IDENTIFIER_PATTERN = re.compile(r"^[a-z0-9]+(?:_[a-z0-9]+)*$")
@@ -64,6 +65,7 @@ def scaffold_engine(name: str, project_root: Path | None = None) -> dict[str, Pa
         raise ScaffoldError(f"Engine '{name}' already exists at {engine_dir}")
 
     schemas_dir = engine_dir / "schemas"
+    docs_dir = engine_dir / "docs"
     tests_engine_dir = root / "tests" / "engines" / name
     rules_custom_dir = root / "rulesets" / name / "custom"
     rules_managed_dir = root / "rulesets" / name / "managed"
@@ -71,6 +73,7 @@ def scaffold_engine(name: str, project_root: Path | None = None) -> dict[str, Pa
 
     engine_dir.mkdir(parents=True, exist_ok=True)
     schemas_dir.mkdir(parents=True, exist_ok=True)
+    docs_dir.mkdir(parents=True, exist_ok=True)
     tests_engine_dir.mkdir(parents=True, exist_ok=True)
     rules_custom_dir.mkdir(parents=True, exist_ok=True)
     rules_managed_dir.mkdir(parents=True, exist_ok=True)
@@ -434,24 +437,36 @@ def test_{name}_adapter_protocol_conformance() -> None:
     example_rule_file = scaffold_rule(name, f"{name}_example_rule", project_root=root)
     created_files["example_rule"] = example_rule_file
 
-    # 8. Append engine config section to .env.example and .env if present
-    section_tag = f"# ENGINE: {name.upper()}"
-    section_stub = f"""
-
-# ==============================================================================
-# ENGINE: {name.upper()}
-# ==============================================================================
-# Configuration and credentials for {name}
-# GRAFT_{name.upper()}_API_KEY=
-"""
-    for env_filename in (".env.example", ".env"):
-        env_path = root / env_filename
-        if env_path.exists():
-            content = env_path.read_text(encoding="utf-8")
-            if section_tag not in content:
-                env_path.write_text(content.rstrip() + section_stub, encoding="utf-8")
+    # 8. Engine-scoped .env.example inside src/graft/engines/{name}/.env.example
+    env_example_file = engine_dir / ".env.example"
+    env_example_content = (
+        f"# {'=' * 78}\n"
+        f"# ENGINE: {name.upper()}\n"
+        f"# {'=' * 78}\n"
+        f"# Configuration and credentials for {name}\n"
+        f"# Copy to src/graft/engines/{name}/.env or merge into the root .env file.\n"
+        f"# GRAFT_{name.upper()}_API_KEY=\n"
+    )
+    env_example_file.write_text(env_example_content, encoding="utf-8")
+    created_files["env_example"] = env_example_file
 
     return created_files
+
+
+def _resolve_default_rule_logic(engine: str, rule_name: str, root: Path) -> str:
+    fallback = f'events | where rule_name == "{rule_name}" and event_type == "USER_LOGIN"'
+    engines_dir = root / "src" / "graft" / "engines"
+    candidates: tuple[Path | None, ...] = (engines_dir, None) if engines_dir.is_dir() else (None,)
+    for candidate_dir in candidates:
+        registry = EngineRegistry(engines_dir=candidate_dir)
+        if not registry.has(engine):
+            continue
+        try:
+            adapter = registry.load_adapter(engine)
+        except EngineError:
+            return fallback
+        return adapter.get_default_rule_logic(rule_name)
+    return fallback
 
 
 def scaffold_rule(
@@ -516,14 +531,7 @@ def scaffold_rule(
     else:
         dest.parent.mkdir(parents=True, exist_ok=True)
         rule_uuid = str(uuid.uuid4())
-        default_logic = (
-            """events:
-  $e.metadata.event_type = "USER_LOGIN"
-condition:
-  $e"""
-            if engine == "secops"
-            else f'events | where rule_name == "{rule_name}" and event_type == "USER_LOGIN"'
-        )
+        default_logic = _resolve_default_rule_logic(engine, rule_name, root)
 
         doc = {
             "metadata": {

@@ -160,7 +160,7 @@ values:
         encoding="utf-8",
     )
 
-    custom_dir = tmp_path / "rulesets" / "secops" / "custom"
+    custom_dir = tmp_path / "rulesets" / "siem_alpha" / "custom"
     custom_dir.mkdir(parents=True)
     (custom_dir / "multiple_hosts_scanned.yaml").write_text(
         """metadata:
@@ -191,17 +191,17 @@ tests: []
         encoding="utf-8",
     )
 
-    managed_dir = tmp_path / "rulesets" / "secops" / "managed"
+    managed_dir = tmp_path / "rulesets" / "siem_alpha" / "managed"
     managed_dir.mkdir(parents=True)
     (managed_dir / "index.yaml").write_text("categories: []\nexclusions: []\n", encoding="utf-8")
 
 
 def _make_manifest() -> EngineManifest:
     return EngineManifest(
-        name="secops",
-        display_name="Google SecOps",
-        description="Google SecOps Engine",
-        adapter_class="graft.engines.secops.adapter:SecOpsAdapter",
+        name="siem_alpha",
+        display_name="SIEM Alpha",
+        description="SIEM Alpha Engine",
+        adapter_class="graft.engines.siem_alpha.adapter:SiemAlphaAdapter",
         capabilities=EngineCapabilities(
             custom_rules=True,
             datasets=True,
@@ -314,10 +314,8 @@ def test_pull_excludes_datasets_on_target_all_and_pulls_on_target_datasets(
             name="known_scanner_ips",
             description="Pulled scanner IPs.",
             owners=("SOC",),
-            tags=("secops", "dataset"),
-            references=(
-                "https://cloud.google.com/chronicle/docs/reference/rest/v1alpha/projects.locations.instances.dataTables",
-            ),
+            tags=("siem_alpha", "dataset"),
+            references=("https://example.com/docs/datatables",),
         ),
         values=("10.10.0.50",),
     )
@@ -334,8 +332,8 @@ def test_pull_excludes_datasets_on_target_all_and_pulls_on_target_datasets(
         env="production",
         target="all",
         force=False,
-        out_dir=str(tmp_path / "rulesets/secops/custom"),
-        out_manifest=str(tmp_path / "rulesets/secops/managed/index.yaml"),
+        out_dir=str(tmp_path / "rulesets/siem_alpha/custom"),
+        out_manifest=str(tmp_path / "rulesets/siem_alpha/managed/index.yaml"),
         out_datasets_dir=str(tmp_path / "datasets"),
     )
     rc_all = controller.execute(args_all, json_output=True)
@@ -350,8 +348,8 @@ def test_pull_excludes_datasets_on_target_all_and_pulls_on_target_datasets(
         env="production",
         target="datasets",
         force=False,
-        out_dir=str(tmp_path / "rulesets/secops/custom"),
-        out_manifest=str(tmp_path / "rulesets/secops/managed/index.yaml"),
+        out_dir=str(tmp_path / "rulesets/siem_alpha/custom"),
+        out_manifest=str(tmp_path / "rulesets/siem_alpha/managed/index.yaml"),
         out_datasets_dir=str(tmp_path / "datasets"),
     )
     rc_ds = controller.execute(args_ds, json_output=True)
@@ -370,13 +368,13 @@ def test_register_engine_commands_includes_datasets_target() -> None:
     manifest = _make_manifest()
     register_engine_commands(subparsers, manifest, EngineRegistry())
 
-    parsed_diff = parser.parse_args(["secops", "diff", "--target", "datasets"])
+    parsed_diff = parser.parse_args(["siem_alpha", "diff", "--target", "datasets"])
     assert parsed_diff.target == "datasets"
 
-    parsed_apply = parser.parse_args(["secops", "apply", "--target", "datasets"])
+    parsed_apply = parser.parse_args(["siem_alpha", "apply", "--target", "datasets"])
     assert parsed_apply.target == "datasets"
 
-    parsed_pull = parser.parse_args(["secops", "pull", "--target", "datasets"])
+    parsed_pull = parser.parse_args(["siem_alpha", "pull", "--target", "datasets"])
     assert parsed_pull.target == "datasets"
 
 

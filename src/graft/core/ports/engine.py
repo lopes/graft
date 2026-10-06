@@ -59,3 +59,13 @@ class EngineAdapter(Protocol):
 
     def dump_managed_manifest(self, state: ManagedState, path: Path) -> None:
         return None
+
+    def get_default_rule_logic(self, rule_name: str) -> str:
+        return f'events | where rule_name == "{rule_name}" and event_type == "USER_LOGIN"'
+
+    def validate_rule_dataset_references(
+        self,
+        rule: RuleEnvelope,
+        local_dataset_names: set[str],
+    ) -> None:
+        return None

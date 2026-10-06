@@ -82,7 +82,7 @@ def test_lint_scans_both_rulesets_and_datasets_by_default(tmp_path: Path) -> Non
     archived.write_text("not: valid: dataset", encoding="utf-8")
 
     _write_custom_rule(
-        rules_dir / "secops" / "custom" / "multiple_hosts_scanned.yaml",
+        rules_dir / "siem_alpha" / "custom" / "multiple_hosts_scanned.yaml",
         name="multiple_hosts_scanned",
         logic=(
             "  events:\n"
@@ -101,110 +101,47 @@ def test_lint_scans_both_rulesets_and_datasets_by_default(tmp_path: Path) -> Non
     assert rc == 0
 
 
-def test_lint_rule_referencing_local_dataset_with_wrong_or_missing_column_fails(
+def test_lint_delegates_dataset_reference_validation_to_engine_adapter(
     tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
+    from unittest.mock import MagicMock
+
     datasets_dir = tmp_path / "datasets"
     rules_dir = tmp_path / "rulesets"
     _write_dataset(datasets_dir / "known_scanner_ips.yaml")
 
-    # 1. Wrong column (.ip instead of .value)
-    bad_col_rule = _write_custom_rule(
-        rules_dir / "secops" / "custom" / "bad_col_rule.yaml",
-        name="bad_col_rule",
-        logic=(
-            "  events:\n"
-            '    $e.metadata.event_type = "NETWORK_CONNECTION"\n'
-            "    not $e.principal.ip in %known_scanner_ips.ip\n"
-            "  condition:\n"
-            "    $e"
-        ),
+    bad_rule = _write_custom_rule(
+        rules_dir / "siem_alpha" / "custom" / "bad_ref_rule.yaml",
+        name="bad_ref_rule",
+        logic="  query referencing %known_scanner_ips.wrong_col",
         rule_uuid="11111111-2222-3333-4444-555555555551",
     )
+
+    mock_adapter = MagicMock()
+    mock_adapter.validate_rule_dataset_references.side_effect = ValueError(
+        "Dataset 'known_scanner_ips' must be referenced via 'known_scanner_ips.value'"
+    )
+
+    monkeypatch.setattr(
+        "graft.cli.commands_core.EngineRegistry.get",
+        lambda self, name: MagicMock(name=name),
+    )
+    monkeypatch.setattr(
+        "graft.cli.commands_core.EngineRegistry.load_adapter",
+        lambda self, name, env="staging": mock_adapter,
+    )
+
     rc = execute_lint(
-        paths=[str(bad_col_rule)],
+        paths=[str(bad_rule)],
         rules_dir=str(rules_dir),
         datasets_dir=str(datasets_dir),
     )
     assert rc == 1
     err_out = capsys.readouterr().err
     assert "known_scanner_ips.value" in err_out
-
-    # 2. Missing column (%known_scanner_ips without .value)
-    missing_col_rule = _write_custom_rule(
-        rules_dir / "secops" / "custom" / "missing_col_rule.yaml",
-        name="missing_col_rule",
-        logic=(
-            "  events:\n"
-            '    $e.metadata.event_type = "NETWORK_CONNECTION"\n'
-            "    not $e.principal.ip in %known_scanner_ips\n"
-            "  condition:\n"
-            "    $e"
-        ),
-        rule_uuid="11111111-2222-3333-4444-555555555552",
-    )
-    rc2 = execute_lint(
-        paths=[str(missing_col_rule)],
-        rules_dir=str(rules_dir),
-        datasets_dir=str(datasets_dir),
-    )
-    assert rc2 == 1
-    assert "known_scanner_ips.value" in capsys.readouterr().err
-
-
-def test_lint_rule_referencing_local_dataset_with_cidr_or_regex_operator_fails(
-    tmp_path: Path,
-    capsys: pytest.CaptureFixture[str],
-) -> None:
-    datasets_dir = tmp_path / "datasets"
-    rules_dir = tmp_path / "rulesets"
-    _write_dataset(datasets_dir / "known_scanner_ips.yaml")
-
-    cidr_rule = _write_custom_rule(
-        rules_dir / "secops" / "custom" / "cidr_op_rule.yaml",
-        name="cidr_op_rule",
-        logic=(
-            "  events:\n"
-            '    $e.metadata.event_type = "NETWORK_CONNECTION"\n'
-            "    not $e.principal.ip in cidr %known_scanner_ips.value\n"
-            "  condition:\n"
-            "    $e"
-        ),
-        rule_uuid="11111111-2222-3333-4444-555555555553",
-    )
-    rc = execute_lint(
-        paths=[str(cidr_rule)],
-        rules_dir=str(rules_dir),
-        datasets_dir=str(datasets_dir),
-    )
-    assert rc == 1
-    assert "string" in capsys.readouterr().err.lower()
-
-
-def test_lint_rule_referencing_unmanaged_external_table_passes(tmp_path: Path) -> None:
-    datasets_dir = tmp_path / "datasets"
-    rules_dir = tmp_path / "rulesets"
-    _write_dataset(datasets_dir / "known_scanner_ips.yaml")
-
-    ext_rule = _write_custom_rule(
-        rules_dir / "secops" / "custom" / "external_table_rule.yaml",
-        name="external_table_rule",
-        logic=(
-            "  events:\n"
-            '    $e.metadata.event_type = "NETWORK_CONNECTION"\n'
-            "    not $e.principal.ip in cidr %external_cmdb_subnets.cidr_block\n"
-            "  condition:\n"
-            "    $e"
-        ),
-        rule_uuid="11111111-2222-3333-4444-555555555554",
-    )
-    rc = execute_lint(
-        paths=[str(ext_rule)],
-        rules_dir=str(rules_dir),
-        datasets_dir=str(datasets_dir),
-    )
-    assert rc == 0
+    mock_adapter.validate_rule_dataset_references.assert_called_once()
 
 
 def test_scaffold_dataset_via_function_and_cli(

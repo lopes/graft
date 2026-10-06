@@ -248,7 +248,7 @@ def test_engine_manifest_supports_datasets_capability(tmp_path: Path) -> None:
         """name: mock_eng
 display_name: Mock Engine
 description: Mock engine with dataset support
-adapter_class: graft.engines.secops.adapter:SecOpsAdapter
+adapter_class: graft.engines.mock_eng.adapter:MockEngAdapter
 capabilities:
   custom_rules: true
   datasets: true

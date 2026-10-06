@@ -88,7 +88,7 @@ To maintain strict architectural boundaries, responsibilities are cleanly divide
 | **Reusable Datasets & TTL Expiration** | Provides `DatasetEnvelope` model (`datasets/<name>.yaml`), `base_dataset.schema.json` (`0..1,000` strings), UTC `ttl:YYYY-MM-DD` inline comment evaluation, `datasets/_archived/` deprecation (`deprecated=True`, `description="Deprecated on Graft"`), `%<name>.value` rule cross-validation, and additive `DatasetReconciler`. | Implements `DatasetPort` (`list_datasets`, `create_dataset`, `update_dataset`) mapping 1-D string lists to SIEM-native lookup tables (single `STRING` column named `value`), including explicit `0`-row creation and row-clearing logic when all `ttl:` entries expire or a dataset is archived. |
 | **Detection Rule Schema** | Loads and validates base envelope structures (`base_custom.schema.json` for `custom/*.yaml`, `base_managed.schema.json` for `managed/<rule>.yaml`, and `base_dataset.schema.json` for `datasets/*.yaml`). | Provides `schemas/custom.schema.json` (extending `base_custom.schema.json`) for custom rules and `schemas/managed.schema.json` for `managed/index.yaml`. |
 | **Reconciliation Logic** | Computes diffs, evaluates Scoped vs. Full Catalog scopes, and enforces execution order (`Datasets` $\rightarrow$ `Custom Rules` $\rightarrow$ `Managed Content`). | Executes atomic remote API calls (`create_dataset`, `update_dataset`, `create_rule`, `update_rule`, `set_rule_state`, `set_ruleset_deployment`). |
-| **Authentication & HTTP** | Manages environment variable resolution and `.env` loading. | Establishes authenticated sessions (STS/WIF, OAuth2, API tokens) and issues HTTP requests via `urllib.request`. |
+| **Authentication & HTTP** | Loads root `.env` and `src/graft/engines/*/.env` without overriding process environment variables. | Establishes authenticated sessions (STS/WIF, OAuth2, API tokens) and issues HTTP requests via `urllib.request`. |
 | **Syntax Verification** | Orchestrates file discovery and aggregates compiler results. | Invokes the vendor's syntax validation API (e.g., Chronicle `:verifyRuleText` with local dataset placeholder fallback or Azure API syntax check). |
 | **Synthetic Replay** | Parses `tests:` block fixtures and evaluates expected match counts. | Pre-syncs referenced local datasets to staging, transports synthetic events to staging quarantine, and executes detection evaluation. |
 | **Vendor Managed Content** | Validates `managed/index.yaml` against `schemas/managed.schema.json`, computes exclusion/ruleset diffs, and enforces 1-to-1 `managed.id` uniqueness and existence against `index.yaml`. | Defines the engine-specific `managed/index.yaml` structure with a unique `id` per managed rule/ruleset, interacts with vendor curated rules APIs, and implements `has_managed_rule_id`. |
@@ -145,6 +145,15 @@ class EngineAdapter(Protocol):
     def dump_managed_manifest(self, state: ManagedState, path: Path) -> None: ...
 
     def has_managed_rule_id(self, managed_id: str, state: ManagedState) -> bool: ...
+
+    def get_default_rule_logic(self, rule_name: str) -> str: ...
+
+    def validate_rule_dataset_references(
+        self,
+        rule_path: Path,
+        logic: str,
+        valid_dataset_names: set[str],
+    ) -> list[str]: ...
 ```
 
 The composite adapter acts as a capabilities factory and lifecycle hook provider:
@@ -154,6 +163,8 @@ The composite adapter acts as a capabilities factory and lifecycle hook provider
 - **`deconstruct_rule(remote_rule)`:** Extracts embedded metadata from a raw remote rule during `pull` (defaults to returning `remote_rule` unchanged).
 - **`load_managed_manifest(path)` / `dump_managed_manifest(state, path)`:** Parses and serializes `rulesets/<engine>/managed/index.yaml` when `managed_rules: true` (defaults to `None`).
 - **`has_managed_rule_id(managed_id, state)`:** Verifies whether a registered managed rule's `managed.id` exists in the parsed `ManagedState` from `rulesets/<engine>/managed/index.yaml`. Used by `graft lint` to enforce referential integrity between `rulesets/<engine>/managed/<rule_name>.yaml` and `index.yaml`.
+- **`get_default_rule_logic(rule_name)`:** Returns the default query logic snippet injected when scaffolding a new custom rule via `graft <engine> new <name>` or `graft new rule <name> --engine <engine>`.
+- **`validate_rule_dataset_references(rule_path, logic, valid_dataset_names)`:** Validates engine-specific dataset reference syntax inside `rule.logic` against `datasets/*.yaml` during `graft lint` (defaults to `[]`).
 
 ---
 

@@ -1,5 +1,4 @@
 import json
-import re
 import sys
 from pathlib import Path
 from typing import Any
@@ -35,7 +34,6 @@ from graft.core.validation.mitre_validator import update_mitre_taxonomy
 from graft.core.validation.schema_validator import SchemaValidator
 
 _MANIFEST_FILENAMES = ("index.yaml", "index.yml")
-_DATASET_REF_RE = re.compile(r"%(?P<name>[a-zA-Z0-9_]+)(?:\.(?P<col>[a-zA-Z0-9_]+))?")
 
 
 def _iter_yaml_files(directory: Path) -> list[Path]:
@@ -62,41 +60,6 @@ def _is_dataset_path(file_path: Path, datasets_dir: str) -> bool:
         return True
     except ValueError:
         return False
-
-
-def _validate_rule_dataset_references(
-    rule: RuleEnvelope,
-    local_dataset_names: set[str],
-) -> None:
-    if not rule.logic or not local_dataset_names:
-        return
-    uncommented_lines = [re.sub(r"//.*$", "", line) for line in rule.logic.splitlines()]
-    uncommented_logic = "\n".join(uncommented_lines)
-    uncommented_logic = re.sub(r"/\*.*?\*/", "", uncommented_logic, flags=re.DOTALL)
-
-    for match in _DATASET_REF_RE.finditer(uncommented_logic):
-        ds_name = match.group("name")
-        if ds_name not in local_dataset_names:
-            continue
-        col = match.group("col")
-        if col != "value":
-            raise ValueError(
-                f"Rule '{rule.metadata.name}' references local dataset '{ds_name}' as "
-                f"'{match.group(0)}'; Graft datasets are single-column string lists and "
-                f"must be referenced as '%{ds_name}.value'"
-            )
-        op_match = re.search(
-            rf"\bin\s+(?P<op>cidr|regex)\s+%{re.escape(ds_name)}(?:\.[a-zA-Z0-9_]+)?\b",
-            uncommented_logic,
-            flags=re.IGNORECASE,
-        )
-        if op_match:
-            op = op_match.group("op")
-            raise ValueError(
-                f"Rule '{rule.metadata.name}' uses 'in {op}' with local dataset "
-                f"'%{ds_name}.value'; Graft datasets are literal string lists and only "
-                f"support string membership ('in %{ds_name}.value')"
-            )
 
 
 def _infer_engine_from_path(file_path: Path) -> str:
@@ -261,8 +224,15 @@ def execute_lint(
                             break
                         continue
 
-                    if not rule.is_managed:
-                        _validate_rule_dataset_references(rule, local_dataset_names)
+                    if engine not in adapters:
+                        try:
+                            adapters[engine] = registry.load_adapter(engine)
+                        except Exception:
+                            adapters[engine] = None
+                    adapter = adapters[engine]
+
+                    if not rule.is_managed and adapter is not None:
+                        adapter.validate_rule_dataset_references(rule, local_dataset_names)
 
                     if rule.is_managed and rule.managed is not None:
                         index_path = _resolve_index_manifest_path(file_path, engine, rules_dir)
@@ -271,12 +241,6 @@ def execute_lint(
                                 f"Managed index manifest not found at '{index_path}' "
                                 f"to validate managed.id '{rule.managed.id}'"
                             )
-                        if engine not in adapters:
-                            try:
-                                adapters[engine] = registry.load_adapter(engine)
-                            except Exception:
-                                adapters[engine] = None
-                        adapter = adapters[engine]
                         if adapter is not None:
                             cache_key = (engine, index_path.resolve())
                             if cache_key not in managed_states:

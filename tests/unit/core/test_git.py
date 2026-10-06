@@ -12,7 +12,10 @@ def test_get_changed_files_branch_diff(tmp_path: Path) -> None:
             return subprocess.CompletedProcess(
                 args=cmd,
                 returncode=0,
-                stdout="rulesets/secops/custom/rule_a.yaml\nrulesets/secops/managed/index.yaml\n",
+                stdout=(
+                    "rulesets/siem_alpha/custom/rule_a.yaml\n"
+                    "rulesets/siem_alpha/managed/index.yaml\n"
+                ),
                 stderr="",
             )
         return subprocess.CompletedProcess(args=cmd, returncode=0, stdout="", stderr="")
@@ -21,8 +24,8 @@ def test_get_changed_files_branch_diff(tmp_path: Path) -> None:
         changed = get_changed_files(cwd=tmp_path)
 
     expected = {
-        (tmp_path / "rulesets/secops/custom/rule_a.yaml").resolve(),
-        (tmp_path / "rulesets/secops/managed/index.yaml").resolve(),
+        (tmp_path / "rulesets/siem_alpha/custom/rule_a.yaml").resolve(),
+        (tmp_path / "rulesets/siem_alpha/managed/index.yaml").resolve(),
     }
     assert changed == expected
 
@@ -36,7 +39,7 @@ def test_get_changed_files_fallback_to_main(tmp_path: Path) -> None:
             return subprocess.CompletedProcess(
                 args=cmd,
                 returncode=0,
-                stdout="rulesets/secops/custom/rule_b.yaml\n",
+                stdout="rulesets/siem_alpha/custom/rule_b.yaml\n",
                 stderr="",
             )
         return subprocess.CompletedProcess(args=cmd, returncode=0, stdout="", stderr="")
@@ -44,7 +47,7 @@ def test_get_changed_files_fallback_to_main(tmp_path: Path) -> None:
     with patch("subprocess.run", side_effect=fake_subprocess_run):
         changed = get_changed_files(cwd=tmp_path)
 
-    assert (tmp_path / "rulesets/secops/custom/rule_b.yaml").resolve() in changed
+    assert (tmp_path / "rulesets/siem_alpha/custom/rule_b.yaml").resolve() in changed
 
 
 def test_get_changed_files_includes_working_tree_and_untracked(tmp_path: Path) -> None:
@@ -56,14 +59,14 @@ def test_get_changed_files_includes_working_tree_and_untracked(tmp_path: Path) -
             return subprocess.CompletedProcess(
                 args=cmd,
                 returncode=0,
-                stdout="rulesets/secops/custom/modified_unstaged.yaml\n",
+                stdout="rulesets/siem_alpha/custom/modified_unstaged.yaml\n",
                 stderr="",
             )
         if "ls-files --others" in cmd_str:
             return subprocess.CompletedProcess(
                 args=cmd,
                 returncode=0,
-                stdout="rulesets/secops/custom/new_untracked.yaml\n",
+                stdout="rulesets/siem_alpha/custom/new_untracked.yaml\n",
                 stderr="",
             )
         return subprocess.CompletedProcess(args=cmd, returncode=0, stdout="", stderr="")
@@ -71,8 +74,8 @@ def test_get_changed_files_includes_working_tree_and_untracked(tmp_path: Path) -
     with patch("subprocess.run", side_effect=fake_subprocess_run):
         changed = get_changed_files(cwd=tmp_path)
 
-    assert (tmp_path / "rulesets/secops/custom/modified_unstaged.yaml").resolve() in changed
-    assert (tmp_path / "rulesets/secops/custom/new_untracked.yaml").resolve() in changed
+    assert (tmp_path / "rulesets/siem_alpha/custom/modified_unstaged.yaml").resolve() in changed
+    assert (tmp_path / "rulesets/siem_alpha/custom/new_untracked.yaml").resolve() in changed
 
 
 def test_get_changed_files_git_error_returns_empty(tmp_path: Path) -> None:
@@ -94,7 +97,7 @@ def test_get_changed_files_clean_branch_does_not_fallback_to_head_minus_one(tmp_
             return subprocess.CompletedProcess(
                 args=cmd,
                 returncode=0,
-                stdout="rulesets/secops/custom/old_committed_rule.yaml\n",
+                stdout="rulesets/siem_alpha/custom/old_committed_rule.yaml\n",
                 stderr="",
             )
         return subprocess.CompletedProcess(args=cmd, returncode=0, stdout="", stderr="")

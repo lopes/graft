@@ -15,6 +15,7 @@ graft/
 │   └── <name>.yaml           # 2-block reusable string datasets shared across engines
 ├── src/graft/engines/<engine>/
 │   ├── engine.yaml           # Declarative manifest (capabilities, envs, vars)
+│   ├── .env.example          # Engine-scoped environment variable template
 │   ├── adapter.py            # Primary EngineAdapter protocol implementation
 │   ├── config.py             # Tenant coordinates & auth resolution
 │   ├── datasets.py           # Dataset synchronization (DatasetPort)
@@ -23,7 +24,8 @@ graft/
 │   ├── managed.py            # Managed state sync (ManagedEnginePort)
 │   ├── replay.py             # Synthetic replay harness (ReplayHarnessPort)
 │   ├── schemas/              # Co-located engine schemas (custom.schema.json, managed.schema.json)
-│   └── README.md             # Engine-specific documentation
+│   ├── docs/                 # Co-located engine setup guides & operational runbooks
+│   └── README.md             # Engine package overview
 ├── tests/engines/<engine>/   # Engine unit & contract tests
 └── rulesets/<engine>/
     ├── _archived/            # Decommissioned rules preserved for audit history
@@ -45,20 +47,22 @@ Based on the capabilities declared in `engine.yaml`, [`EngineCommandController`]
 graft <engine> [subcommands...]
 ```
 
-For example, the Google SecOps engine mounts:
-- `graft secops new <name>`: Bootstrap a new SecOps YARA-L rule envelope.
-- `graft secops verify [paths...]`: Lint locally and dry-run YARA-L syntax via Chronicle `:verifyRuleText`.
-- `graft secops test [paths...]`: Execute synthetic UDM replay tests in isolated staging quarantine (pre-syncing referenced local datasets).
-- `graft secops diff`: Compute delta between Git and SecOps tenant (supports `--target datasets|custom|managed|all` and `--all` for full catalog drift).
-- `graft secops apply`: Apply desired Git state to SecOps tenant in order (`datasets` $\rightarrow$ `custom` $\rightarrow$ `managed`).
-- `graft secops pull`: Pull detection rules, managed state, or compatible datasets (`--target datasets`) from SecOps tenant to local repository.
-- `graft secops datasets {diff,apply,pull}`: Granular commands for Google SecOps Data Tables (`datasets/<name>.yaml`).
-- `graft secops managed {diff,apply,pull}`: Granular commands for Google Curated Rule Sets and exclusions.
+For example, an engine declaring all five capabilities (such as `secops`) mounts:
+- `graft <engine> new <name>`: Bootstrap a new custom rule envelope (or `--managed <id>` for a registered managed rule).
+- `graft <engine> verify [paths...]`: Lint locally and dry-run query syntax via the engine's compiler API.
+- `graft <engine> test [paths...]`: Execute synthetic replay tests in isolated staging quarantine (pre-syncing referenced local datasets).
+- `graft <engine> diff`: Compute delta between Git and target tenant (supports `--target datasets|custom|managed|all` and `--all` for full catalog drift).
+- `graft <engine> apply`: Apply desired Git state to target tenant in order (`datasets` $\rightarrow$ `custom` $\rightarrow$ `managed`).
+- `graft <engine> pull`: Pull detection rules, managed state, or compatible datasets (`--target datasets`) from target tenant to local repository.
+- `graft <engine> datasets {diff,apply,pull}`: Granular commands for reusable string datasets (`datasets/<name>.yaml`).
+- `graft <engine> managed {diff,apply,pull}`: Granular commands for vendor-managed content and exclusions.
 
 ---
 
 ## 3. Available Documentation
 
-- **[Google SecOps Engine Reference (`secops.md`)](secops.md):** Configuration, IAM permissions, dual-tenant staging vs prod topologies, single-tenant lab mode, and API mechanics.
+Engine-specific setup guides, IAM policies, and operational runbooks are co-located directly inside each engine package under `src/graft/engines/<engine>/docs/`:
+
+- **[Google SecOps (`secops`) Engine Package](../../src/graft/engines/secops/README.md) & [Setup & Operations Guide](../../src/graft/engines/secops/docs/README.md):** GCP IAM permissions, Workload Identity Federation provisioning, dual-tenant staging vs. production topologies, Data Tables synchronization, Curated Rule Sets, and `findingsRefinements` exclusion runbooks.
 - **[Pluggable Engine Adapter Framework](../developers/framework.md):** Architectural specification, abstraction layers, Core ports, and dynamic capabilities-driven routing.
 - **[Extending & Bootstrapping Engines](../developers/extending_engines.md):** Step-by-step developer tutorial on bootstrapping a new engine adapter (e.g. CrowdStrike, Microsoft Sentinel, Splunk) via `graft new engine`.

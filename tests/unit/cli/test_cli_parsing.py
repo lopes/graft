@@ -41,10 +41,10 @@ def test_pyproject_release_metadata() -> None:
 def test_parse_lint_command() -> None:
     parser = build_parser()
     args = parser.parse_args(
-        ["lint", "rulesets/secops/custom/gcp_service_account_key_created.yaml", "--fail-fast"]
+        ["lint", "rulesets/sentinel/custom/gcp_service_account_key_created.yaml", "--fail-fast"]
     )
     assert args.command == "lint"
-    assert args.paths == ["rulesets/secops/custom/gcp_service_account_key_created.yaml"]
+    assert args.paths == ["rulesets/sentinel/custom/gcp_service_account_key_created.yaml"]
     assert args.fail_fast is True
 
 
@@ -58,16 +58,16 @@ def test_parse_new_engine_command() -> None:
 
 def test_parse_new_rule_command() -> None:
     parser = build_parser()
-    args = parser.parse_args(["new", "rule", "suspicious_powershell", "--engine", "secops"])
+    args = parser.parse_args(["new", "rule", "suspicious_powershell", "--engine", "sentinel"])
     assert args.command == "new"
     assert args.new_type == "rule"
     assert args.name == "suspicious_powershell"
-    assert args.engine == "secops"
+    assert args.engine == "sentinel"
     assert args.managed is None
 
     with pytest.raises(SystemExit):
         parser.parse_args(
-            ["new", "rule", "gcti_host_indicators", "--engine", "secops", "--managed"]
+            ["new", "rule", "gcti_host_indicators", "--engine", "sentinel", "--managed"]
         )
 
     args_managed_id = parser.parse_args(
@@ -76,7 +76,7 @@ def test_parse_new_rule_command() -> None:
             "rule",
             "gcti_host_indicators",
             "--engine",
-            "secops",
+            "sentinel",
             "--managed",
             "f5533b66-9327-9880-93e6-75a738ac2345",
         ]
@@ -84,47 +84,68 @@ def test_parse_new_rule_command() -> None:
     assert args_managed_id.managed == "f5533b66-9327-9880-93e6-75a738ac2345"
 
 
-def test_parse_secops_subcommands() -> None:
-    parser = build_parser()
+def test_parse_registered_engine_subcommands() -> None:
+    import argparse
+
+    from graft.cli.engine_controller import register_engine_commands
+    from graft.core.engine_registry import EngineRegistry
+    from graft.core.models.engine import EngineCapabilities, EngineManifest
+
+    parser = argparse.ArgumentParser()
+    subparsers = parser.add_subparsers(dest="command")
+    manifest = EngineManifest(
+        name="sentinel",
+        display_name="Sentinel",
+        description="Sentinel Engine",
+        adapter_class="graft.engines.sentinel.adapter:SentinelAdapter",
+        capabilities=EngineCapabilities(
+            custom_rules=True,
+            datasets=True,
+            syntax_verification=True,
+            managed_rules=True,
+            replay_testing=True,
+        ),
+    )
+    register_engine_commands(subparsers, manifest, EngineRegistry())
 
     # new
-    args = parser.parse_args(["secops", "new", "test_rule"])
-    assert args.command == "secops"
+    args = parser.parse_args(["sentinel", "new", "test_rule"])
+    assert args.command == "sentinel"
     assert args.engine_command == "new"
     assert args.rule_name == "test_rule"
     assert args.managed is None
 
-    args_managed = parser.parse_args(["secops", "new", "managed_rule", "--managed", "rs-123"])
+    args_managed = parser.parse_args(["sentinel", "new", "managed_rule", "--managed", "rs-123"])
     assert args_managed.managed == "rs-123"
 
     # verify
-    args = parser.parse_args(["secops", "verify", "--env", "staging"])
-    assert args.command == "secops"
+    args = parser.parse_args(["sentinel", "verify", "--env", "staging"])
+    assert args.command == "sentinel"
     assert args.engine_command == "verify"
     assert args.env == "staging"
 
     # test
-    args = parser.parse_args(["secops", "test", "--require-staging", "--changed-only"])
-    assert args.command == "secops"
+    args = parser.parse_args(["sentinel", "test", "--require-staging", "--changed-only"])
+    assert args.command == "sentinel"
     assert args.engine_command == "test"
     assert args.require_staging is True
     assert args.changed_only is True
 
     # diff
-    args = parser.parse_args(["secops", "diff", "--env", "production", "--target", "managed"])
-    assert args.command == "secops"
+    args = parser.parse_args(["sentinel", "diff", "--env", "production", "--target", "managed"])
+    assert args.command == "sentinel"
     assert args.engine_command == "diff"
     assert args.env == "production"
     assert args.target == "managed"
 
     # apply
-    args = parser.parse_args(["secops", "apply", "--env", "staging"])
-    assert args.command == "secops"
+    args = parser.parse_args(["sentinel", "apply", "--env", "staging"])
+    assert args.command == "sentinel"
     assert args.engine_command == "apply"
 
     # managed pull
-    args = parser.parse_args(["secops", "managed", "pull", "--env", "production"])
-    assert args.command == "secops"
+    args = parser.parse_args(["sentinel", "managed", "pull", "--env", "production"])
+    assert args.command == "sentinel"
     assert args.engine_command == "managed"
     assert args.managed_command == "pull"
     assert args.env == "production"

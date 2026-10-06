@@ -131,82 +131,20 @@ paths:
 
 ---
 
-## 5. Workload Identity Federation (WIF) Provisioning
+## 5. CI/CD Identity Federation & Secrets Architecture
 
-Graft pipelines authenticate to Google Cloud without static service account keys. Follow these steps to provision WIF on Google Cloud:
+Graft pipelines authenticate to downstream SIEM and cloud APIs using short-lived OpenID Connect (OIDC) federation rather than static API keys or downloaded service account JSON files:
 
-### 1. Set Environment Variables
-```bash
-export PROJECT_ID="my-gcp-secops-project"
-export POOL_NAME="github-actions-pool"
-export PROVIDER_NAME="github-actions-provider"
-export REPO_SLUG="org/graft"
-export SA_NAME="graft-secops-deployer"
-```
-
-### 2. Create the Workload Identity Pool
-```bash
-gcloud iam workload-identity-pools create "${POOL_NAME}" \
-  --project="${PROJECT_ID}" \
-  --location="global" \
-  --display-name="GitHub Actions Pool"
-```
-
-### 3. Create the Workload Identity Provider with Attribute Pinning
-```bash
-gcloud iam workload-identity-pools providers create-oidc "${PROVIDER_NAME}" \
-  --project="${PROJECT_ID}" \
-  --location="global" \
-  --workload-identity-pool="${POOL_NAME}" \
-  --display-name="GitHub Actions OIDC Provider" \
-  --issuer-uri="https://token.actions.githubusercontent.com" \
-  --attribute-mapping="google.subject=assertion.sub,attribute.actor=assertion.actor,attribute.repository=assertion.repository" \
-  --attribute-condition="assertion.repository == '${REPO_SLUG}'"
-```
-
-> [!IMPORTANT]
-> The `--attribute-condition` pins token exchange exclusively to your authoritative repository (`${REPO_SLUG}`). Unauthorized forks cannot assume your service account.
-
-### 4. Create the Automation Service Account & Grant IAM Roles
-```bash
-# Create the service account
-gcloud iam service-accounts create "${SA_NAME}" \
-  --project="${PROJECT_ID}" \
-  --display-name="Graft Detection CI/CD Deployer"
-
-export SA_EMAIL="${SA_NAME}@${PROJECT_ID}.iam.gserviceaccount.com"
-
-# Grant Chronicle Editor role for rule and curated content management
-gcloud projects add-iam-policy-binding "${PROJECT_ID}" \
-  --member="serviceAccount:${SA_EMAIL}" \
-  --role="roles/chronicle.editor"
-
-# Allow GitHub Actions WIF provider to impersonate the Service Account
-export POOL_RESOURCE_ID=$(gcloud iam workload-identity-pools describe "${POOL_NAME}" \
-  --project="${PROJECT_ID}" --location="global" --format="value(name)")
-
-gcloud iam service-accounts add-iam-policy-binding "${SA_EMAIL}" \
-  --project="${PROJECT_ID}" \
-  --role="roles/iam.workloadIdentityUser" \
-  --member="principalSet://iam.googleapis.com/${POOL_RESOURCE_ID}/attribute.repository/${REPO_SLUG}"
-```
-
-### 5. Configure GitHub Repository Secrets & Variables
-
-In your GitHub repository (**Settings > Secrets and variables > Actions**):
-
-- **Repository Secrets:**
-  - `GRAFT_SECOPS_WIF_PROVIDER`: Full resource name of the WIF provider:
-    `projects/<project-number>/locations/global/workloadIdentityPools/<pool-name>/providers/<provider-name>`
-  - `GRAFT_SECOPS_PROD_SA_EMAIL`: `graft-secops-deployer@<project-id>.iam.gserviceaccount.com`
-  - `GRAFT_SECOPS_STAGING_SA_EMAIL`: Service account email for staging replay tests (optional; falls back to prod SA if omitted).
-- **Repository Variables:**
-  - `GRAFT_SECOPS_PROD_PROJECT`: Google Cloud project ID for production.
-  - `GRAFT_SECOPS_PROD_LOCATION`: Chronicle multi-region (e.g., `us`, `europe`).
-  - `GRAFT_SECOPS_PROD_INSTANCE_ID`: Chronicle customer/instance GUID.
-  - `GRAFT_SECOPS_STAGING_PROJECT`: Staging project ID (for replay tests).
-  - `GRAFT_SECOPS_STAGING_LOCATION`: Staging location.
-  - `GRAFT_SECOPS_STAGING_INSTANCE_ID`: Staging instance GUID.
+1. **Cryptographic Attribute Pinning:** Configure your cloud or SIEM identity provider (e.g., Google Cloud Workload Identity Federation, AWS IAM OIDC, or Microsoft Entra Workload ID) to trust `https://token.actions.githubusercontent.com` and pin token exchange strictly to your repository claim (`assertion.repository == '<owner>/<repo>'`). Unauthorized forks cannot assume your deployer identity.
+2. **Dual-Tenant Staging vs. Production Separation:**
+   - **Staging (`GRAFT_<ENGINE>_STAGING_*`):** Used by pull request cloud gates (`graft <engine> verify` and `graft <engine> test`) to validate syntax and run synthetic replay tests in quarantine without polluting production SOC queues.
+   - **Production (`GRAFT_<ENGINE>_PROD_*`):** Used by mainline deployment (`graft <engine> apply --env production --all`) and read-only PR diff plans (`graft <engine> diff --env production`).
+   - **Single-Tenant Fallback:** When operating a single-tenant sandbox, engines can fall back to `GRAFT_<ENGINE>_PROD_*` coordinates for syntax verification while guarding production from synthetic replay injection.
+3. **GitHub Secrets vs. Variables Separation:**
+   - **Repository Secrets (`${{ secrets.* }}`):** Store identity federation provider resource paths, deployer service account identifiers, or short-lived token exchange credentials (e.g., `GRAFT_SECOPS_WIF_PROVIDER`, `GRAFT_SECOPS_PROD_SA_EMAIL`).
+   - **Repository Variables (`${{ vars.* }}`):** Store non-sensitive tenant routing coordinates (e.g., `GRAFT_<ENGINE>_PROD_*` and `GRAFT_<ENGINE>_STAGING_*`).
+4. **Engine-Specific Provisioning Runbooks:**
+   - For step-by-step `gcloud` commands to provision Google Cloud Workload Identity Federation, service accounts, and GitHub Actions secrets/variables for Google SecOps, see the **[Google SecOps Engine Setup & Operations Guide](../../src/graft/engines/secops/docs/README.md)**.
 
 ---
 

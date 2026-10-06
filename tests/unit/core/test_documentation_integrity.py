@@ -103,14 +103,71 @@ def test_core_and_cli_have_no_hardcoded_secops_coupled_branches() -> None:
             f"Driving Core file {core_py} contains engine-specific 'secops' reference"
         )
 
-    commands_core = Path("src/graft/cli/commands_core.py").read_text(encoding="utf-8")
-    assert 'engine = "secops"' not in commands_core, (
-        "commands_core.py must not hardcode engine = 'secops' fallback"
-    )
+    for cli_py in sorted(Path("src/graft/cli").rglob("*.py")):
+        if cli_py.name == "main.py":
+            continue
+        content = cli_py.read_text(encoding="utf-8")
+        assert "secops" not in content.lower(), (
+            f"Driving CLI file {cli_py} contains engine-specific 'secops' reference"
+        )
+
     engine_controller = Path("src/graft/cli/engine_controller.py").read_text(encoding="utf-8")
     assert "adapter: Any" not in engine_controller, (
         "engine_controller.py must type adapter as EngineAdapter, not Any"
     )
+
+    root_env_example = Path(".env.example").read_text(encoding="utf-8")
+    assert "secops" not in root_env_example.lower(), (
+        "Root .env.example must remain core-only; engine templates belong in "
+        "src/graft/engines/<engine>/.env.example"
+    )
+
+
+def test_unit_tests_have_no_secops_references() -> None:
+    self_rel = Path("tests/unit/core/test_documentation_integrity.py")
+    violations: list[str] = []
+    for test_py in sorted(Path("tests/unit").rglob("*.py")):
+        if test_py == self_rel:
+            continue
+        content = test_py.read_text(encoding="utf-8")
+        if "secops" in content.lower():
+            violations.append(str(test_py))
+
+    assert not violations, (
+        "Engine-specific 'secops' references found in tests/unit/ "
+        "(move SecOps tests to tests/engines/secops/):\n" + "\n".join(violations)
+    )
+
+
+def test_engine_docs_co_located_in_engine_packages() -> None:
+    engines_docs_dir = Path("docs/engines")
+    if engines_docs_dir.is_dir():
+        extra_files = [p.name for p in sorted(engines_docs_dir.iterdir()) if p.name != "README.md"]
+        assert not extra_files, (
+            "Engine-specific documentation must live under src/graft/engines/<engine>/docs/, "
+            f"not docs/engines/: {extra_files}"
+        )
+
+    for manifest_path in sorted(Path("src/graft/engines").glob("*/engine.yaml")):
+        engine_dir = manifest_path.parent
+        engine_docs_readme = engine_dir / "docs" / "README.md"
+        assert engine_docs_readme.is_file(), (
+            f"Missing co-located engine documentation hub: {engine_docs_readme}"
+        )
+
+    for operator_doc in (
+        Path("docs/operators/cicd_and_infrastructure.md"),
+        Path("docs/operators/security.md"),
+    ):
+        content = operator_doc.read_text(encoding="utf-8")
+        assert "gcloud iam workload-identity-pools" not in content, (
+            f"{operator_doc} contains SecOps-specific gcloud WIF provisioning commands "
+            "(move to src/graft/engines/secops/docs/)"
+        )
+        assert "gcloud iam service-accounts" not in content, (
+            f"{operator_doc} contains SecOps-specific gcloud SA provisioning commands "
+            "(move to src/graft/engines/secops/docs/)"
+        )
 
 
 def test_agent_skills_frontmatter_and_structure() -> None:

@@ -2,7 +2,6 @@ import json
 from pathlib import Path
 
 import pytest
-import yaml
 from jsonschema import Draft202012Validator
 
 from graft.core.validation.schema_validator import SchemaValidator
@@ -14,7 +13,7 @@ def validator() -> SchemaValidator:
 
 
 @pytest.fixture
-def valid_secops_custom_dict() -> dict[str, object]:
+def valid_base_custom_dict() -> dict[str, object]:
     return {
         "metadata": {
             "id": "c4e9b8f2-89b1-4f81-9b16-928d54128f73",
@@ -32,13 +31,10 @@ def valid_secops_custom_dict() -> dict[str, object]:
                 "Adapted from internal red team exercise (2026)",
             ],
         },
-        "logic": (
-            'events:\n  $e.target.process.command_line = "powershell -enc"\ncondition:\n  $e\n'
-        ),
+        "logic": 'events | where command_line contains "powershell -enc"\n',
         "deployment": {
             "enabled": True,
             "alerting": True,
-            "run_frequency": "live",
         },
         "runbook": {
             "context": (
@@ -73,40 +69,40 @@ def valid_secops_custom_dict() -> dict[str, object]:
     }
 
 
-def test_valid_secops_custom_rule_passes(
-    validator: SchemaValidator, valid_secops_custom_dict: dict[str, object]
+def test_valid_base_custom_rule_passes(
+    validator: SchemaValidator, valid_base_custom_dict: dict[str, object]
 ) -> None:
-    errors = validator.validate(valid_secops_custom_dict, schema_name="secops_custom")
+    errors = validator.validate(valid_base_custom_dict, schema_name="base_custom")
     assert errors == []
-    assert validator.is_valid(valid_secops_custom_dict, schema_name="secops_custom") is True
+    assert validator.is_valid(valid_base_custom_dict, schema_name="base_custom") is True
 
 
 def test_missing_required_top_level_block(
-    validator: SchemaValidator, valid_secops_custom_dict: dict[str, object]
+    validator: SchemaValidator, valid_base_custom_dict: dict[str, object]
 ) -> None:
-    del valid_secops_custom_dict["logic"]
-    errors = validator.validate(valid_secops_custom_dict, schema_name="secops_custom")
+    del valid_base_custom_dict["logic"]
+    errors = validator.validate(valid_base_custom_dict, schema_name="base_custom")
     assert len(errors) >= 1
     assert any("logic" in err.message for err in errors)
-    assert validator.is_valid(valid_secops_custom_dict, schema_name="secops_custom") is False
+    assert validator.is_valid(valid_base_custom_dict, schema_name="base_custom") is False
 
 
 def test_unknown_top_level_block_rejected(
-    validator: SchemaValidator, valid_secops_custom_dict: dict[str, object]
+    validator: SchemaValidator, valid_base_custom_dict: dict[str, object]
 ) -> None:
-    valid_secops_custom_dict["unauthorized_custom_field"] = "value"
-    errors = validator.validate(valid_secops_custom_dict, schema_name="secops_custom")
+    valid_base_custom_dict["unauthorized_custom_field"] = "value"
+    errors = validator.validate(valid_base_custom_dict, schema_name="base_custom")
     assert len(errors) >= 1
     assert any("unauthorized_custom_field" in err.message for err in errors)
 
 
 def test_description_length_limit(
-    validator: SchemaValidator, valid_secops_custom_dict: dict[str, object]
+    validator: SchemaValidator, valid_base_custom_dict: dict[str, object]
 ) -> None:
-    metadata = valid_secops_custom_dict["metadata"]
+    metadata = valid_base_custom_dict["metadata"]
     assert isinstance(metadata, dict)
     metadata["description"] = "A" * 129
-    errors = validator.validate(valid_secops_custom_dict, schema_name="secops_custom")
+    errors = validator.validate(valid_base_custom_dict, schema_name="base_custom")
     assert len(errors) >= 1
     assert any("128" in err.message or "maxLength" in err.validator for err in errors)
 
@@ -114,13 +110,13 @@ def test_description_length_limit(
 @pytest.mark.parametrize("disallowed_field", ["status", "priority", "authors"])
 def test_disallowed_metadata_fields_rejected(
     validator: SchemaValidator,
-    valid_secops_custom_dict: dict[str, object],
+    valid_base_custom_dict: dict[str, object],
     disallowed_field: str,
 ) -> None:
-    metadata = valid_secops_custom_dict["metadata"]
+    metadata = valid_base_custom_dict["metadata"]
     assert isinstance(metadata, dict)
     metadata[disallowed_field] = "value"
-    errors = validator.validate(valid_secops_custom_dict, schema_name="secops_custom")
+    errors = validator.validate(valid_base_custom_dict, schema_name="base_custom")
     assert len(errors) >= 1
     assert any(
         disallowed_field in err.message or "additionalProperties" in err.validator for err in errors
@@ -133,13 +129,13 @@ def test_disallowed_metadata_fields_rejected(
 )
 def test_all_metadata_fields_are_required(
     validator: SchemaValidator,
-    valid_secops_custom_dict: dict[str, object],
+    valid_base_custom_dict: dict[str, object],
     required_meta_key: str,
 ) -> None:
-    metadata = valid_secops_custom_dict["metadata"]
+    metadata = valid_base_custom_dict["metadata"]
     assert isinstance(metadata, dict)
     del metadata[required_meta_key]
-    errors = validator.validate(valid_secops_custom_dict, schema_name="secops_custom")
+    errors = validator.validate(valid_base_custom_dict, schema_name="base_custom")
     assert len(errors) >= 1
     assert any(required_meta_key in err.message for err in errors)
 
@@ -163,48 +159,48 @@ def test_all_metadata_fields_are_required(
 )
 def test_metadata_collection_and_blank_constraints(
     validator: SchemaValidator,
-    valid_secops_custom_dict: dict[str, object],
+    valid_base_custom_dict: dict[str, object],
     field_name: str,
     bad_value: object,
 ) -> None:
-    metadata = valid_secops_custom_dict["metadata"]
+    metadata = valid_base_custom_dict["metadata"]
     assert isinstance(metadata, dict)
     metadata[field_name] = bad_value
-    assert validator.is_valid(valid_secops_custom_dict, schema_name="secops_custom") is False
+    assert validator.is_valid(valid_base_custom_dict, schema_name="base_custom") is False
 
 
 def test_whitespace_only_logic_and_runbook_rejected(
-    validator: SchemaValidator, valid_secops_custom_dict: dict[str, object]
+    validator: SchemaValidator, valid_base_custom_dict: dict[str, object]
 ) -> None:
-    valid_secops_custom_dict["logic"] = "   \n  "
-    assert validator.is_valid(valid_secops_custom_dict, schema_name="secops_custom") is False
+    valid_base_custom_dict["logic"] = "   \n  "
+    assert validator.is_valid(valid_base_custom_dict, schema_name="base_custom") is False
 
-    valid_secops_custom_dict["logic"] = "events:\n  $e\ncondition:\n  $e"
-    runbook = valid_secops_custom_dict["runbook"]
+    valid_base_custom_dict["logic"] = "events | where true"
+    runbook = valid_base_custom_dict["runbook"]
     assert isinstance(runbook, dict)
     for rb_key in ("context", "triage", "response"):
         original = runbook[rb_key]
         runbook[rb_key] = "   "
-        assert validator.is_valid(valid_secops_custom_dict, schema_name="secops_custom") is False
+        assert validator.is_valid(valid_base_custom_dict, schema_name="base_custom") is False
         runbook[rb_key] = original
 
 
 def test_test_event_timestamp_and_payload_constraints(
-    validator: SchemaValidator, valid_secops_custom_dict: dict[str, object]
+    validator: SchemaValidator, valid_base_custom_dict: dict[str, object]
 ) -> None:
-    tests = valid_secops_custom_dict["tests"]
+    tests = valid_base_custom_dict["tests"]
     assert isinstance(tests, list)
     event = tests[0]["events"][0]
 
     event["timestamp"] = ""
-    assert validator.is_valid(valid_secops_custom_dict, schema_name="secops_custom") is False
+    assert validator.is_valid(valid_base_custom_dict, schema_name="base_custom") is False
 
     event["timestamp"] = "not-a-timestamp"
-    assert validator.is_valid(valid_secops_custom_dict, schema_name="secops_custom") is False
+    assert validator.is_valid(valid_base_custom_dict, schema_name="base_custom") is False
 
     event["timestamp"] = "2026-09-17T12:00:00Z"
     event["payload"] = {}
-    assert validator.is_valid(valid_secops_custom_dict, schema_name="secops_custom") is False
+    assert validator.is_valid(valid_base_custom_dict, schema_name="base_custom") is False
 
 
 @pytest.mark.parametrize(
@@ -220,14 +216,14 @@ def test_test_event_timestamp_and_payload_constraints(
 )
 def test_invalid_rule_name_pattern(
     validator: SchemaValidator,
-    valid_secops_custom_dict: dict[str, object],
+    valid_base_custom_dict: dict[str, object],
     valid_managed_rule_dict: dict[str, object],
     bad_name: str,
 ) -> None:
-    metadata = valid_secops_custom_dict["metadata"]
+    metadata = valid_base_custom_dict["metadata"]
     assert isinstance(metadata, dict)
     metadata["name"] = bad_name
-    errors = validator.validate(valid_secops_custom_dict, schema_name="secops_custom")
+    errors = validator.validate(valid_base_custom_dict, schema_name="base_custom")
     assert len(errors) >= 1
 
     managed_meta = valid_managed_rule_dict["metadata"]
@@ -239,14 +235,14 @@ def test_invalid_rule_name_pattern(
 
 def test_max_64_char_rule_name_passes(
     validator: SchemaValidator,
-    valid_secops_custom_dict: dict[str, object],
+    valid_base_custom_dict: dict[str, object],
     valid_managed_rule_dict: dict[str, object],
 ) -> None:
     name_64 = "a" * 64
-    metadata = valid_secops_custom_dict["metadata"]
+    metadata = valid_base_custom_dict["metadata"]
     assert isinstance(metadata, dict)
     metadata["name"] = name_64
-    assert validator.is_valid(valid_secops_custom_dict, schema_name="secops_custom") is True
+    assert validator.is_valid(valid_base_custom_dict, schema_name="base_custom") is True
 
     managed_meta = valid_managed_rule_dict["metadata"]
     assert isinstance(managed_meta, dict)
@@ -255,187 +251,41 @@ def test_max_64_char_rule_name_passes(
 
 
 def test_mitre_tactic_property_names_use_dashes_and_reject_underscores(
-    validator: SchemaValidator, valid_secops_custom_dict: dict[str, object]
+    validator: SchemaValidator, valid_base_custom_dict: dict[str, object]
 ) -> None:
-    metadata = valid_secops_custom_dict["metadata"]
+    metadata = valid_base_custom_dict["metadata"]
     assert isinstance(metadata, dict)
 
     metadata["mitre"] = {"initial-access": ["T1566.002"], "privilege-escalation": ["T1098.001"]}
-    assert validator.is_valid(valid_secops_custom_dict, schema_name="secops_custom") is True
+    assert validator.is_valid(valid_base_custom_dict, schema_name="base_custom") is True
 
     metadata["mitre"] = {"initial_access": ["T1566.002"]}
-    errors = validator.validate(valid_secops_custom_dict, schema_name="secops_custom")
+    errors = validator.validate(valid_base_custom_dict, schema_name="base_custom")
     assert len(errors) >= 1
-    assert validator.is_valid(valid_secops_custom_dict, schema_name="secops_custom") is False
-
-
-def test_deployment_run_frequency_mandatory_and_valid_values(
-    validator: SchemaValidator, valid_secops_custom_dict: dict[str, object]
-) -> None:
-    deployment = valid_secops_custom_dict["deployment"]
-    assert isinstance(deployment, dict)
-
-    # Missing run_frequency must fail
-    del deployment["run_frequency"]
-    errors = validator.validate(valid_secops_custom_dict, schema_name="secops_custom")
-    assert len(errors) >= 1
-
-    # Valid values: 'unspecified', 'live', 'hourly', 'daily'
-    for valid_freq in ["unspecified", "live", "hourly", "daily"]:
-        deployment["run_frequency"] = valid_freq
-        assert validator.is_valid(valid_secops_custom_dict, schema_name="secops_custom") is True
-
-    # Invalid value
-    deployment["run_frequency"] = "weekly"
-    assert validator.is_valid(valid_secops_custom_dict, schema_name="secops_custom") is False
-
-
-def test_deployment_additional_properties_rejected(
-    validator: SchemaValidator, valid_secops_custom_dict: dict[str, object]
-) -> None:
-    deployment = valid_secops_custom_dict["deployment"]
-    assert isinstance(deployment, dict)
-    deployment["unexpected_key"] = True
-    errors = validator.validate(valid_secops_custom_dict, schema_name="secops_custom")
-    assert len(errors) >= 1
-    assert any("unexpected_key" in err.message for err in errors)
+    assert validator.is_valid(valid_base_custom_dict, schema_name="base_custom") is False
 
 
 def test_test_expect_non_negative_integer(
-    validator: SchemaValidator, valid_secops_custom_dict: dict[str, object]
+    validator: SchemaValidator, valid_base_custom_dict: dict[str, object]
 ) -> None:
-    tests = valid_secops_custom_dict["tests"]
+    tests = valid_base_custom_dict["tests"]
     assert isinstance(tests, list)
 
-    # expect: -1 must fail
     tests[0]["expect"] = -1
-    assert validator.is_valid(valid_secops_custom_dict, schema_name="secops_custom") is False
+    assert validator.is_valid(valid_base_custom_dict, schema_name="base_custom") is False
 
-    # expect: 0 is valid for exclusion/negative test
     tests[0]["expect"] = 0
-    assert validator.is_valid(valid_secops_custom_dict, schema_name="secops_custom") is True
+    assert validator.is_valid(valid_base_custom_dict, schema_name="base_custom") is True
 
 
 def test_test_events_min_items(
-    validator: SchemaValidator, valid_secops_custom_dict: dict[str, object]
+    validator: SchemaValidator, valid_base_custom_dict: dict[str, object]
 ) -> None:
-    tests = valid_secops_custom_dict["tests"]
+    tests = valid_base_custom_dict["tests"]
     assert isinstance(tests, list)
-    tests[0]["events"] = []  # minItems is 1
-    errors = validator.validate(valid_secops_custom_dict, schema_name="secops_custom")
+    tests[0]["events"] = []
+    errors = validator.validate(valid_base_custom_dict, schema_name="base_custom")
     assert len(errors) >= 1
-
-
-def test_valid_managed_manifest_passes(validator: SchemaValidator) -> None:
-    manifest = {
-        "rulesets": [
-            {
-                "id": "rs-cloud-threats",
-                "name": "Cloud Threat Detections",
-                "category": "CLOUD",
-                "deployments": [
-                    {"type": "PRECISE", "enabled": True, "alerting": True},
-                    {"type": "BROAD", "enabled": False, "alerting": False},
-                ],
-            }
-        ],
-        "exclusions": [
-            {
-                "id": "ex-backup-account",
-                "rule_id": "r-1",
-                "ruleset_id": None,
-                "expression": '$e.principal.user.userid != "svc_backup"',
-                "description": "Exclude backup service account",
-            }
-        ],
-    }
-    assert validator.is_valid(manifest, schema_name="secops_managed") is True
-
-
-@pytest.mark.parametrize(
-    "missing_excl_key",
-    ["id", "rule_id", "ruleset_id", "expression", "description"],
-)
-def test_managed_manifest_all_exclusion_fields_required(
-    validator: SchemaValidator, missing_excl_key: str
-) -> None:
-    exclusion: dict[str, object] = {
-        "id": "ex-backup-account",
-        "rule_id": "r-1",
-        "ruleset_id": None,
-        "expression": '$e.principal.user.userid != "svc_backup"',
-        "description": "Exclude backup service account",
-    }
-    del exclusion[missing_excl_key]
-    manifest = {
-        "rulesets": [],
-        "exclusions": [exclusion],
-    }
-    assert validator.is_valid(manifest, schema_name="secops_managed") is False
-
-
-def test_managed_manifest_missing_top_level_exclusions_rejected(
-    validator: SchemaValidator,
-) -> None:
-    manifest: dict[str, object] = {"rulesets": []}
-    assert validator.is_valid(manifest, schema_name="secops_managed") is False
-
-
-def test_managed_manifest_blank_exclusion_description_rejected(
-    validator: SchemaValidator,
-) -> None:
-    manifest = {
-        "rulesets": [],
-        "exclusions": [
-            {
-                "id": "ex-backup-account",
-                "rule_id": "r-1",
-                "ruleset_id": None,
-                "expression": '$e.principal.user.userid != "svc_backup"',
-                "description": "   ",
-            }
-        ],
-    }
-    assert validator.is_valid(manifest, schema_name="secops_managed") is False
-
-
-def test_managed_manifest_unknown_property_rejected(validator: SchemaValidator) -> None:
-    manifest: dict[str, object] = {
-        "rulesets": [],
-        "exclusions": [],
-        "invalid_block": {},
-    }
-    assert validator.is_valid(manifest, schema_name="secops_managed") is False
-
-
-def test_reference_example_rule_validates_cleanly(validator: SchemaValidator) -> None:
-    custom_rules = list(Path("rulesets/secops/custom").glob("*.yaml"))
-    assert len(custom_rules) >= 3
-    for rule_path in custom_rules:
-        data = yaml.safe_load(rule_path.read_text(encoding="utf-8"))
-        errors = validator.validate(data, schema_name="secops_custom")
-        assert errors == []
-
-
-def test_reference_managed_manifest_validates_cleanly(validator: SchemaValidator) -> None:
-    managed_path = Path("rulesets/secops/managed/index.yaml")
-    assert managed_path.is_file()
-    data = yaml.safe_load(managed_path.read_text(encoding="utf-8"))
-    errors = validator.validate(data, schema_name="secops_managed")
-    assert errors == []
-
-
-def test_reference_registered_managed_rules_validate_cleanly(validator: SchemaValidator) -> None:
-    managed_rules = [
-        p
-        for p in Path("rulesets/secops/managed").glob("*.yaml")
-        if p.name not in ("index.yaml", "index.yml")
-    ]
-    assert len(managed_rules) >= 1
-    for rule_path in managed_rules:
-        data = yaml.safe_load(rule_path.read_text(encoding="utf-8"))
-        errors = validator.validate(data, schema_name="base_managed")
-        assert errors == []
 
 
 def test_all_schemas_conform_to_draft202012_metaschema() -> None:
@@ -526,16 +376,14 @@ def valid_managed_rule_dict() -> dict[str, object]:
     return {
         "metadata": {
             "id": "c4e9b8f2-89b1-4f81-9b16-928d54128f73",
-            "name": "gcti_active_breach_host_indicators",
-            "description": "Registers GCTI Active Breach Priority Host Indicators ruleset.",
+            "name": "active_breach_host_indicators",
+            "description": "Registers Active Breach Priority Host Indicators ruleset.",
             "owners": ["Security Operations"],
             "mitre": {
                 "command-and-control": ["T1071.001"],
             },
-            "tags": ["secops", "managed", "gcti"],
-            "references": [
-                "https://docs.cloud.google.com/chronicle/docs/detection/curated-detections"
-            ],
+            "tags": ["siem_alpha", "managed", "threat_intel"],
+            "references": ["https://attack.mitre.org/techniques/T1071/001/"],
         },
         "managed": {
             "id": "f5533b66-9327-9880-93e6-75a738ac2345",
@@ -585,13 +433,13 @@ def test_managed_rule_requires_non_empty_managed_id(
 
 def test_rule_name_index_is_reserved_and_rejected(
     validator: SchemaValidator,
-    valid_secops_custom_dict: dict[str, object],
+    valid_base_custom_dict: dict[str, object],
     valid_managed_rule_dict: dict[str, object],
 ) -> None:
-    custom_meta = valid_secops_custom_dict["metadata"]
+    custom_meta = valid_base_custom_dict["metadata"]
     assert isinstance(custom_meta, dict)
     custom_meta["name"] = "index"
-    assert validator.is_valid(valid_secops_custom_dict, schema_name="secops_custom") is False
+    assert validator.is_valid(valid_base_custom_dict, schema_name="base_custom") is False
 
     managed_meta = valid_managed_rule_dict["metadata"]
     assert isinstance(managed_meta, dict)

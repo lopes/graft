@@ -212,7 +212,7 @@ EOF
 > **Action Required: Copy and record these 5 values now.**  
 > Your GCP environment and SecOps instance are now fully configured and pre-flight verified. Once you close this Cloud Shell session, these session environment variables will be cleared from terminal memory.
 >
-> - **Local CLI:** Paste this block directly into your `.env` file at the root of the repository. Locally, Graft authenticates directly against GCP via `gcloud` impersonation (Option 1) or via `GRAFT_SECOPS_TOKEN` (Option 2).
+> - **Local CLI:** Paste this block directly into `src/graft/engines/secops/.env` (or your root `.env` file; see [`src/graft/engines/secops/.env.example`](../.env.example)). Locally, Graft authenticates directly against GCP via `gcloud` impersonation (Option 1) or via `GRAFT_SECOPS_TOKEN` (Option 2).
 > - **GitHub Actions:** In your GitHub repository (**Settings** > **Secrets and variables** > **Actions**), register these same 5 values:
 >   - **Secrets (`${{ secrets.* }}`):** `GRAFT_SECOPS_WIF_PROVIDER` and `GRAFT_SECOPS_${TARGET_ENV_UPPER}_SA_EMAIL`
 >   - **Variables (`${{ vars.* }}`):** `GRAFT_SECOPS_${TARGET_ENV_UPPER}_PROJECT`, `GRAFT_SECOPS_${TARGET_ENV_UPPER}_LOCATION`, and `GRAFT_SECOPS_${TARGET_ENV_UPPER}_INSTANCE_ID`
@@ -335,7 +335,7 @@ To avoid credential ambiguity across multiple platforms and engines, Graft enfor
 
 ## 7. Google Curated Rule Sets & Managed Manifest (`rulesets/secops/managed/index.yaml`)
 
-Google SecOps provides Curated Rule Sets—vendor-managed detection packages maintained by Google Cloud Threat Intelligence (GCTI). Graft manages the entire curated content lifecycle declaratively through a single consolidated manifest: [`rulesets/secops/managed/index.yaml`](../../rulesets/secops/managed/index.yaml), and supports optional registration of individual curated rulesets in `rulesets/secops/managed/<rule_name>.yaml` for MITRE ATT&CK coverage and SOC runbooks.
+Google SecOps provides Curated Rule Sets—vendor-managed detection packages maintained by Google Cloud Threat Intelligence (GCTI). Graft manages the entire curated content lifecycle declaratively through a single consolidated manifest: [`rulesets/secops/managed/index.yaml`](../../../../../rulesets/secops/managed/index.yaml), and supports optional registration of individual curated rulesets in `rulesets/secops/managed/<rule_name>.yaml` for MITRE ATT&CK coverage and SOC runbooks.
 
 ```mermaid
 flowchart TD
@@ -366,7 +366,7 @@ Google SecOps organizes curated detections in a 3-tier hierarchy:
 
 ### Managed Manifest Format
 
-The manifest [`rulesets/secops/managed/index.yaml`](../../rulesets/secops/managed/index.yaml) adheres to [`src/graft/engines/secops/schemas/managed.schema.json`](../../src/graft/engines/secops/schemas/managed.schema.json):
+The manifest [`rulesets/secops/managed/index.yaml`](../../../../../rulesets/secops/managed/index.yaml) adheres to [`src/graft/engines/secops/schemas/managed.schema.json`](../schemas/managed.schema.json):
 
 ```yaml
 categories:
@@ -462,7 +462,7 @@ Exclusion queries evaluate against Unified Data Model (UDM) fields. Unlike YARA-
 Follow this step-by-step operational runbook:
 
 #### Step 1: Identify the Target RuleSet
-1. Open [`rulesets/secops/managed/index.yaml`](../../rulesets/secops/managed/index.yaml).
+1. Open [`rulesets/secops/managed/index.yaml`](../../../../../rulesets/secops/managed/index.yaml).
 2. Locate the ruleset where false positives occur (e.g. search for `"Malware Signals - Suspicious Execution"`).
 3. Copy its `id` UUID (e.g. `1c4ab1f6-d801-d6a9-1177-3ec3dd5bcbe9`).
 
@@ -521,7 +521,7 @@ When an exclusion is no longer needed:
 
 In Google SecOps, detection rules are versioned resources. Recreating a rule by deleting and re-creating it (`POST rules`) generates a new server-assigned rule ID, resets detection history, breaks SOAR playbooks tied to the original rule identifier, and creates gaps in monitoring coverage.
 
-Graft implements an in-place **Custom Rule Reconciliation Engine** ([`CustomRuleReconciler`](../../src/graft/core/reconciler.py#L309)) and adapter ([`SecOpsDeployerAdapter`](../../src/graft/engines/secops/deployer.py#L7)) that updates rule text and deployment states in-place, preserving rule continuity, audit history, and detection timelines.
+Graft implements an in-place **Custom Rule Reconciliation Engine** ([`CustomRuleReconciler`](../../../core/reconciler.py#L309)) and adapter ([`SecOpsDeployerAdapter`](../deployer.py#L7)) that updates rule text and deployment states in-place, preserving rule continuity, audit history, and detection timelines.
 
 ```mermaid
 sequenceDiagram
@@ -563,7 +563,7 @@ The custom rule reconciliation pipeline executes five discrete stages:
 - **Deployment Binding:** Aggregates live deployment states via `GET /v1/projects/.../rules/-/deployments` to establish the exact `(enabled: bool, alerting: bool)` status for every rule without issuing N sequential requests.
 
 #### 2. Three-Tier Content Normalization & Matching
-To prevent spurious diffs caused by whitespace differences, platform line endings, or synthesized metadata headers, [`secops_rule_content_matches`](../../src/graft/engines/secops/adapter.py#L33) evaluates equivalence across three tiers:
+To prevent spurious diffs caused by whitespace differences, platform line endings, or synthesized metadata headers, [`secops_rule_content_matches`](../adapter.py#L33) evaluates equivalence across three tiers:
 
 - **Tier 1 (Raw Logic Equivalence):** Compares the normalized rule logic text directly (`\r\n` converted to `\n` and stripped).
 - **Tier 2 (Synthesized YARA-L Equivalence):** Compares the remote rule against the locally synthesized YARA-L rule (incorporating standard metadata fields: `meta: id = ...`, `description = ...`).
@@ -636,13 +636,13 @@ To bootstrap Graft without manual transcription:
    ```
    Merging to `main` completes the cutover, declaring Git as the permanent, authoritative Source of Truth.
 
-For full architectural details, see the **[Engine Adoption & Lifecycle Guide](../operators/adoption.md)**.
+For full architectural details, see the **[Engine Adoption & Lifecycle Guide](../../../../../docs/operators/adoption.md)**.
 
 ---
 
 ## 11. Google SecOps Data Tables & Dataset Synchronization (`datasets/<name>.yaml`)
 
-Google SecOps deprecated legacy Reference Lists in favor of **Data Tables** (`dataTables`). Graft integrates engine-agnostic string datasets (`datasets/<name>.yaml`) directly with the Chronicle `v1` Data Tables REST API via [`SecOpsDatasetAdapter`](../../src/graft/engines/secops/datasets.py).
+Google SecOps deprecated legacy Reference Lists in favor of **Data Tables** (`dataTables`). Graft integrates engine-agnostic string datasets (`datasets/<name>.yaml`) directly with the Chronicle `v1` Data Tables REST API via [`SecOpsDatasetAdapter`](../datasets.py).
 
 ```mermaid
 sequenceDiagram
@@ -683,7 +683,7 @@ sequenceDiagram
   - `description`: `metadata.description` (or `"Deprecated on Graft"` when archived under `datasets/_archived/`).
   - `columnInfo`: `[{"columnIndex": 0, "originalColumn": "value", "columnType": "STRING"}]`.
 - In YARA-L 2.0 rules, analysts reference the dataset using `%<name>.value` (e.g., `not $net.principal.ip in %known_scanner_ips.value`).
-- **Atomic 1,000-Row Ceiling (`0..1,000` Values):** Chronicle's `dataTableRows:bulkReplace` endpoint accepts a maximum of `1,000` rows per atomic request. Graft enforces `maxItems: 1000` in [`base_dataset.schema.json`](../../src/graft/core/schemas/base_dataset.schema.json) so every non-empty dataset update executes as a single atomic replacement.
+- **Atomic 1,000-Row Ceiling (`0..1,000` Values):** Chronicle's `dataTableRows:bulkReplace` endpoint accepts a maximum of `1,000` rows per atomic request. Graft enforces `maxItems: 1000` in [`base_dataset.schema.json`](../../../core/schemas/base_dataset.schema.json) so every non-empty dataset update executes as a single atomic replacement.
 - **Empty & Deprecated Datasets (`0` Rows):** Because Chronicle's `dataTableRows:bulkReplace` rejects empty `requests: []` payloads with `400 INVALID_ARGUMENT`, `SecOpsDatasetAdapter` skips `bulkReplace` when creating an empty table and clears existing rows via `GET dataTables/{name}/dataTableRows` + `DELETE dataTables/{name}/dataTableRows/{row_id}` when updating a dataset whose `ttl:YYYY-MM-DD` values have all expired or that has been moved to `datasets/_archived/`.
 
 ### 2. Additive Coexistence & Safe Archival
@@ -692,9 +692,24 @@ sequenceDiagram
 - If a dataset is moved to `datasets/_archived/<name>.yaml` and still exists in SecOps, `diff` / `apply` clears its rows to `0` and updates its description to `"Deprecated on Graft"` so rules referencing `%<name>.value` do not break before an operator removes the rule reference and deletes the table in SecOps.
 
 ### 3. Pre-Merge `verify` & Staging `test` Handling
-- **Pre-Merge Syntax Dry-Run (`graft secops verify`):** When a pull request adds both a new `datasets/<name>.yaml` and a rule referencing `%<name>.value`, the Data Table does not yet exist on the remote tenant. If `:verifyRuleText` returns a compilation diagnostic indicating `metadata unavailable for data table <name>` for a dataset that exists locally in `datasets/<name>.yaml`, [`SecOpsCompilerAdapter.verify_rule`](../../src/graft/engines/secops/compiler.py) automatically substitutes `"graft_verify_placeholder"` for `%<name>.value` in memory and re-verifies the YARA-L syntax.
-- **Staging Replay Testing (`graft secops test`):** Before executing `:run` for a rule in Staging, [`SecOpsReplayAdapter`](../../src/graft/engines/secops/replay.py) inspects `rule.logic` for `%<name>.value` references and pre-synchronizes any matching local `datasets/<name>.yaml` files to the Staging tenant so positive and negative exclusion tests evaluate against the active dataset values in Git.
+- **Pre-Merge Syntax Dry-Run (`graft secops verify`):** When a pull request adds both a new `datasets/<name>.yaml` and a rule referencing `%<name>.value`, the Data Table does not yet exist on the remote tenant. If `:verifyRuleText` returns a compilation diagnostic indicating `metadata unavailable for data table <name>` for a dataset that exists locally in `datasets/<name>.yaml`, [`SecOpsCompilerAdapter.verify_rule`](../compiler.py) automatically substitutes `"graft_verify_placeholder"` for `%<name>.value` in memory and re-verifies the YARA-L syntax.
+- **Staging Replay Testing (`graft secops test`):** Before executing `:run` for a rule in Staging, [`SecOpsReplayEngine`](../replay.py) inspects `rule.logic` for `%<name>.value` references and pre-synchronizes any matching local `datasets/<name>.yaml` files to the Staging tenant so positive and negative exclusion tests evaluate against the active dataset values in Git.
 
+---
 
+## 12. Google Cloud Audit Logging & Security Telemetry
 
+Every WIF token exchange and Chronicle API mutation generates an immutable Cloud Audit Log entry in Google Cloud Logging. Monitor these log streams to audit rule deployments and detect anomalous credential usage:
 
+```text
+# Query WIF token exchanges and SA impersonation in Google Cloud Logging:
+protoPayload.serviceName="iamcredentials.googleapis.com"
+protoPayload.methodName="GenerateAccessToken"
+protoPayload.authenticationInfo.principalEmail=~"graft-secops-deployer"
+```
+
+```text
+# Query Chronicle rule, data table, and managed content modifications in Google Cloud Logging:
+protoPayload.serviceName="chronicle.googleapis.com"
+protoPayload.methodName=~"CreateRule|UpdateRule|DeleteRule|ApplyManaged|CreateDataTable|BulkReplaceDataTableRows"
+```

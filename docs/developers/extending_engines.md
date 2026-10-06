@@ -14,6 +14,7 @@ Graft's hexagonal architecture ensures that each engine exists as a completely s
 src/graft/engines/sentinel/
 ├── __init__.py           # Package entrypoint
 ├── engine.yaml           # Engine manifest discovered by EngineRegistry
+├── .env.example          # Engine-scoped environment variable template
 ├── adapter.py            # Primary EngineAdapter protocol implementation
 ├── config.py             # Credentials and environment coordinate resolution
 ├── compiler.py           # Syntax verification implementing RuleCompilerPort
@@ -21,7 +22,9 @@ src/graft/engines/sentinel/
 ├── schemas/
 │   ├── custom.schema.json    # Engine custom rule schema (extends base_custom.schema.json)
 │   └── managed.schema.json   # Optional: schema for rulesets/<engine>/managed/index.yaml
-└── README.md                 # Engine documentation
+├── docs/
+│   └── README.md             # Engine setup, IAM, and operations runbook
+└── README.md                 # Engine package overview
 ```
 
 Engine tests live in `tests/engines/<engine>/`:
@@ -54,7 +57,7 @@ uv run graft new engine sentinel
 
 This command:
 1. Validates the engine identifier slug (`^[a-z0-9_]+$`).
-2. Creates `src/graft/engines/sentinel/` with boilerplate adapter, compiler, deployer, config, `schemas/custom.schema.json`, and `schemas/managed.schema.json`.
+2. Creates `src/graft/engines/sentinel/` with boilerplate adapter, compiler, deployer, config, `.env.example`, `docs/README.md`, `schemas/custom.schema.json`, and `schemas/managed.schema.json`.
 3. Creates `rulesets/sentinel/custom/` (with an initial example detection envelope), `rulesets/sentinel/managed/`, and `rulesets/sentinel/_archived/`.
 4. Generates initial in-tree test files in `tests/engines/sentinel/`.
 
