@@ -1,5 +1,7 @@
+import functools
 import importlib.resources
 import json
+import re
 import urllib.request
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
@@ -10,6 +12,8 @@ DEFAULT_ATTACK_STIX_URL = (
     "https://raw.githubusercontent.com/mitre-attack/attack-stix-data/master/"
     "enterprise-attack/enterprise-attack-19.2.json"
 )
+_TACTIC_ID_RE = re.compile(r"^TA\d{4}$", re.IGNORECASE)
+_TECHNIQUE_ID_RE = re.compile(r"^T\d{4}(?:\.\d{3})?$", re.IGNORECASE)
 
 
 def parse_attack_stix_bundle(stix_data: dict[str, Any], version: str = "19.2") -> dict[str, Any]:
@@ -121,6 +125,78 @@ class MitreValidator:
     def tactics(self) -> dict[str, dict[str, str]]:
         return self._tactics
 
+    @property
+    def techniques(self) -> dict[str, dict[str, object]]:
+        return self._techniques
+
+    def resolve_tactic_ids(self, mitre_mappings: Mapping[str, Sequence[str]]) -> tuple[str, ...]:
+        tactic_ids: set[str] = set()
+        for tactic in mitre_mappings:
+            norm = tactic.strip().lower()
+            if norm in ("none", "ta0000"):
+                continue
+            if norm in self._tactics:
+                tid = self._tactics[norm].get("id", "")
+                if tid and tid.upper() != "TA0000":
+                    tactic_ids.add(tid.upper())
+            elif _TACTIC_ID_RE.match(norm):
+                tactic_ids.add(norm.upper())
+        return tuple(sorted(tactic_ids))
+
+    def resolve_technique_ids(self, mitre_mappings: Mapping[str, Sequence[str]]) -> tuple[str, ...]:
+        technique_ids: set[str] = set()
+        for techniques in mitre_mappings.values():
+            for tech in techniques:
+                norm = tech.strip().upper()
+                if norm and norm != "T0000" and _TECHNIQUE_ID_RE.match(norm):
+                    technique_ids.add(norm)
+        return tuple(sorted(technique_ids))
+
+    def reconstruct_mitre_mapping(
+        self,
+        raw_tactics: Sequence[str],
+        raw_techniques: Sequence[str],
+    ) -> dict[str, tuple[str, ...]]:
+        id_to_shortname: dict[str, str] = {
+            info["id"].upper(): shortname
+            for shortname, info in self._tactics.items()
+            if shortname != "none" and "id" in info
+        }
+        declared_tactics: set[str] = set()
+        for raw_t in raw_tactics:
+            cleaned_t = raw_t.strip()
+            if not cleaned_t:
+                continue
+            upper_t = cleaned_t.upper()
+            lower_t = cleaned_t.lower()
+            if upper_t == "TA0000" or lower_t == "none":
+                continue
+            if upper_t in id_to_shortname:
+                declared_tactics.add(id_to_shortname[upper_t])
+            elif lower_t in self._tactics:
+                declared_tactics.add(lower_t)
+
+        grouped: dict[str, set[str]] = {}
+        for raw_tech in raw_techniques:
+            tech_id = raw_tech.strip().upper()
+            if not tech_id or tech_id == "T0000":
+                continue
+            tech_data = self._techniques.get(tech_id)
+            if not isinstance(tech_data, dict):
+                continue
+            valid_tactics_raw = tech_data.get("tactics", [])
+            if not isinstance(valid_tactics_raw, list):
+                continue
+            valid_tactics = [str(t) for t in valid_tactics_raw if str(t) and str(t) != "none"]
+            if not valid_tactics:
+                continue
+            matching_tactics = [t for t in valid_tactics if t in declared_tactics]
+            target_tactics = matching_tactics if matching_tactics else valid_tactics
+            for tactic_name in target_tactics:
+                grouped.setdefault(tactic_name, set()).add(tech_id)
+
+        return {tactic: tuple(sorted(techs)) for tactic, techs in sorted(grouped.items())}
+
     def validate(self, mitre_mappings: Mapping[str, Sequence[str]]) -> list[MitreValidationError]:
         errors: list[MitreValidationError] = []
 
@@ -165,3 +241,8 @@ class MitreValidator:
 
     def is_valid(self, mitre_mappings: Mapping[str, Sequence[str]]) -> bool:
         return len(self.validate(mitre_mappings)) == 0
+
+
+@functools.lru_cache(maxsize=1)
+def get_default_mitre_validator() -> MitreValidator:
+    return MitreValidator()

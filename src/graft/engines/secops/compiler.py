@@ -7,6 +7,7 @@ from pathlib import Path
 from graft.core.models.compiler import CompilationDiagnostic, CompilationResult
 from graft.core.models.rule import RuleEnvelope, RuleMetadata
 from graft.core.ports.compiler import RuleCompilerPort
+from graft.core.validation.mitre_validator import get_default_mitre_validator
 from graft.engines.secops.client import SecOpsClient
 
 _UUID_REGEX = re.compile(
@@ -20,6 +21,8 @@ _MISSING_DATATABLE_DIAG_RE = re.compile(
     re.IGNORECASE,
 )
 _LOCAL_DATASET_REF_RE = re.compile(r"%(?P<name>[a-zA-Z0-9_]+)\.value\b")
+_META_TACTIC_TOKEN_RE = re.compile(r"\b(TA\d{4})\b", re.IGNORECASE)
+_META_TECHNIQUE_TOKEN_RE = re.compile(r"\b(T\d{4}(?:\.\d{3})?)\b", re.IGNORECASE)
 
 
 def _has_local_dataset(name: str) -> bool:
@@ -61,6 +64,9 @@ def _indent_logic(logic: str, indent: str = "  ") -> str:
 def synthesize_yaral_rule(rule: RuleEnvelope) -> tuple[str, int]:
     meta_id = rule.metadata.id
     meta_desc = rule.metadata.description.replace('"', '\\"')
+    validator = get_default_mitre_validator()
+    tactic_ids = validator.resolve_tactic_ids(rule.metadata.mitre)
+    technique_ids = validator.resolve_technique_ids(rule.metadata.mitre)
 
     header_lines = [
         f"rule {rule.metadata.name} {{",
@@ -68,6 +74,10 @@ def synthesize_yaral_rule(rule: RuleEnvelope) -> tuple[str, int]:
         f'    id = "{meta_id}"',
         f'    description = "{meta_desc}"',
     ]
+    if tactic_ids:
+        header_lines.append(f'    tactic = "{", ".join(tactic_ids)}"')
+    if technique_ids:
+        header_lines.append(f'    technique = "{", ".join(technique_ids)}"')
     header_offset = len(header_lines)
     rule_text = "\n".join(header_lines) + "\n" + _indent_logic(rule.logic) + "\n}\n"
     return rule_text, header_offset
@@ -131,6 +141,22 @@ def deconstruct_yaral_rule(
 
     logic_body = textwrap.dedent(logic_body.lstrip("\r\n")).strip()
 
+    raw_tactics: list[str] = []
+    raw_techniques: list[str] = []
+    for meta_key in ("tactic", "technique", "mitre_ttp", "tags"):
+        raw_val = meta_dict.get(meta_key, "")
+        if not raw_val:
+            continue
+        raw_tactics.extend(m.group(1) for m in _META_TACTIC_TOKEN_RE.finditer(raw_val))
+        raw_techniques.extend(m.group(1) for m in _META_TECHNIQUE_TOKEN_RE.finditer(raw_val))
+        if meta_key == "tactic":
+            raw_tactics.extend(tok.strip() for tok in raw_val.split(",") if tok.strip())
+
+    mitre = get_default_mitre_validator().reconstruct_mitre_mapping(
+        raw_tactics=raw_tactics,
+        raw_techniques=raw_techniques,
+    )
+
     meta_id = _extract_uuid(meta_dict.get("id", ""), fallback_id or rule_name)
     desc = meta_dict.get("description", f"Imported detection rule for {rule_name}")
     if len(desc) > 128:
@@ -140,7 +166,7 @@ def deconstruct_yaral_rule(
         name=rule_name,
         description=desc,
         owners=(),
-        mitre={},
+        mitre=mitre,
     )
     return metadata, logic_body
 

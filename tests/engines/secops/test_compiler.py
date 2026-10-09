@@ -53,7 +53,10 @@ def test_synthesize_yaral_rule(sample_rule: RuleEnvelope) -> None:
     assert "rule test_network_beaconing {" in rule_text
     assert 'id = "a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d"' in rule_text
     assert 'description = "Detects beaconing to C2"' in rule_text
-    # Strict check: only id, description in meta:
+    assert 'tactic = "TA0011"' in rule_text
+    assert 'technique = "T1071.001"' in rule_text
+    # Strict check: only id, description, tactic, technique in meta:
+    assert "rule_name" not in rule_text
     assert "author" not in rule_text
     assert "owner" not in rule_text
     assert "severity" not in rule_text
@@ -66,6 +69,37 @@ def test_synthesize_yaral_rule(sample_rule: RuleEnvelope) -> None:
     lines = rule_text.splitlines()
     assert lines[header_offset] == "  events:"
     assert lines[header_offset + 1] == '    $e.metadata.event_type = "NETWORK_CONNECTION"'
+
+
+def test_synthesize_yaral_rule_multi_mitre_and_unmapped_sentinel(
+    sample_rule: RuleEnvelope,
+) -> None:
+    import dataclasses
+
+    multi_rule = dataclasses.replace(
+        sample_rule,
+        metadata=dataclasses.replace(
+            sample_rule.metadata,
+            mitre={
+                "privilege-escalation": ("T1098.001", "T1078.004"),
+                "persistence": ("T1098.001",),
+            },
+        ),
+    )
+    multi_text, _ = synthesize_yaral_rule(multi_rule)
+    assert 'tactic = "TA0003, TA0004"' in multi_text
+    assert 'technique = "T1078.004, T1098.001"' in multi_text
+
+    unmapped_rule = dataclasses.replace(
+        sample_rule,
+        metadata=dataclasses.replace(
+            sample_rule.metadata,
+            mitre={"none": ("T0000",)},
+        ),
+    )
+    unmapped_text, _ = synthesize_yaral_rule(unmapped_rule)
+    assert "tactic =" not in unmapped_text
+    assert "technique =" not in unmapped_text
 
 
 def test_verify_syntax_success(mock_client: MagicMock) -> None:
@@ -174,6 +208,18 @@ def test_secops_rule_content_matches(sample_rule: RuleEnvelope) -> None:
     remote_synth = dataclasses.replace(sample_rule, logic=synth_text)
     assert secops_rule_content_matches(sample_rule, remote_synth) is True
 
+    # Remote rule missing meta.tactic / meta.technique is detected as drift
+    legacy_remote_text = (
+        f"rule {sample_rule.metadata.name} {{\n"
+        "  meta:\n"
+        f'    id = "{sample_rule.metadata.id}"\n'
+        f'    description = "{sample_rule.metadata.description}"\n'
+        f"  {sample_rule.logic}\n"
+        "}\n"
+    )
+    remote_missing_mitre = dataclasses.replace(sample_rule, logic=legacy_remote_text)
+    assert secops_rule_content_matches(sample_rule, remote_missing_mitre) is False
+
     # Remote rule with synthesized text with mismatched meta.id is detected as drift
     remote_rule_id = "ru_remote_999"
     remote_with_id = dataclasses.replace(
@@ -204,6 +250,7 @@ def test_deconstruct_synthesized_yaral_rule(sample_rule: RuleEnvelope) -> None:
     assert metadata.id == sample_rule.metadata.id
     assert metadata.name == sample_rule.metadata.name
     assert metadata.description == sample_rule.metadata.description
+    assert metadata.mitre == sample_rule.metadata.mitre
     assert logic.strip() == sample_rule.logic.strip()
 
 

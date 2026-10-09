@@ -50,9 +50,16 @@ def secops_rule_content_matches(desired: RuleEnvelope, remote: RuleEnvelope) -> 
             fallback_id=remote.metadata.id,
             fallback_name=remote.metadata.name,
         )
+        desired_mitre = {
+            k: tuple(t for t in v if t != "T0000")
+            for k, v in desired.metadata.mitre.items()
+            if k != "none"
+        }
+        desired_mitre = {k: v for k, v in desired_mitre.items() if v}
         return bool(
             remote_meta.id == desired.metadata.id
             and remote_meta.description == desired.metadata.description
+            and remote_meta.mitre == desired_mitre
             and remote_logic.strip() == desired.logic.strip()
         )
     except Exception:

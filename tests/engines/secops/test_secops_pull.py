@@ -277,3 +277,65 @@ def test_secops_pull_skip_existing_without_force(
 
     assert exit_code_force == 0
     assert existing_rule.read_text(encoding="utf-8") != "existing content"
+
+
+def test_secops_pull_custom_rule_reconstructs_mitre(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    import yaml
+
+    client = MagicMock(spec=SecOpsClient)
+    inst_base = "projects/p/locations/us/instances/i"
+
+    def fake_request(
+        method: str,
+        endpoint: str,
+        body: object = None,
+        params: object = None,
+        **kwargs: object,
+    ) -> dict[str, object]:
+        if method == "GET" and endpoint == "rules":
+            return {
+                "rules": [
+                    {
+                        "name": f"{inst_base}/rules/ru_b1d72370-5fa3-4cb8-a579-22a468d6f101",
+                        "displayName": "workspace_nrd_email_opened",
+                        "text": """rule workspace_nrd_email_opened {
+  meta:
+    id = "b1d72370-5fa3-4cb8-a579-22a468d6f101"
+    description = "Google Workspace email opened from a newly registered domain."
+    tactic = "TA0001"
+    technique = "T1566.002"
+  events:
+    $e.metadata.event_type = "EMAIL_TRANSACTION"
+  condition:
+    $e
+}""",
+                    }
+                ]
+            }
+        if method == "GET" and endpoint == "rules/-/deployments":
+            return {"ruleDeployments": []}
+        return {}
+
+    client.request.side_effect = fake_request
+    custom_dir = tmp_path / "custom"
+
+    with patch("graft.engines.secops.adapter.SecOpsClient", return_value=client):
+        exit_code = main(
+            [
+                "secops",
+                "pull",
+                "--target",
+                "custom",
+                "--out-dir",
+                str(custom_dir),
+            ]
+        )
+
+    assert exit_code == 0
+    capsys.readouterr()
+    pulled_rule = custom_dir / "workspace_nrd_email_opened.yaml"
+    assert pulled_rule.is_file()
+    raw = yaml.safe_load(pulled_rule.read_text(encoding="utf-8"))
+    assert raw["metadata"]["mitre"] == {"initial-access": ["T1566.002"]}
