@@ -169,3 +169,60 @@ def test_update_mitre_taxonomy(tmp_path: Path) -> None:
     assert target_file.is_file()
     saved = json.loads(target_file.read_text(encoding="utf-8"))
     assert "stealth" in saved["tactics"]
+
+
+def test_resolve_tactic_and_technique_ids(mitre_validator: MitreValidator) -> None:
+    from graft.core.validation.mitre_validator import get_default_mitre_validator
+
+    assert get_default_mitre_validator() is get_default_mitre_validator()
+
+    mitre_mapping = {
+        "privilege-escalation": ("T1098.001", "T1078.004"),
+        "persistence": ("T1098.001",),
+        "none": ("T0000",),
+    }
+    assert mitre_validator.resolve_tactic_ids(mitre_mapping) == ("TA0003", "TA0004")
+    assert mitre_validator.resolve_technique_ids(mitre_mapping) == ("T1078.004", "T1098.001")
+
+    assert mitre_validator.resolve_tactic_ids({"none": ("T0000",)}) == ()
+    assert mitre_validator.resolve_technique_ids({"none": ("T0000",)}) == ()
+
+
+def test_reconstruct_mitre_mapping(mitre_validator: MitreValidator) -> None:
+    reconstructed = mitre_validator.reconstruct_mitre_mapping(
+        raw_tactics=["TA0003"],
+        raw_techniques=["T1098.001"],
+    )
+    assert reconstructed == {"persistence": ("T1098.001",)}
+
+    reconstructed_both = mitre_validator.reconstruct_mitre_mapping(
+        raw_tactics=["ta0004", "TA0003"],
+        raw_techniques=["t1098.001"],
+    )
+    assert reconstructed_both == {
+        "persistence": ("T1098.001",),
+        "privilege-escalation": ("T1098.001",),
+    }
+
+    reconstructed_no_tactic = mitre_validator.reconstruct_mitre_mapping(
+        raw_tactics=[],
+        raw_techniques=["T1098.001"],
+    )
+    assert reconstructed_no_tactic == {
+        "persistence": ("T1098.001",),
+        "privilege-escalation": ("T1098.001",),
+    }
+
+    reconstructed_shortname = mitre_validator.reconstruct_mitre_mapping(
+        raw_tactics=["initial-access"],
+        raw_techniques=["T1078.004"],
+    )
+    assert reconstructed_shortname == {"initial-access": ("T1078.004",)}
+
+    assert (
+        mitre_validator.reconstruct_mitre_mapping(
+            raw_tactics=["TA0000", "TA9999"],
+            raw_techniques=["T0000", "T9999.999"],
+        )
+        == {}
+    )
