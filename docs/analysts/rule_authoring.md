@@ -23,7 +23,7 @@ Core identification, operational ownership, and threat taxonomy mapping. All 7 f
 - `name` *(string, required)*: Unique snake_case rule identifier (`^[a-z0-9]+(?:_[a-z0-9]+)*$`, max 64 chars, never starting or ending with `_`, `"index"` reserved) following the `<subject>_<fact>` convention.
 - `description` *(string, required)*: Plain-text explanation of the detection objective (non-blank, max 128 chars).
 - `owners` *(list of strings, required, min 1 unique item)*: Teams or individuals operationally accountable for maintaining and tuning the rule (e.g., `Cloud Security Operations`, `Detection Engineering <detection@company.com>`).
-- `mitre` *(mapping of tactic to techniques, required, min 1 tactic with min 1 unique technique)*: MITRE ATT&CK Enterprise taxonomy mapping. Must use MITRE's normalized tactic names (lowercase with spaces replaced by dashes, e.g., `initial-access`, `privilege-escalation`, `execution` — see [MITRE Enterprise Tactics](https://attack.mitre.org/tactics/enterprise/)) and real technique IDs (`T1566.002`, `T1098.001`). Validated against the pre-indexed matrix during linting.
+- `mitre` *(mapping of tactic to techniques, required, min 1 tactic with min 1 unique technique)*: MITRE ATT&CK Enterprise taxonomy mapping. Must use MITRE's normalized tactic names (lowercase with spaces replaced by dashes, e.g., `initial-access`, `privilege-escalation`, `execution` — see [MITRE Enterprise Tactics](https://attack.mitre.org/tactics/enterprise/)) and real technique IDs (`T1566.002`, `T1098.001`). Validated against the pre-indexed matrix during linting and automatically exported to target SIEMs that index rule-level TTP metadata (for example, `meta.tactic` as `TAxxxx` IDs and `meta.technique` as `Txxxx` IDs in Google SecOps YARA-L 2.0, omitting the unmapped sentinel `none` / `T0000`).
 - `tags` *(list of strings, required, min 1 unique item, max 32)*: Lowercase categorical labels (`^[a-z0-9_/\\-]+$`). Prefer 2–3 broad, reusable platform or telemetry surface labels per rule (e.g., `gcp`, `iam`, `storage`, `workspace`, `email`, `whois`, `gcti`, `network`) so tags aggregate cleanly across the catalog. Avoid one-off rule keywords or duplicating fields already captured elsewhere (`engine`, `rule_type`, or MITRE tactics).
 - `references` *(list of strings, required, min 1 unique item)*: Non-blank strings citing threat research URLs, internal design docs, or external/community author attribution.
 
@@ -54,7 +54,7 @@ In day-to-day SOC and detection engineering operations, the primary question whe
 
 ### Block 2: `logic`
 Engine-native detection query string. Each engine adapter compiles and validates this block according to its target query language.
-- **Example (Google SecOps):** Contains YARA-L 2.0 sections (`events:`, `match:`, `outcome:`, `condition:`). Graft automatically synthesizes the `rule <name> { meta: ... }` wrapper when sending to Chronicle APIs.
+- **Example (Google SecOps):** Contains YARA-L 2.0 sections (`events:`, `match:`, `outcome:`, `condition:`). Graft automatically synthesizes the `rule <name> { meta: ... }` wrapper (`id`, `description`, `tactic`, and `technique`) when sending to Chronicle APIs.
 
 ### Block 3: `deployment`
 Operational controls governing how the rule runs in the target engine.

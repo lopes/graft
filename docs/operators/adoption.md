@@ -104,9 +104,9 @@ When pulling custom rules via `RuleDeployerPort.list_rules()` and `EngineAdapter
 2. The engine adapter's rule deconstructor:
    - Sanitizes rule display names into valid snake_case identifiers matching `^[a-z0-9]+(?:_[a-z0-9]+)*$` (max 64 characters).
    - Normalizes or preserves UUIDs for `metadata.id`.
-   - Extracts embedded `id` and `description` metadata while stripping engine-specific wrapper boilerplate so only clean query logic remains in the `logic` block.
-   - Leaves `owners: []`, `mitre: {}`, `tags: []`, and `references: []` empty—Graft never guesses operational ownership from legacy inline author strings.
-   - **Example (Google SecOps):** [`deconstruct_yaral_rule`](../../src/graft/engines/secops/compiler.py#L59) strips the outer `rule <name> { meta: ... }` wrapper, normalizes `ru_<uuid>` server IDs, and preserves clean YARA-L sections (`events:`, `match:`, `outcome:`, `condition:`).
+   - Extracts embedded `id`, `description`, and valid MITRE ATT&CK `tactic` / `technique` T-codes (when present) while stripping engine-specific wrapper boilerplate so only clean query logic remains in the `logic` block.
+   - Leaves `owners: []`, `tags: []`, and `references: []` empty (and `mitre: {}` when no valid MITRE techniques exist in `meta:`)—Graft never guesses operational ownership from legacy inline author strings.
+   - **Example (Google SecOps):** [`deconstruct_yaral_rule`](../../src/graft/engines/secops/compiler.py#L85) strips the outer `rule <name> { meta: ... }` wrapper, normalizes `ru_<uuid>` server IDs, reconstructs `metadata.mitre` from valid `TAxxxx` / `Txxxx` tokens in `meta:`, and preserves clean YARA-L sections (`events:`, `match:`, `outcome:`, `condition:`).
 3. Graft populates default placeholder runbook sections (`context`, `triage`, `response`). Because Graft schemas strictly require non-empty `owners`, `mitre`, `tags`, and `references`, `graft lint` will intentionally flag freshly pulled rules until operators complete Epoch 2 enrichment.
 4. Each rule is saved to `rulesets/<engine>/custom/<rule_name>.yaml`. Existing files are protected against accidental overwrites unless `--force` is supplied.
 
