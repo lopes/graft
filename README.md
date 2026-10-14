@@ -161,6 +161,10 @@ cd graft
 # Install virtualenv and dev dependencies
 uv sync
 
+# Configure local environment templates (platform & engine credentials)
+cp .env.example .env
+cp src/graft/engines/secops/.env.example src/graft/engines/secops/.env
+
 # Run static quality gates & test suite
 uv run ruff check .
 uv run ruff format --check .

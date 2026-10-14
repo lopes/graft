@@ -68,7 +68,7 @@ Staging and Production point to two physically separate SIEM instances:
 
 ### Single-Tenant Production Guard
 
-Because synthetic replay testing injects test events and creates temporary rules, replay adapters enforce a strict production tenant guard. If staging coordinates are omitted or resolve to the same tenant instance as Production (for example, the same `(project_id, location, instance_id)` in `SecOpsReplayEngine`), Graft refuses to inject synthetic events into Production:
+Because synthetic replay testing injects test events and creates temporary rules, replay adapters enforce a strict production tenant guard. If staging coordinates are omitted or resolve to the same tenant instance as Production (for example, the same `(project_id, location, instance_id)` in `SecOpsReplayAdapter`), Graft refuses to inject synthetic events into Production:
 
 - Without `--require-staging` (default): Emits `[WARNING]` and exits `0` (graceful degradation).
 - With `--require-staging`: Emits `[ERROR] Replay tests require a dedicated staging tenant and cannot run against production coordinates` and exits `1`.

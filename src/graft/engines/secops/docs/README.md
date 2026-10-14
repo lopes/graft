@@ -693,7 +693,7 @@ sequenceDiagram
 
 ### 3. Pre-Merge `verify` & Staging `test` Handling
 - **Pre-Merge Syntax Dry-Run (`graft secops verify`):** When a pull request adds both a new `datasets/<name>.yaml` and a rule referencing `%<name>.value`, the Data Table does not yet exist on the remote tenant. If `:verifyRuleText` returns a compilation diagnostic indicating `metadata unavailable for data table <name>` for a dataset that exists locally in `datasets/<name>.yaml`, [`SecOpsCompilerAdapter.verify_rule`](../compiler.py) automatically substitutes `"graft_verify_placeholder"` for `%<name>.value` in memory and re-verifies the YARA-L syntax.
-- **Staging Replay Testing (`graft secops test`):** Before executing `:run` for a rule in Staging, [`SecOpsReplayEngine`](../replay.py) inspects `rule.logic` for `%<name>.value` references and pre-synchronizes any matching local `datasets/<name>.yaml` files to the Staging tenant so positive and negative exclusion tests evaluate against the active dataset values in Git.
+- **Staging Replay Testing (`graft secops test`):** Before executing `:run` for a rule in Staging, [`SecOpsReplayAdapter`](../replay.py) inspects `rule.logic` for `%<name>.value` references and pre-synchronizes any matching local `datasets/<name>.yaml` files to the Staging tenant so positive and negative exclusion tests evaluate against the active dataset values in Git.
 
 ---
 
