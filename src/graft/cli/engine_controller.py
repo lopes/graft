@@ -204,7 +204,11 @@ class EngineCommandController:
         if cmd == "pull":
             return self._execute_pull(args, env_target, json_output)
 
-        sys.stderr.write(f"Unknown engine command '{cmd}'\n")
+        err_msg = f"Unknown engine command '{cmd}'"
+        if json_output:
+            sys.stdout.write(json.dumps({"success": False, "error": err_msg}) + "\n")
+        else:
+            sys.stderr.write(f"{err_msg}\n")
         return 1
 
     def _execute_verify(self, args: argparse.Namespace, env: str, json_output: bool) -> int:
@@ -759,7 +763,11 @@ class EngineCommandController:
         adapter = self.registry.load_adapter(self.manifest.name, env=env)
         managed_port = adapter.get_managed()
         if managed_port is None:
-            sys.stderr.write(f"Managed content not supported by {self.manifest.display_name}\n")
+            err_msg = f"Managed content not supported by {self.manifest.display_name}"
+            if json_output:
+                sys.stdout.write(json.dumps({"success": False, "error": err_msg}) + "\n")
+            else:
+                sys.stderr.write(f"{err_msg}\n")
             return 1
 
         manifest_path = Path(
@@ -780,6 +788,11 @@ class EngineCommandController:
         if cmd == "apply":
             target_state = self._load_managed_state(manifest_path, adapter)
             if target_state is None:
+                err_msg = f"Managed manifest not found or unsupported at '{manifest_path}'"
+                if json_output:
+                    sys.stdout.write(json.dumps({"success": False, "error": err_msg}) + "\n")
+                else:
+                    sys.stderr.write(f"Error: {err_msg}\n")
                 return 1
             reconciler = GitOpsReconciler()
             reconciler.apply(target_state, managed_port)

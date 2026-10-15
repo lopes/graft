@@ -111,8 +111,11 @@ def execute_lint(
             elif p.is_file():
                 target_files.append(p)
             else:
-                if not json_output:
-                    sys.stderr.write(f"Error: Path not found: {p}\n")
+                err_msg = f"Path not found: {p}"
+                if json_output:
+                    sys.stdout.write(json.dumps({"success": False, "error": err_msg}) + "\n")
+                else:
+                    sys.stderr.write(f"Error: {err_msg}\n")
                 return 1
     else:
         root_datasets = Path(resolved_datasets_dir)
