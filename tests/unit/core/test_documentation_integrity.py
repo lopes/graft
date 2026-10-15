@@ -191,3 +191,28 @@ def test_agent_skills_frontmatter_and_structure() -> None:
             isinstance(frontmatter.get("description"), str) and frontmatter["description"].strip()
         )
         assert frontmatter.get("disable-model-invocation") is True
+
+
+def test_agents_md_and_track_readmes_index_all_docs_and_skills() -> None:
+    agents_md = Path("AGENTS.md").read_text(encoding="utf-8")
+
+    for doc_path in sorted(Path("docs").rglob("*.md")):
+        if doc_path == Path("docs/README.md"):
+            continue
+        rel_str = doc_path.as_posix()
+        assert rel_str in agents_md, (
+            f"Unindexed documentation file '{rel_str}': add a link to AGENTS.md §1"
+        )
+        if doc_path.name != "README.md" and doc_path.parent != Path("docs"):
+            track_readme = doc_path.parent / "README.md"
+            assert track_readme.is_file(), f"Missing track README: {track_readme}"
+            track_text = track_readme.read_text(encoding="utf-8")
+            assert doc_path.name in track_text, (
+                f"Unindexed guide '{doc_path.name}': add a link in {track_readme}"
+            )
+
+    for skill_path in sorted(Path(".agents/skills").glob("*/SKILL.md")):
+        rel_str = skill_path.as_posix()
+        assert rel_str in agents_md, (
+            f"Unindexed agent skill '{rel_str}': add a link to AGENTS.md §1"
+        )

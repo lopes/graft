@@ -1,5 +1,6 @@
 import pytest
 
+from graft.core.env import load_env_file
 from graft.core.loader import load_rule_from_yaml
 from graft.engines.secops.client import SecOpsClient
 from graft.engines.secops.config import SecOpsConfig
@@ -9,6 +10,7 @@ from graft.engines.secops.replay import SecOpsReplayAdapter
 @pytest.mark.integration
 @pytest.mark.replay
 def test_live_replay_staging() -> None:
+    load_env_file()
     try:
         config = SecOpsConfig.from_env("staging")
     except KeyError as exc:

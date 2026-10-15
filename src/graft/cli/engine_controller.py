@@ -191,6 +191,8 @@ class EngineCommandController:
 
         env_target = getattr(args, "env", "staging")
 
+        if cmd == "render":
+            return self._execute_render(args, env_target, json_output)
         if cmd == "verify":
             return self._execute_verify(args, env_target, json_output)
         if cmd == "test":
@@ -204,8 +206,101 @@ class EngineCommandController:
         if cmd == "pull":
             return self._execute_pull(args, env_target, json_output)
 
-        sys.stderr.write(f"Unknown engine command '{cmd}'\n")
+        err_msg = f"Unknown engine command '{cmd}'"
+        if json_output:
+            sys.stdout.write(json.dumps({"success": False, "error": err_msg}) + "\n")
+        else:
+            sys.stderr.write(f"{err_msg}\n")
         return 1
+
+    def _execute_render(self, args: argparse.Namespace, env: str, json_output: bool) -> int:
+        render_paths: list[Path] = []
+        raw_paths = getattr(args, "paths", [])
+        all_rules = getattr(args, "all", False)
+
+        if raw_paths:
+            for p_str in raw_paths:
+                p = Path(p_str)
+                if p.is_dir():
+                    render_paths.extend(_iter_custom_yaml_files(p))
+                elif (
+                    p.is_file()
+                    and p.name not in _MANIFEST_FILENAMES
+                    and "managed" not in p.parts
+                    and not any(part.startswith("_") for part in p.parts)
+                ):
+                    render_paths.append(p)
+        elif all_rules:
+            default_dir = Path(f"rulesets/{self.manifest.name}/custom")
+            if default_dir.is_dir():
+                render_paths.extend(_iter_custom_yaml_files(default_dir))
+        else:
+            changed = get_changed_files()
+            custom_dir = Path(f"rulesets/{self.manifest.name}/custom").resolve()
+            for p in changed:
+                if (
+                    p.is_file()
+                    and p.suffix in (".yaml", ".yml")
+                    and not any(part.startswith("_") for part in p.parts)
+                ):
+                    try:
+                        if p.resolve().is_relative_to(custom_dir):
+                            render_paths.append(p)
+                    except ValueError:
+                        pass
+            render_paths.sort()
+
+        if not render_paths:
+            if json_output:
+                sys.stdout.write(
+                    json.dumps({"success": True, "total": 0, "failed": 0, "rules": []}) + "\n"
+                )
+            else:
+                sys.stdout.write(
+                    f"No custom rules found to render for {self.manifest.display_name}.\n"
+                )
+            return 0
+
+        adapter = self.registry.load_adapter(self.manifest.name, env=env)
+        rendered_list: list[dict[str, Any]] = []
+        errors_list: list[dict[str, str]] = []
+        failed_count = 0
+
+        for path in render_paths:
+            try:
+                rule = load_rule_from_yaml(path)
+                if rule.is_managed:
+                    continue
+                rendered = adapter.render_rule(rule)
+                rendered_list.append(
+                    {
+                        "name": rule.metadata.name,
+                        "path": str(path),
+                        "rendered": rendered,
+                    }
+                )
+                if not json_output:
+                    sys.stdout.write(rendered)
+                    if not rendered.endswith("\n"):
+                        sys.stdout.write("\n")
+            except Exception as exc:
+                failed_count += 1
+                errors_list.append({"file": str(path), "error": str(exc)})
+                if not json_output:
+                    sys.stderr.write(f"[FAIL] {path}: {exc}\n")
+
+        if json_output:
+            payload: dict[str, Any] = {
+                "success": failed_count == 0,
+                "total": len(rendered_list) + failed_count,
+                "failed": failed_count,
+                "rules": rendered_list,
+            }
+            if errors_list:
+                payload["errors"] = errors_list
+            sys.stdout.write(json.dumps(payload, indent=2) + "\n")
+
+        return 1 if failed_count > 0 else 0
 
     def _execute_verify(self, args: argparse.Namespace, env: str, json_output: bool) -> int:
         verify_paths: list[Path] = []
@@ -759,7 +854,11 @@ class EngineCommandController:
         adapter = self.registry.load_adapter(self.manifest.name, env=env)
         managed_port = adapter.get_managed()
         if managed_port is None:
-            sys.stderr.write(f"Managed content not supported by {self.manifest.display_name}\n")
+            err_msg = f"Managed content not supported by {self.manifest.display_name}"
+            if json_output:
+                sys.stdout.write(json.dumps({"success": False, "error": err_msg}) + "\n")
+            else:
+                sys.stderr.write(f"{err_msg}\n")
             return 1
 
         manifest_path = Path(
@@ -780,6 +879,11 @@ class EngineCommandController:
         if cmd == "apply":
             target_state = self._load_managed_state(manifest_path, adapter)
             if target_state is None:
+                err_msg = f"Managed manifest not found or unsupported at '{manifest_path}'"
+                if json_output:
+                    sys.stdout.write(json.dumps({"success": False, "error": err_msg}) + "\n")
+                else:
+                    sys.stderr.write(f"Error: {err_msg}\n")
                 return 1
             reconciler = GitOpsReconciler()
             reconciler.apply(target_state, managed_port)
@@ -996,6 +1100,18 @@ def register_engine_commands(
         apply_p.add_argument("--env", choices=envs, default=envs[-1] if envs else "production")
         apply_p.add_argument("--target", choices=targets, default=targets[-1])
         apply_p.add_argument("--all", "--full", action="store_true", dest="all_rules")
+
+        # render
+        render_p = cmd_subparsers.add_parser(
+            "render",
+            help=f"Synthesize offline {manifest.display_name} query from rule envelope",
+        )
+        render_p.add_argument("paths", nargs="*", help="Rule files or directories to render")
+        render_p.add_argument(
+            "--all",
+            action="store_true",
+            help="Render all custom rules in catalog instead of scoped diff",
+        )
 
         # pull
         pull_targets: list[str] = ["all", "custom", "managed"] if caps.managed_rules else ["custom"]

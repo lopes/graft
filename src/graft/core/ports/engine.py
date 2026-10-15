@@ -51,6 +51,9 @@ class EngineAdapter(Protocol):
     def are_rules_equal(self, desired: RuleEnvelope, remote: RuleEnvelope) -> bool:
         return desired.logic.strip() == remote.logic.strip()
 
+    def render_rule(self, rule: RuleEnvelope) -> str:
+        return rule.logic
+
     def deconstruct_rule(self, remote_rule: RuleEnvelope) -> RuleEnvelope:
         return remote_rule
 

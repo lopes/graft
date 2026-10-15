@@ -7,7 +7,12 @@ from collections.abc import Sequence
 from pathlib import Path
 
 from graft import __version__
-from graft.cli.commands_core import execute_export, execute_lint, execute_update_mitre
+from graft.cli.commands_core import (
+    execute_engines,
+    execute_export,
+    execute_lint,
+    execute_update_mitre,
+)
 from graft.cli.engines import discover_and_register_engines
 from graft.cli.scaffold import ScaffoldError, scaffold_dataset, scaffold_engine, scaffold_rule
 from graft.core.env import load_env_file
@@ -61,11 +66,11 @@ def build_parser() -> argparse.ArgumentParser:
 
     # 3. export
     export_p = subparsers.add_parser(
-        "export", help="Export metadata catalog or ATT&CK Navigator layer"
+        "export", help="Export metadata catalog, datasets, or ATT&CK Navigator layer"
     )
     export_p.add_argument(
         "target",
-        choices=["matrix", "navigator", "catalog", "metadata"],
+        choices=["matrix", "navigator", "catalog", "metadata", "datasets"],
         help="Target export artifact",
     )
     export_p.add_argument(
@@ -81,11 +86,22 @@ def build_parser() -> argparse.ArgumentParser:
         dest="rules_dir",
         help="Root directory of rulesets (default: rulesets)",
     )
+    export_p.add_argument(
+        "--datasets-dir",
+        default="datasets",
+        dest="datasets_dir",
+        help="Root directory of datasets (default: datasets)",
+    )
     export_p.add_argument("--engine", help="Filter export to a specific engine (e.g. secops)")
     export_p.add_argument(
         "--color",
         default="#008744",
         help="Hex color for Navigator layer gradient stop (default: #008744)",
+    )
+
+    # 4. engines
+    subparsers.add_parser(
+        "engines", help="List registered detection engines, capabilities, and schemas"
     )
 
     # 4. new (engine | rule | dataset)
@@ -165,9 +181,13 @@ def main(argv: Sequence[str] | None = None) -> int:
                 format_type=getattr(args, "format", None),
                 json_output=args.json,
                 rules_dir=getattr(args, "rules_dir", "rulesets"),
+                datasets_dir=getattr(args, "datasets_dir", "datasets"),
                 engine=getattr(args, "engine", None),
                 color=getattr(args, "color", "#008744"),
             )
+
+        if cmd == "engines":
+            return execute_engines(json_output=args.json)
 
         if cmd == "new":
             if args.new_type == "engine":

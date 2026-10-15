@@ -387,3 +387,24 @@ def test_secops_export_catalog_and_matrix_from_live_rulesets(
     rule_names = [r["name"] for r in cat_data]
     assert "workspace_nrd_email_opened" in rule_names
     assert "gcti_breach_network_indicator_matched" in rule_names
+
+
+def test_secops_render_offline_single_rule_and_json(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    rule_path = "rulesets/secops/custom/gcp_service_account_key_created.yaml"
+    rc = main(["secops", "render", rule_path])
+    assert rc == 0
+    out_text = capsys.readouterr().out
+    assert "rule gcp_service_account_key_created {" in out_text
+    assert "meta:" in out_text
+    assert "events:" in out_text
+    assert "condition:" in out_text
+
+    rc_json = main(["--json", "secops", "render", rule_path])
+    assert rc_json == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["success"] is True
+    assert payload["total"] == 1
+    assert payload["rules"][0]["name"] == "gcp_service_account_key_created"
+    assert "rule gcp_service_account_key_created {" in payload["rules"][0]["rendered"]

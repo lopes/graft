@@ -141,3 +141,23 @@ Graft provides structured console and diagnostic logging:
 - Emits UTC ISO-8601 timestamps (`YYYY-MM-DDTHH:MM:SSZ`) for direct correlation with SIEM and CI audit trails.
 - CLI commands support `--json` output for automated piping into security telemetry pipelines.
 - Replay test runs enforce a strict production tenant guard, refusing to inject synthetic events when staging coordinates are missing or match production.
+
+---
+
+## 8. Supply-Chain Security & Mechanical AST Enforcement
+
+Because a Detection-as-Code platform executes inside privileged CI/CD runners with permissions to modify SIEM detection rules and exclusions, third-party dependency sprawl is a direct supply-chain risk. Every unnecessary package added to a deployment tool expands its CVE exposure and transitive dependency tree.
+
+Graft mitigates supply-chain and architectural tampering through three automated code-level defenses:
+
+1. **Stdlib-First Runtime (`urllib.request`, `argparse`, `dataclasses`):**
+   - All HTTP REST communication, CLI routing, retry backoff, and domain modeling use Python >= 3.13 standard libraries. Graft avoids heavy cloud SDKs or third-party HTTP/CLI frameworks in production code (`src/graft/`), keeping the runtime dependency footprint locked to the minimal set declared in [`pyproject.toml`](../../pyproject.toml).
+2. **AST Static Import Gate ([`test_architecture_layers.py`](../../tests/unit/core/test_architecture_layers.py)):**
+   - Rather than relying on manual code review, Graft uses Python's built-in **Abstract Syntax Tree (`ast`)** parser during every `pytest` run to inspect all `import` and `from ... import` nodes across `src/graft/`.
+   - **Unauthorized Dependency Blocking:** Any import of a package outside Python's `sys.stdlib_module_names` and the approved runtime list fails CI immediately.
+   - **Network & Layer Isolation:** The AST gate forbids the Driving Core (`src/graft/core/`) from importing HTTP clients (`urllib.request`, `http.client`, `socket`) or engine adapters (`graft.engines.*`), guaranteeing that offline commands (`graft lint`, `graft export`, `graft <engine> render`) cannot make unexpected outbound network calls.
+3. **Adversarial Input & Leak Prevention Gates ([`test_adversarial_inputs.py`](../../tests/unit/core/test_adversarial_inputs.py) & [`test_documentation_integrity.py`](../../tests/unit/core/test_documentation_integrity.py)):**
+   - YAML parsers strictly use `yaml.safe_load()` (never `yaml.load()`, preventing arbitrary Python object deserialization) and wrap decoding/schema failures into typed domain exceptions.
+   - Automated repository scans block accidental commits of local workstation paths, internal hostnames, or corporate email identifiers.
+
+For full implementation details on the AST boundary tests, schema completeness gates, and Test-Driven Development (TDD) workflow, see **[Engineering Standards & Quality Gates](../developers/quality_and_standards.md)**.

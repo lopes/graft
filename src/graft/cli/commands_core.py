@@ -1,3 +1,5 @@
+import csv
+import io
 import json
 import sys
 from pathlib import Path
@@ -111,8 +113,11 @@ def execute_lint(
             elif p.is_file():
                 target_files.append(p)
             else:
-                if not json_output:
-                    sys.stderr.write(f"Error: Path not found: {p}\n")
+                err_msg = f"Path not found: {p}"
+                if json_output:
+                    sys.stdout.write(json.dumps({"success": False, "error": err_msg}) + "\n")
+                else:
+                    sys.stderr.write(f"Error: {err_msg}\n")
                 return 1
     else:
         root_datasets = Path(resolved_datasets_dir)
@@ -376,73 +381,197 @@ def _load_engine_adapters_and_states(
     return adapters, managed_states
 
 
+def execute_engines(json_output: bool = False) -> int:
+    registry = EngineRegistry()
+    manifests = registry.list_engines()
+    engines_payload: list[dict[str, Any]] = []
+    cwd = Path.cwd().resolve()
+
+    for m in manifests:
+        eng_dir = registry.get_engine_dir(m.name)
+        schemas_dir = eng_dir / "schemas"
+        schema_paths: list[str] = []
+        if schemas_dir.is_dir():
+            for sf in sorted(schemas_dir.glob("*.schema.json")):
+                try:
+                    schema_paths.append(str(sf.resolve().relative_to(cwd)))
+                except ValueError:
+                    schema_paths.append(str(sf))
+
+        engines_payload.append(
+            {
+                "name": m.name,
+                "display_name": m.display_name,
+                "description": m.description,
+                "adapter_class": m.adapter_class,
+                "environments": list(m.environments),
+                "capabilities": {
+                    "datasets": m.capabilities.datasets,
+                    "custom_rules": m.capabilities.custom_rules,
+                    "managed_rules": m.capabilities.managed_rules,
+                    "syntax_verification": m.capabilities.syntax_verification,
+                    "replay_testing": m.capabilities.replay_testing,
+                },
+                "schemas": schema_paths,
+            }
+        )
+
+    if json_output:
+        sys.stdout.write(
+            json.dumps(
+                {
+                    "success": True,
+                    "total": len(engines_payload),
+                    "engines": engines_payload,
+                },
+                indent=2,
+            )
+            + "\n"
+        )
+        return 0
+
+    lines = [
+        f"{'Engine':<12} | {'Display Name':<18} | {'Environments':<20} | Capabilities",
+        "-" * 88,
+    ]
+    for item in engines_payload:
+        caps_obj = item["capabilities"]
+        enabled_caps = [k for k, v in caps_obj.items() if v]
+        envs_str = ", ".join(item["environments"])
+        caps_str = ", ".join(enabled_caps)
+        lines.append(
+            f"{item['name']:<12} | {item['display_name']:<18} | {envs_str:<20} | {caps_str}"
+        )
+    sys.stdout.write("\n".join(lines) + "\n")
+    return 0
+
+
+def _export_datasets_payload(datasets_dir: str) -> list[dict[str, Any]]:
+    root = Path(datasets_dir)
+    if not root.is_dir():
+        return []
+    payload: list[dict[str, Any]] = []
+    for ds_path in _iter_yaml_files(root):
+        try:
+            ds = load_dataset_from_yaml(ds_path)
+            payload.append(
+                {
+                    "name": ds.metadata.name,
+                    "description": ds.metadata.description,
+                    "owners": list(ds.metadata.owners),
+                    "tags": list(ds.metadata.tags),
+                    "references": list(ds.metadata.references),
+                    "value_count": len(ds.values),
+                    "values": list(ds.values),
+                }
+            )
+        except (DatasetLoadError, ValueError, OSError):
+            continue
+    return payload
+
+
 def execute_export(
     target: str,
     out_path: str | None = None,
     format_type: str | None = None,
     json_output: bool = False,
     rules_dir: str = "rulesets",
+    datasets_dir: str = "datasets",
     engine: str | None = None,
     color: str = "#008744",
 ) -> int:
-    loaded = _load_all_rules(rules_dir)
-    if engine is not None:
-        loaded = [r for r in loaded if r[1] == engine]
-
-    engines_set = {r[1] for r in loaded}
-    adapters, managed_states = _load_engine_adapters_and_states(engines_set, rules_dir)
-
     output_str = ""
 
-    if target in ("matrix", "navigator"):
-        fmt = format_type or ("json" if json_output else "navigator")
-        enriched_loaded = [
-            (
-                rule,
-                r_engine,
-                rule_path,
-                resolve_rule_deployment_status(
+    if target == "datasets":
+        fmt = format_type or ("json" if json_output else "table")
+        ds_items = _export_datasets_payload(datasets_dir)
+        if fmt == "json":
+            output_str = json.dumps(ds_items, indent=2)
+        elif fmt == "csv":
+            buf = io.StringIO()
+            writer = csv.writer(buf, lineterminator="\n")
+            writer.writerow(["name", "description", "owners", "tags", "value_count", "values"])
+            for item in ds_items:
+                writer.writerow(
+                    [
+                        item["name"],
+                        item["description"],
+                        ";".join(item["owners"]),
+                        ";".join(item["tags"]),
+                        item["value_count"],
+                        ";".join(item["values"]),
+                    ]
+                )
+            output_str = buf.getvalue().rstrip("\n")
+        else:
+            lines = [
+                f"{'Dataset Name':<28} | {'Values':<6} | {'Owners':<20} | Description",
+                "-" * 92,
+            ]
+            for item in ds_items:
+                owners_str = ", ".join(item["owners"])
+                lines.append(
+                    f"{item['name']:<28} | {item['value_count']:<6} | "
+                    f"{owners_str:<20} | {item['description']}"
+                )
+            output_str = "\n".join(lines)
+    else:
+        loaded = _load_all_rules(rules_dir)
+        if engine is not None:
+            loaded = [r for r in loaded if r[1] == engine]
+
+        engines_set = {r[1] for r in loaded}
+        adapters, managed_states = _load_engine_adapters_and_states(engines_set, rules_dir)
+
+        if target in ("matrix", "navigator"):
+            fmt = format_type or ("json" if json_output else "navigator")
+            enriched_loaded = [
+                (
+                    rule,
+                    r_engine,
+                    rule_path,
+                    resolve_rule_deployment_status(
+                        rule,
+                        engine=r_engine,
+                        adapter=adapters.get(r_engine),
+                        managed_state=managed_states.get(r_engine),
+                    ),
+                )
+                for rule, r_engine, rule_path in loaded
+            ]
+            report = calculate_mitre_coverage(enriched_loaded)
+
+            if fmt == "table":
+                output_str = render_matrix_table(report)
+            else:  # navigator or json
+                layer_title = (
+                    f"Graft Detection Coverage ({engine})" if engine else "Graft Detection Coverage"
+                )
+                payload = export_navigator_layer(report, layer_name=layer_title, color=color)
+                output_str = json.dumps(payload, indent=2)
+
+        elif target in ("catalog", "metadata"):
+            fmt = format_type or ("json" if json_output else "table")
+            entries: list[CatalogEntry] = []
+            for rule, r_engine, rule_path in loaded:
+                entry = build_catalog_entry_from_rule(
                     rule,
                     engine=r_engine,
+                    path=rule_path,
                     adapter=adapters.get(r_engine),
                     managed_state=managed_states.get(r_engine),
-                ),
-            )
-            for rule, r_engine, rule_path in loaded
-        ]
-        report = calculate_mitre_coverage(enriched_loaded)
+                )
+                entries.append(entry)
 
-        if fmt == "table":
-            output_str = render_matrix_table(report)
-        else:  # navigator or json
-            layer_title = (
-                f"Graft Detection Coverage ({engine})" if engine else "Graft Detection Coverage"
-            )
-            payload = export_navigator_layer(report, layer_name=layer_title, color=color)
-            output_str = json.dumps(payload, indent=2)
-
-    elif target in ("catalog", "metadata"):
-        fmt = format_type or ("json" if json_output else "table")
-        entries: list[CatalogEntry] = []
-        for rule, r_engine, rule_path in loaded:
-            entry = build_catalog_entry_from_rule(
-                rule,
-                engine=r_engine,
-                path=rule_path,
-                adapter=adapters.get(r_engine),
-                managed_state=managed_states.get(r_engine),
-            )
-            entries.append(entry)
-
-        if fmt == "csv":
-            output_str = export_catalog_csv(entries)
-        elif fmt == "json":
-            catalog_payload = export_catalog_json(entries)
-            output_str = json.dumps(catalog_payload, indent=2)
-        elif fmt == "markdown":
-            output_str = export_catalog_markdown(entries)
-        else:  # table
-            output_str = render_catalog_table(entries)
+            if fmt == "csv":
+                output_str = export_catalog_csv(entries)
+            elif fmt == "json":
+                catalog_payload = export_catalog_json(entries)
+                output_str = json.dumps(catalog_payload, indent=2)
+            elif fmt == "markdown":
+                output_str = export_catalog_markdown(entries)
+            else:  # table
+                output_str = render_catalog_table(entries)
 
     if out_path:
         dest = Path(out_path)

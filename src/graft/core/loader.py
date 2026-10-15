@@ -174,7 +174,12 @@ def load_rule_from_yaml(
     if not file_path.is_file():
         raise RuleLoadError(f"Rule file not found: {file_path}")
     validate_rule_identifier(file_path.stem, kind="rule filename")
-    content = file_path.read_text(encoding="utf-8")
+    try:
+        content = file_path.read_text(encoding="utf-8")
+    except (UnicodeDecodeError, OSError) as exc:
+        raise RuleLoadError(
+            f"Failed reading rule file '{file_path}' (invalid UTF-8 or OS error): {exc}"
+        ) from exc
 
     if schema_name is None:
         parts = file_path.parts
@@ -373,7 +378,12 @@ def load_dataset_from_yaml(
     if not file_path.is_file():
         raise DatasetLoadError(f"Dataset file not found: {file_path}")
     validate_dataset_identifier(file_path.stem, kind="dataset filename")
-    content = file_path.read_text(encoding="utf-8")
+    try:
+        content = file_path.read_text(encoding="utf-8")
+    except (UnicodeDecodeError, OSError) as exc:
+        raise DatasetLoadError(
+            f"Failed reading dataset file '{file_path}' (invalid UTF-8 or OS error): {exc}"
+        ) from exc
     dataset = load_dataset_from_str(
         content,
         schema_name=schema_name,

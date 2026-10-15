@@ -120,3 +120,13 @@ def test_managed_loader_exclusion_requires_description_on_dump_and_load(tmp_path
 
     with pytest.raises(ManagedManifestLoadError, match="Schema validation failed"):
         load_managed_manifest_from_yaml(out_file)
+
+
+def test_load_managed_manifest_from_yaml_handles_invalid_utf8_bytes_gracefully(
+    tmp_path: Path,
+) -> None:
+    bad_file = tmp_path / "index.yaml"
+    bad_file.write_bytes(b"\xff\xfe\x00\x80invalid utf-8")
+
+    with pytest.raises(ManagedManifestLoadError, match="UTF-8"):
+        load_managed_manifest_from_yaml(bad_file)

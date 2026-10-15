@@ -115,7 +115,12 @@ def load_managed_manifest_from_yaml(path: Path | str) -> ManagedState:
     file_path = Path(path)
     if not file_path.is_file():
         raise FileNotFoundError(f"Manifest file not found: {file_path}")
-    content = file_path.read_text(encoding="utf-8")
+    try:
+        content = file_path.read_text(encoding="utf-8")
+    except (UnicodeDecodeError, OSError) as exc:
+        raise ManagedManifestLoadError(
+            f"Failed reading manifest file '{file_path}' (invalid UTF-8 or OS error): {exc}"
+        ) from exc
     return load_managed_manifest_from_str(content)
 
 

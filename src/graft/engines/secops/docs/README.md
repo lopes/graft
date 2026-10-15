@@ -313,17 +313,25 @@ gcloud auth print-access-token --impersonate-service-account=<SA_EMAIL>
 - **Practicality Caveat:** While architecturally best-practice, Option 1 requires `gcloud` installed locally on the developer workstation and requires the user to hold `roles/iam.serviceAccountTokenCreator` on the automation service account. On locked-down corporate workstations, minimal Docker containers, or environments where installing external CLIs is restricted, this can be cumbersome.
 
 #### Option 2: Explicit GCP Bearer Token (`GRAFT_SECOPS_TOKEN` or `GRAFT_GCP_TOKEN`) (Fast Fallback)
-If `gcloud` is not installed on your local machine (e.g. minimal environments, remote jumpboxes, or quick ad-hoc operations), you can pass an impersonated token directly via the environment or `.env` file:
+If `gcloud` is not installed on your local machine (e.g. minimal environments, remote jumpboxes, or quick ad-hoc operations), you can pass an impersonated token directly via the environment or `src/graft/engines/secops/.env`:
 ```bash
 export GRAFT_SECOPS_TOKEN="<access_token>"
-# or inside .env:
-GRAFT_SECOPS_TOKEN="<access_token>"
 ```
-- **How to Generate:** Run the impersonation command in Google Cloud Shell or any machine with `gcloud` access:
+- **How to Generate (Default 1-Hour TTL):** Run the impersonation command in Google Cloud Shell or any machine with `gcloud` access:
   ```bash
   gcloud auth print-access-token --impersonate-service-account="${SA_EMAIL}"
   ```
-- **Ephemerality Warning:** Raw OAuth 2.0 access tokens (`ya29...`) are **strictly ephemeral** and expire after **1 hour (3,600 seconds)**. Once expired, API requests will immediately fail with `401 Unauthorized` (`Request had invalid authentication credentials`). You must re-run `gcloud auth print-access-token` and paste the new token into `.env`.
+- **Extending Token Lifetime Up to 12 Hours (`43,200s`):** By default, GCP OAuth 2.0 access tokens (`ya29...`) expire after **1 hour (`3,600` seconds)**, after which API requests fail with `401 UNAUTHENTICATED`. If your GCP organization permits extended service account credential lifetimes (`constraints/iam.allowServiceAccountCredentialLifetimeExtension`), pass `--lifetime=43200` to mint a token valid for up to **12 hours** (the hard GCP maximum):
+  ```bash
+  gcloud auth print-access-token \
+    --impersonate-service-account="${SA_EMAIL}" \
+    --lifetime=43200
+  ```
+- **One-Liner to Refresh `GRAFT_SECOPS_TOKEN`:**
+  ```bash
+  echo "export GRAFT_SECOPS_TOKEN=\"$(gcloud auth print-access-token --impersonate-service-account=${SA_EMAIL})\""
+  ```
+- **Precedence Note:** When `GRAFT_SECOPS_TOKEN` is non-empty in `.env` or your shell environment, it takes precedence over `gcloud`. If you later install `gcloud` locally and switch to Option 1, comment out or remove `GRAFT_SECOPS_TOKEN` from `.env` so Graft refreshes tokens automatically.
 - **When to Use:** Ideal for rapid verification, temporary operator sessions, or lightweight environments where installing the full Google Cloud SDK is impractical.
 
 ### 3. Token Grammar Reference
