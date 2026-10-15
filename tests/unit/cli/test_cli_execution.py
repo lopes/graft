@@ -715,3 +715,25 @@ def test_main_lint_duplicate_file_stem_in_same_engine_fails(
     exit_code = main(["lint", "--rules-dir", str(tmp_path / "rulesets")])
     assert exit_code == 1
     assert "Duplicate rule filename stem 'same_stem'" in capsys.readouterr().err
+
+
+def test_main_engines_list_and_json_output(capsys: pytest.CaptureFixture[str]) -> None:
+    rc_table = main(["engines"])
+    assert rc_table == 0
+    out_table = capsys.readouterr().out
+    assert "Engine" in out_table
+    assert "Capabilities" in out_table
+
+    rc_json = main(["--json", "engines"])
+    assert rc_json == 0
+    data = json.loads(capsys.readouterr().out)
+    assert data["success"] is True
+    assert data["total"] >= 1
+    first = data["engines"][0]
+    assert "name" in first
+    assert "display_name" in first
+    assert "capabilities" in first
+    assert "datasets" in first["capabilities"]
+    assert "custom_rules" in first["capabilities"]
+    assert "environments" in first
+    assert "schemas" in first

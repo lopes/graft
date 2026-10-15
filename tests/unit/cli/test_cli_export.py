@@ -268,3 +268,50 @@ def test_export_catalog_out_file(tmp_path: Path) -> None:
     assert out_file.is_file()
     content = out_file.read_text(encoding="utf-8")
     assert "workspace_nrd_email_opened" in content
+
+
+def test_export_datasets_table_json_and_csv_with_ttl_filtering(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    ds_dir = tmp_path / "datasets"
+    ds_dir.mkdir(parents=True)
+    (ds_dir / "known_scanner_ips.yaml").write_text(
+        """metadata:
+  name: "known_scanner_ips"
+  description: "Authorized vulnerability scanner IP addresses"
+  owners:
+    - "Detection Engineering"
+  tags:
+    - "network"
+  references:
+    - "https://internal.wiki/scanners"
+values:
+  - "198.51.100.10"
+  - "198.51.100.20" # temporary scanner ttl:2020-01-01
+  - "198.51.100.30" # future scanner ttl:2099-12-31
+""",
+        encoding="utf-8",
+    )
+
+    rc_table = main(["export", "datasets", "--datasets-dir", str(ds_dir)])
+    assert rc_table == 0
+    table_out = capsys.readouterr().out
+    assert "known_scanner_ips" in table_out
+    assert "Authorized vulnerability scanner IP addresses" in table_out
+
+    rc_json = main(["--json", "export", "datasets", "--datasets-dir", str(ds_dir)])
+    assert rc_json == 0
+    json_data = json.loads(capsys.readouterr().out)
+    assert isinstance(json_data, list)
+    assert len(json_data) == 1
+    assert json_data[0]["name"] == "known_scanner_ips"
+    assert json_data[0]["value_count"] == 2
+    assert json_data[0]["values"] == ["198.51.100.10", "198.51.100.30"]
+
+    rc_csv = main(["export", "datasets", "--format", "csv", "--datasets-dir", str(ds_dir)])
+    assert rc_csv == 0
+    csv_out = capsys.readouterr().out
+    assert "name,description,owners,tags,value_count,values" in csv_out
+    assert "known_scanner_ips" in csv_out
+    assert "198.51.100.10;198.51.100.30" in csv_out
+    assert "198.51.100.20" not in csv_out

@@ -126,6 +126,10 @@ class SecOpsAdapter(EngineAdapter):
     def are_rules_equal(self, desired: RuleEnvelope, remote: RuleEnvelope) -> bool:
         return secops_rule_content_matches(desired, remote)
 
+    def render_rule(self, rule: RuleEnvelope) -> str:
+        rendered, _ = synthesize_yaral_rule(rule)
+        return rendered
+
     def resolve_deployment_status(
         self,
         rule: RuleEnvelope,

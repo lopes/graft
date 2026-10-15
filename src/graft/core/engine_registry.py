@@ -26,7 +26,7 @@ class EngineManifestLoadError(EngineError):
     pass
 
 
-RESERVED_CORE_COMMANDS = frozenset({"lint", "export", "update-mitre", "new", "help"})
+RESERVED_CORE_COMMANDS = frozenset({"lint", "export", "update-mitre", "new", "engines", "help"})
 
 
 class EngineRegistry:
