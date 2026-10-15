@@ -1,7 +1,6 @@
-import os
-
 import pytest
 
+from graft.core.env import load_env_file
 from graft.engines.secops.client import SecOpsClient
 from graft.engines.secops.compiler import SecOpsCompilerAdapter
 from graft.engines.secops.config import SecOpsConfig
@@ -9,16 +8,11 @@ from graft.engines.secops.config import SecOpsConfig
 
 @pytest.mark.integration
 def test_live_verify_rule_text_staging() -> None:
-    required_keys = [
-        "GRAFT_STAGING_PROJECT",
-        "GRAFT_STAGING_LOCATION",
-        "GRAFT_STAGING_INSTANCE_ID",
-    ]
-    missing = [k for k in required_keys if k not in os.environ]
-    if missing:
-        pytest.skip(f"Staging credentials not in environment: {', '.join(missing)}")
-
-    config = SecOpsConfig.from_env("staging")
+    load_env_file()
+    try:
+        config = SecOpsConfig.from_env("staging")
+    except KeyError as exc:
+        pytest.skip(f"Staging credentials not in environment: {exc}")
     client = SecOpsClient(config=config)
     compiler = SecOpsCompilerAdapter(client=client)
 

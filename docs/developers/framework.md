@@ -138,6 +138,8 @@ class EngineAdapter(Protocol):
 
     def are_rules_equal(self, desired: RuleEnvelope, remote: RuleEnvelope) -> bool: ...
 
+    def render_rule(self, rule: RuleEnvelope) -> str: ...
+
     def deconstruct_rule(self, remote_rule: RuleEnvelope) -> RuleEnvelope: ...
 
     def load_managed_manifest(self, path: Path) -> ManagedState | None: ...
@@ -160,6 +162,7 @@ The composite adapter acts as a capabilities factory and lifecycle hook provider
 - **Port Factories (`get_compiler`, `get_deployer`, `get_managed`, `get_replay`, `get_dataset`):** Return the concrete port implementation or `None` when a capability is unsupported.
 - **`resolve_deployment_status(rule, managed_state)`:** Translates engine-specific deployment toggles into an engine-agnostic status (`enabled`, `silent`, `disabled`). For custom rules (`rule.is_managed == False`), it inspects `rule.deployment`; for registered managed rules (`rule.is_managed == True`), it resolves the live deployment status from `managed_state` (`rulesets/<engine>/managed/index.yaml`).
 - **`are_rules_equal(desired, remote)`:** Compares a desired Git `RuleEnvelope` against a remote tenant `RuleEnvelope` during `diff`/`apply` (defaults to trimmed `logic` comparison; engines that compile metadata into the query payload, such as `SecOpsAdapter`, override this to compare compiled payloads).
+- **`render_rule(rule)`:** Synthesizes the engine-native query text from a `RuleEnvelope` offline for `graft <engine> render` (defaults to returning `rule.logic`).
 - **`deconstruct_rule(remote_rule)`:** Extracts embedded metadata from a raw remote rule during `pull` (defaults to returning `remote_rule` unchanged).
 - **`load_managed_manifest(path)` / `dump_managed_manifest(state, path)`:** Parses and serializes `rulesets/<engine>/managed/index.yaml` when `managed_rules: true` (defaults to `None`).
 - **`has_managed_rule_id(managed_id, state)`:** Verifies whether a registered managed rule's `managed.id` exists in the parsed `ManagedState` from `rulesets/<engine>/managed/index.yaml`. Used by `graft lint` to enforce referential integrity between `rulesets/<engine>/managed/<rule_name>.yaml` and `index.yaml`.
@@ -367,6 +370,7 @@ flowchart TD
 
     subgraph CustomBranch["custom_rules: true"]
         C_NEW["Provision 'graft &lt;engine&gt; new'"]
+        C_RENDER["Provision 'graft &lt;engine&gt; render'"]
         C_DIFF["Provision 'graft &lt;engine&gt; diff'"]
         C_APPLY["Provision 'graft &lt;engine&gt; apply'"]
         C_PULL["Provision 'graft &lt;engine&gt; pull'"]
@@ -398,7 +402,7 @@ flowchart TD
 ```
 
 ### CLI Dynamic Adaptation Rules:
-1. If `custom_rules: true`: Core registers `new`, `diff`, `apply`, and `pull`.
+1. If `custom_rules: true`: Core registers `new`, `render`, `diff`, `apply`, and `pull`.
 2. If `datasets: true`: Core registers the `datasets` subcommand (`datasets diff`, `datasets apply`, `datasets pull`) and adds `datasets` to `--target` on `diff`, `apply`, and `pull`.
 3. If `managed_rules: true`: Core registers the `managed` subcommand (`managed diff`, `managed apply`, `managed pull`) and adds `managed` to `--target` on `diff`, `apply`, and `pull`.
 4. If both `datasets: false` and `managed_rules: false`: The `datasets` and `managed` subcommands are omitted from CLI help text, and `--target` on `diff/apply/pull` is locked strictly to `["custom"]`.

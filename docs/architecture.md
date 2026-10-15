@@ -55,6 +55,9 @@ The platform divides into three decoupled layers:
 For a comprehensive technical deep-dive into the framework, protocol signatures, and dynamic discovery, see:
 👉 **[Pluggable Engine Adapter Framework](developers/framework.md)**
 
+> [!NOTE]
+> **Mechanically Enforced via Python AST (`ast`) & TDD:** These Hexagonal layer boundaries, the Stdlib-First dependency policy, and lossless `Schema <-> Dataclass <-> YAML` round-trips are not merely conventions—they are verified on every `pytest` run by static Abstract Syntax Tree (`ast`) analysis and completeness tests in [`tests/unit/core/test_architecture_layers.py`](../tests/unit/core/test_architecture_layers.py). See **[Engineering Standards & Quality Gates](developers/quality_and_standards.md)** for how Hexagonal Architecture, AST gates, and TDD work together.
+
 ---
 
 ## 3. Multi-Track Content Governance & Ruleset/Dataset Taxonomy

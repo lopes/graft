@@ -7,16 +7,43 @@
 
 ---
 
-## 1. Core Operating Principles
+## 1. How Hexagonal Architecture, AST Gates, and TDD Work Together
 
-1. **Direct, Grounded & Brutally Honest:**
-   - No sycophancy, no conversational fluff, no false consensus. If an architectural approach or implementation has flaws, identify them upfront.
-   - Prefer boring, stable, and simple solutions. Push back on contortions, hacks, and unnecessary abstractions.
-2. **Root Cause First:**
-   - Investigate before modifying code. Identify verified root causes before proposing patches.
-   - Never suppress linter warnings, broad `try/except`, disable tests, or paper over race conditions.
-3. **Phased Execution:**
-   - Work in discrete, reviewable phases. Never implement code belonging to future phases. Stop at phase boundaries, report completion, and obtain confirmation before continuing.
+In many projects, architectural rules ("don't import engine code in Core", "don't add unapproved dependencies", "keep schemas and dataclasses in sync") exist only in documentation and gradually erode during fast iteration. Graft turns its core design principles into **executable, sub-second unit tests** that run automatically inside the Test-Driven Development (TDD) loop:
+
+```mermaid
+flowchart LR
+    TDD["<b>1. Strict TDD Loop</b><br/>Red → Green → Refactor<br/>(tests/unit/ &amp; tests/engines/)"]
+    AST["<b>2. AST Boundary &amp; Supply-Chain Gate</b><br/>Python <code>ast</code> parses every .py file<br/>Enforces Hexagonal &amp; Stdlib-First imports"]
+    COMP["<b>3. Completeness &amp; Round-Trip Gate</b><br/>JSON Schema ↔ Frozen Dataclass<br/>Lossless load → dump → load"]
+    ADV["<b>4. Adversarial Input Gate</b><br/>Malformed YAML, bad UTF-8 &amp; CLI errors<br/>Typed exceptions &amp; strict --json stdout"]
+
+    TDD --> AST --> COMP --> ADV
+```
+
+### 1. What Is AST (`ast`) Static Analysis & Why Use It?
+An **Abstract Syntax Tree (AST)** is the structured tree representation of Python source code produced by Python's built-in compiler before execution. Using the standard library `ast` module (`ast.parse()` and `ast.walk()`), Graft's test suite inspects every `.py` file under `src/graft/` in milliseconds—without executing the code or relying on brittle regular expressions that can be tricked by comments, docstrings, or multi-line strings.
+
+In [`test_architecture_layers.py`](../../tests/unit/core/test_architecture_layers.py), the AST walker extracts every `import x` (`ast.Import`) and `from x import y` (`ast.ImportFrom`) statement to enforce two critical invariants:
+
+- **Hexagonal Import Boundaries (`test_hexagonal_import_boundaries`):**
+  Hexagonal Architecture (Ports & Adapters) requires dependencies to point strictly **inward** toward the domain core. The AST gate verifies that:
+  - **Domain Models (`src/graft/core/models/`):** Import only Python stdlib and sibling `models` (pure `@dataclass(frozen=True)` value objects).
+  - **Port Protocols (`src/graft/core/ports/`):** Import only Python stdlib, `models`, and sibling `ports` (`typing.Protocol` interfaces).
+  - **Driving Core (`src/graft/core/`):** Never imports `graft.cli`, `graft.engines`, or HTTP clients (`urllib.request`, `http.client`, `socket`, except `mitre_validator.py` for explicit STIX updates). This guarantees Core remains 100% engine-agnostic and offline-testable.
+  - **Driven Engine Adapters (`src/graft/engines/<engine>/`):** Never import `graft.cli` or another engine adapter (e.g., `secops` can never couple to a future `sentinel` or `splunk` package).
+  - **Driving CLI (`src/graft/cli/`):** Never statically imports `graft.engines.<engine>.*`; all engine interaction routes dynamically through `EngineRegistry` and `EngineAdapter`.
+- **Stdlib-First & Supply-Chain Gate (`test_stdlib_first_runtime_imports`):**
+  Compares every root module imported in `src/graft/` against Python's `sys.stdlib_module_names` and the approved runtime dependencies declared in [`pyproject.toml`](../../pyproject.toml). Even if an extra third-party library is installed in a local virtual environment, importing it in `src/graft/` without maintainer approval and test-gate alignment fails `pytest` immediately.
+
+### 2. Schema-to-Model & Round-Trip Completeness (`test_architecture_layers.py`)
+Detection-as-Code relies on translating between YAML files on disk, frozen Python dataclasses in memory, and engine-native queries (such as YARA-L). If a developer adds a field to a JSON schema but forgets to add it to `RuleEnvelope` or `rule_to_dict()`, data is silently dropped during `graft <engine> pull` or `graft lint`.
+- `test_schema_and_dataclass_completeness` mechanically verifies that every property in [`src/graft/core/schemas/*.schema.json`](../../src/graft/core/schemas/) matches the fields on `RuleEnvelope` / `DatasetEnvelope` and the keys emitted by `rule_to_dict()` / `dataset_to_dict()`.
+- `test_repository_corpora_lossless_round_trip` loads every active dataset in `datasets/` and rule in `rulesets/`, serializes it back to YAML, re-parses it, and asserts `load(dump(load(file))) == load(file)`.
+
+### 3. Never-Crash & Strict `--json` Error Gate (`test_adversarial_inputs.py`)
+Because both human engineers and AI agents drive Graft via the CLI, hostile or malformed inputs (truncated YAML, invalid UTF-8 bytes, wrong types, or missing file paths) must never produce raw Python tracebacks (`KeyError`, `AttributeError`, `UnicodeDecodeError`).
+- [`test_adversarial_inputs.py`](../../tests/unit/core/test_adversarial_inputs.py) feeds corrupt payloads into Core/Engine loaders and CLI commands, verifying that parsers always raise typed domain exceptions (`RuleLoadError`, `DatasetLoadError`, `ManagedManifestLoadError`, `EngineError`, `ScaffoldError`) and that passing `--json` always outputs valid JSON (`{"success": false, "error": "..."}`) on `stdout`.
 
 ---
 
@@ -24,10 +51,8 @@
 
 Graft enforces an uncompromising standard: **solve problems using Python standard libraries first**.
 
-### 1. Allowed Runtime Dependencies
-Only two third-party runtime dependencies are permitted across the entire codebase:
-1. `pyyaml`: Required for YAML envelope parsing and serialization (Python standard library lacks YAML support).
-2. `jsonschema`: Required for JSON Schema Draft 2020-12 validation.
+### 1. Approved Runtime Dependencies & Governance
+Runtime dependencies are locked in [`pyproject.toml`](../../pyproject.toml) and verified by [`test_architecture_layers.py`](../../tests/unit/core/test_architecture_layers.py). Currently, only YAML parsing (`pyyaml`) and JSON Schema Draft 2020-12 validation (`jsonschema` and its `$ref` registry companion `referencing`) are used at runtime because Python's standard library does not include a YAML parser or JSON Schema validator. Adding any new runtime dependency or OS tool requires explicit maintainer approval.
 
 ### 2. Mandatory Standard Library Replacements
 All other functionality must be implemented using Python >= 3.13 standard libraries:
