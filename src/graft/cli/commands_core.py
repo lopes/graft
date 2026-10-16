@@ -28,11 +28,31 @@ from graft.core.matrix import (
     export_navigator_layer,
     render_matrix_table,
 )
+from graft.core.mitre_intelligence import (
+    build_mitre_coverage_report,
+    calculate_mitre_gaps,
+    export_gaps_csv,
+    export_gaps_json,
+    export_gaps_markdown,
+    export_mitre_coverage_csv,
+    export_mitre_coverage_json,
+    export_mitre_coverage_markdown,
+    filter_technique_ids,
+    inspect_mitre_entities,
+    load_mitre_analytics,
+    load_mitre_database,
+    render_gaps_table,
+    render_inspect_text,
+    render_mitre_coverage_table,
+)
 from graft.core.models.managed import ManagedState
 from graft.core.models.rule import RuleEnvelope
 from graft.core.ports.engine import EngineAdapter
 from graft.core.validation import RuleUniquenessValidator
-from graft.core.validation.mitre_validator import update_mitre_taxonomy
+from graft.core.validation.mitre_validator import (
+    check_upstream_mitre_version,
+    update_mitre_taxonomy,
+)
 from graft.core.validation.schema_validator import SchemaValidator
 
 _MANIFEST_FILENAMES = ("index.yaml", "index.yml")
@@ -299,24 +319,62 @@ def execute_lint(
 def execute_update_mitre(
     source_url: str | None = None,
     json_output: bool = False,
+    version: str | None = None,
+    check_only: bool = False,
 ) -> int:
     try:
-        payload = update_mitre_taxonomy(source_url=source_url)
-        version = payload.get("version", "19.2")
+        if check_only:
+            status = check_upstream_mitre_version()
+            cur = status["current_version"]
+            lat = status["latest_version"]
+            avail = bool(status["update_available"])
+            if json_output:
+                sys.stdout.write(json.dumps({"success": True, **status}, indent=2) + "\n")
+                return 0
+            if status.get("offline"):
+                sys.stdout.write(
+                    f"MITRE ATT&CK pinned at v{cur} (upstream version check skipped: offline).\n"
+                )
+            elif avail:
+                sys.stderr.write(
+                    f"[WARNING] MITRE ATT&CK v{lat} is available upstream "
+                    f"(current: v{cur}). Run 'graft mitre update' to upgrade.\n"
+                )
+            else:
+                sys.stdout.write(f"MITRE ATT&CK taxonomy is up to date (v{cur}).\n")
+            return 0
+
+        payload = update_mitre_taxonomy(source_url=source_url, version=version)
+        load_mitre_database.cache_clear()
+        load_mitre_analytics.cache_clear()
+
+        resolved_ver = str(payload.get("version", ""))
         tech_count = len(payload.get("techniques", {}))
         tactic_count = len(payload.get("tactics", {}))
+        group_count = len(payload.get("groups", {}))
+        mit_count = len(payload.get("mitigations", {}))
+        det_count = len(payload.get("detection_strategies", {}))
+        dc_count = len(payload.get("data_components", {}))
+        an_count = int(payload.get("analytics_count", 0))
         msg = (
-            f"Updated MITRE ATT&CK Enterprise taxonomy to v{version} "
-            f"({tech_count} techniques, {tactic_count} tactics)."
+            f"Updated MITRE ATT&CK Enterprise taxonomy to v{resolved_ver} "
+            f"({tech_count} techniques, {tactic_count} tactics, {det_count} strategies, "
+            f"{an_count} analytics, {dc_count} data components, {group_count} groups, "
+            f"{mit_count} mitigations)."
         )
         if json_output:
             sys.stdout.write(
                 json.dumps(
                     {
                         "success": True,
-                        "version": version,
+                        "version": resolved_ver,
                         "techniques": tech_count,
                         "tactics": tactic_count,
+                        "detection_strategies": det_count,
+                        "analytics": an_count,
+                        "data_components": dc_count,
+                        "groups": group_count,
+                        "mitigations": mit_count,
                         "message": msg,
                     }
                 )
@@ -479,6 +537,11 @@ def execute_export(
     datasets_dir: str = "datasets",
     engine: str | None = None,
     color: str = "#008744",
+    platform: str | None = None,
+    group: str | None = None,
+    data_component: str | None = None,
+    enrich: bool = False,
+    include_gaps: bool = False,
 ) -> int:
     output_str = ""
 
@@ -523,7 +586,7 @@ def execute_export(
         engines_set = {r[1] for r in loaded}
         adapters, managed_states = _load_engine_adapters_and_states(engines_set, rules_dir)
 
-        if target in ("matrix", "navigator"):
+        if target in ("navigator", "matrix", "mitre"):
             fmt = format_type or ("json" if json_output else "navigator")
             enriched_loaded = [
                 (
@@ -539,21 +602,49 @@ def execute_export(
                 )
                 for rule, r_engine, rule_path in loaded
             ]
-            report = calculate_mitre_coverage(enriched_loaded)
+            report = calculate_mitre_coverage(
+                enriched_loaded,
+                platform=platform,
+                group=group,
+                data_component=data_component,
+            )
 
             if fmt == "table":
-                output_str = render_matrix_table(report)
+                output_str = render_matrix_table(report, enrich=enrich)
             else:  # navigator or json
                 layer_title = (
                     f"Graft Detection Coverage ({engine})" if engine else "Graft Detection Coverage"
                 )
-                payload = export_navigator_layer(report, layer_name=layer_title, color=color)
+                payload = export_navigator_layer(
+                    report,
+                    layer_name=layer_title,
+                    color=color,
+                    platform=platform,
+                    group=group,
+                    data_component=data_component,
+                    enrich=enrich,
+                    include_gaps=include_gaps,
+                )
                 output_str = json.dumps(payload, indent=2)
 
         elif target in ("catalog", "metadata"):
             fmt = format_type or ("json" if json_output else "table")
+            has_scope_filter = any(x is not None for x in (platform, group, data_component))
+            allowed_techs = (
+                filter_technique_ids(
+                    platform=platform,
+                    group=group,
+                    data_component=data_component,
+                )
+                if has_scope_filter
+                else None
+            )
             entries: list[CatalogEntry] = []
             for rule, r_engine, rule_path in loaded:
+                if allowed_techs is not None:
+                    rule_techs = {t for ts in rule.metadata.mitre.values() for t in ts}
+                    if not (rule_techs & allowed_techs):
+                        continue
                 entry = build_catalog_entry_from_rule(
                     rule,
                     engine=r_engine,
@@ -564,14 +655,14 @@ def execute_export(
                 entries.append(entry)
 
             if fmt == "csv":
-                output_str = export_catalog_csv(entries)
+                output_str = export_catalog_csv(entries, enrich=enrich)
             elif fmt == "json":
-                catalog_payload = export_catalog_json(entries)
+                catalog_payload = export_catalog_json(entries, enrich=enrich)
                 output_str = json.dumps(catalog_payload, indent=2)
             elif fmt == "markdown":
-                output_str = export_catalog_markdown(entries)
+                output_str = export_catalog_markdown(entries, enrich=enrich)
             else:  # table
-                output_str = render_catalog_table(entries)
+                output_str = render_catalog_table(entries, enrich=enrich)
 
     if out_path:
         dest = Path(out_path)
@@ -586,4 +677,165 @@ def execute_export(
     else:
         sys.stdout.write(output_str + "\n")
 
+    return 0
+
+
+def _load_enriched_rules_for_mitre(
+    rules_dir: str = "rulesets",
+    engine: str | None = None,
+) -> list[tuple[RuleEnvelope, str, Path, str]]:
+    loaded = _load_all_rules(rules_dir)
+    if engine is not None:
+        loaded = [r for r in loaded if r[1] == engine]
+    engines_set = {r[1] for r in loaded}
+    adapters, managed_states = _load_engine_adapters_and_states(engines_set, rules_dir)
+    return [
+        (
+            rule,
+            r_engine,
+            rule_path,
+            resolve_rule_deployment_status(
+                rule,
+                engine=r_engine,
+                adapter=adapters.get(r_engine),
+                managed_state=managed_states.get(r_engine),
+            ),
+        )
+        for rule, r_engine, rule_path in loaded
+    ]
+
+
+def execute_mitre_coverage(
+    rules_dir: str = "rulesets",
+    engine: str | None = None,
+    platform: str | None = None,
+    group: str | None = None,
+    tactic: str | None = None,
+    technique: str | None = None,
+    det: str | None = None,
+    data_component: str | None = None,
+    tag: str | None = None,
+    enrich: bool = False,
+    format_type: str | None = None,
+    out_path: str | None = None,
+    json_output: bool = False,
+) -> int:
+    enriched_loaded = _load_enriched_rules_for_mitre(rules_dir, engine=engine)
+    report = build_mitre_coverage_report(
+        enriched_loaded,
+        platform=platform,
+        group=group,
+        tactic=tactic,
+        technique=technique,
+        det=det,
+        data_component=data_component,
+        tag=tag,
+        enrich=enrich,
+    )
+    fmt = format_type or ("json" if json_output else "table")
+    if fmt == "json":
+        output_str = json.dumps(export_mitre_coverage_json(report, enrich=enrich), indent=2)
+    elif fmt == "csv":
+        output_str = export_mitre_coverage_csv(report, enrich=enrich)
+    elif fmt == "markdown":
+        output_str = export_mitre_coverage_markdown(report, enrich=enrich)
+    else:
+        output_str = render_mitre_coverage_table(report, enrich=enrich)
+
+    if out_path:
+        dest = Path(out_path)
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        dest.write_text(output_str + "\n", encoding="utf-8")
+        if json_output:
+            sys.stdout.write(
+                json.dumps({"success": True, "target": "coverage", "out": str(dest)}) + "\n"
+            )
+        else:
+            sys.stdout.write(f"Exported MITRE coverage to {dest}\n")
+    else:
+        sys.stdout.write(output_str + "\n")
+    return 0
+
+
+def execute_mitre_gaps(
+    rules_dir: str = "rulesets",
+    engine: str | None = None,
+    platform: str | None = None,
+    group: str | None = None,
+    tactic: str | None = None,
+    data_component: str | None = None,
+    top: int | None = None,
+    format_type: str | None = None,
+    out_path: str | None = None,
+    json_output: bool = False,
+) -> int:
+    enriched_loaded = _load_enriched_rules_for_mitre(rules_dir, engine=engine)
+    fmt = format_type or ("json" if json_output else "table")
+    effective_top = top if top is not None else (25 if fmt == "table" else None)
+    report = calculate_mitre_gaps(
+        enriched_loaded,
+        platform=platform,
+        group=group,
+        tactic=tactic,
+        data_component=data_component,
+        top=effective_top,
+    )
+    if fmt == "json":
+        output_str = json.dumps(export_gaps_json(report), indent=2)
+    elif fmt == "csv":
+        output_str = export_gaps_csv(report)
+    elif fmt == "markdown":
+        output_str = export_gaps_markdown(report)
+    else:
+        output_str = render_gaps_table(report)
+
+    if out_path:
+        dest = Path(out_path)
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        dest.write_text(output_str + "\n", encoding="utf-8")
+        if json_output:
+            sys.stdout.write(
+                json.dumps({"success": True, "target": "gaps", "out": str(dest)}) + "\n"
+            )
+        else:
+            sys.stdout.write(f"Exported MITRE gaps to {dest}\n")
+    else:
+        sys.stdout.write(output_str + "\n")
+    return 0
+
+
+def execute_mitre_inspect(
+    targets: list[str],
+    rules_dir: str = "rulesets",
+    platform: str | None = None,
+    include_analytics: bool = False,
+    include_groups: bool = False,
+    full: bool = False,
+    json_output: bool = False,
+) -> int:
+    enriched_loaded = _load_enriched_rules_for_mitre(rules_dir)
+    items = inspect_mitre_entities(
+        targets,
+        rules=enriched_loaded,
+        platform=platform,
+        include_analytics=include_analytics,
+        include_groups=include_groups,
+        full=full,
+    )
+    if json_output:
+        version = str(load_mitre_database().get("version", ""))
+        sys.stdout.write(
+            json.dumps(
+                {
+                    "success": True,
+                    "version": version,
+                    "total": len(items),
+                    "items": items,
+                },
+                indent=2,
+            )
+            + "\n"
+        )
+    else:
+        sys.stdout.write(render_inspect_text(items) + "\n")
     return 0

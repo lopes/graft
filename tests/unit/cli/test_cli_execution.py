@@ -238,7 +238,20 @@ def test_main_new_rule_via_root_command(tmp_path: Path, monkeypatch: pytest.Monk
 
 
 def test_main_update_mitre(capsys: pytest.CaptureFixture[str]) -> None:
-    exit_code = main(["update-mitre"])
+    with patch(
+        "graft.cli.commands_core.update_mitre_taxonomy",
+        return_value={
+            "version": "19.2",
+            "techniques": {"T1059": {}},
+            "tactics": {"execution": {}},
+            "groups": {"G0096": {}},
+            "mitigations": {"M1045": {}},
+            "detection_strategies": {"DET0010": {}},
+            "data_components": {"DC0064": {}},
+            "analytics_count": 10,
+        },
+    ):
+        exit_code = main(["mitre", "update"])
     assert exit_code == 0
     captured = capsys.readouterr()
     assert "MITRE" in captured.out
@@ -518,7 +531,7 @@ def test_main_update_mitre_success(capsys: pytest.CaptureFixture[str]) -> None:
         "graft.cli.commands_core.update_mitre_taxonomy",
         return_value={"version": "19.2", "techniques": {"T1059": {}}, "tactics": {"execution": {}}},
     ):
-        exit_code = main(["update-mitre"])
+        exit_code = main(["mitre", "update"])
     assert exit_code == 0
     captured = capsys.readouterr()
     assert "Updated MITRE ATT&CK Enterprise taxonomy to v19.2" in captured.out
@@ -529,7 +542,7 @@ def test_main_update_mitre_json_output(capsys: pytest.CaptureFixture[str]) -> No
         "graft.cli.commands_core.update_mitre_taxonomy",
         return_value={"version": "19.2", "techniques": {"T1059": {}}, "tactics": {"execution": {}}},
     ):
-        exit_code = main(["--json", "update-mitre"])
+        exit_code = main(["--json", "mitre", "update"])
     assert exit_code == 0
     captured = capsys.readouterr()
     data = json.loads(captured.out)

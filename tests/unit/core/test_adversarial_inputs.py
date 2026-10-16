@@ -128,3 +128,46 @@ def test_engine_controller_json_output_on_managed_errors_and_unknown_command(
     payload_unknown = json.loads(capsys.readouterr().out)
     assert payload_unknown["success"] is False
     assert "nonexistent_subcommand" in payload_unknown["error"]
+
+
+def test_mitre_stix_parser_and_cli_adversarial_inputs(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    from graft.cli.main import main
+    from graft.core.validation.mitre_validator import (
+        parse_attack_analytics_bundle,
+        parse_attack_stix_bundle,
+    )
+
+    corrupted_bundle = {
+        "objects": [
+            123,
+            None,
+            "bad",
+            {"type": "attack-pattern", "external_references": "not_a_list"},
+            {"type": "relationship", "relationship_type": "uses", "source_ref": 123},
+            {
+                "type": "x-mitre-analytic",
+                "external_references": [{"source_name": "mitre-attack", "external_id": "AN9999"}],
+                "name": "Test",
+                "x_mitre_log_source_references": "bad",
+                "x_mitre_mutable_elements": "bad",
+            },
+        ]
+    }
+    res_core = parse_attack_stix_bundle(corrupted_bundle)
+    assert "T0000" in res_core["techniques"]
+    res_an = parse_attack_analytics_bundle(corrupted_bundle)
+    assert "AN9999" in res_an["analytics"]
+
+    rc_bad_inspect = main(["--json", "mitre", "inspect", "UNKNOWN_ENTITY_999"])
+    assert rc_bad_inspect == 1
+    err_inspect = json.loads(capsys.readouterr().out)
+    assert err_inspect["success"] is False
+    assert "Unknown MITRE entity" in err_inspect["error"]
+
+    rc_bad_gaps = main(["--json", "mitre", "gaps", "--platform", "BeOS_Invalid"])
+    assert rc_bad_gaps == 1
+    err_gaps = json.loads(capsys.readouterr().out)
+    assert err_gaps["success"] is False
+    assert "Unknown MITRE platform" in err_gaps["error"]

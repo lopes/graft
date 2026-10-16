@@ -105,6 +105,7 @@ When pulling custom rules via `RuleDeployerPort.list_rules()` and `EngineAdapter
    - Sanitizes rule display names into valid snake_case identifiers matching `^[a-z0-9]+(?:_[a-z0-9]+)*$` (max 64 characters).
    - Normalizes or preserves UUIDs for `metadata.id`.
    - Extracts embedded `id`, `description`, and valid MITRE ATT&CK `tactic` / `technique` T-codes (when present) while stripping engine-specific wrapper boilerplate so only clean query logic remains in the `logic` block.
+   - Automatically upgrades legacy **`revoked-by` MITRE techniques** to their active replacement technique IDs and tactics (for example, automatically translating legacy `T1086` PowerShell tokens from older SIEM rules to `T1059.001` under `execution` via `MitreValidator.reconstruct_mitre_mapping()`).
    - Leaves `owners: []`, `tags: []`, and `references: []` empty (and `mitre: {}` when no valid MITRE techniques exist in `meta:`)—Graft never guesses operational ownership from legacy inline author strings.
    - **Example (Google SecOps):** [`deconstruct_yaral_rule`](../../src/graft/engines/secops/compiler.py#L85) strips the outer `rule <name> { meta: ... }` wrapper, normalizes `ru_<uuid>` server IDs, reconstructs `metadata.mitre` from valid `TAxxxx` / `Txxxx` tokens in `meta:`, and preserves clean YARA-L sections (`events:`, `match:`, `outcome:`, `condition:`).
 3. Graft populates default placeholder runbook sections (`context`, `triage`, `response`). Because Graft schemas strictly require non-empty `owners`, `mitre`, `tags`, and `references`, `graft lint` will intentionally flag freshly pulled rules until operators complete Epoch 2 enrichment.
@@ -174,13 +175,21 @@ Before committing the baseline to version control, detection engineers review an
 
 ### 2. Offline Validation
 
-Validate the entire catalog offline against Draft 2020-12 schemas and bundled MITRE ATT&CK data:
+Validate the entire catalog offline against Draft 2020-12 schemas and bundled MITRE ATT&CK data (`src/graft/data/mitre_attack.json`):
 
 ```bash
 uv run graft lint
 ```
 
-Ensure all imported custom rules and the managed manifest return `0 errors`.
+Ensure all imported custom rules and the managed manifest return `0 errors`. If any pulled rule references a deprecated MITRE technique or the legacy `defense-evasion` tactic split (`stealth` vs. `defense-impairment`), `graft lint` emits the exact replacement technique ID and valid tactic shortnames.
+
+> [!TIP]
+> **Zero-Bootstrap Offline MITRE Data & Version Upgrades:**
+> Graft ships with pre-compiled MITRE ATT&CK STIX bundles (`src/graft/data/mitre_attack.json` and `src/graft/data/mitre_analytics.json`) directly in the repository, so adoption and CI/CD pipelines never download external 40 MB STIX files during normal execution. When MITRE releases a new ATT&CK version, upgrade the repository's pinned taxonomy at your own pace with:
+> ```bash
+> uv run graft mitre update --check
+> uv run graft mitre update
+> ```
 
 ### 3. The Baseline Cutover Commit
 

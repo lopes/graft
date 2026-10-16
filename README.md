@@ -35,7 +35,7 @@ In horticulture, **grafting** joins a shoot from one plant onto the rootstock of
 Graft acts as the unified trunk:
 
 - **Standardized Core:** Author, document, and test detection rules (`metadata`, `logic`, `deployment`, `runbook`, `tests`) alongside reusable, engine-agnostic contextual datasets (`datasets/<name>.yaml`) in a unified, version-controlled repository.
-- **Resilient Branches (Ports & Adapters):** Seamlessly "graft" rules and datasets into production engines. Deploy natively into **Google SecOps** using YARA-L 2.0 and Data Tables today, and branch into auxiliary SIEMs, EDRs, or cloud telemetry tomorrow without refactoring engineering workflows.
+- **Resilient Branches (Ports & Adapters):** Seamlessly "graft" rules and datasets into production **Detection Engines**—defined in Graft as *any system that processes raw telemetry and generates security alerts from it* (spanning SIEM, EDR/XDR, CNAPP, NDR, and identity security platforms). Deploy natively into **Google SecOps** using YARA-L 2.0 and Data Tables today, and branch into auxiliary SIEMs, EDRs, or cloud runtime engines tomorrow without refactoring engineering workflows.
 - **Multi-Track Governance:** Manage reusable string datasets (`datasets/<name>.yaml`), bespoke organizational detections (`rulesets/<engine>/custom/`), and vendor-managed detections (`rulesets/<engine>/managed/index.yaml` and optional registered rule envelopes `rulesets/<engine>/managed/<rule_name>.yaml`) under GitOps plan/apply reconciliation.
 - **Frictionless CI/CD:** Decouple detection authoring from manual UI workflows with automated schema validation, dataset cross-reference checks, pre-merge API syntax dry runs (e.g., `verifyRuleText` in Google SecOps), and synthetic replay testing against dedicated staging infrastructure.
 
@@ -106,11 +106,11 @@ $ graft secops diff --env production
 [-] Exclusion to delete: excl_temp_maintenance_window
 ```
 
-### 5. Threat Visibility, Audit-Ready Catalogs & ATT&CK v19.2 Layers
-Bridge the gap between detection engineering code, SOC operations, and leadership reporting:
+### 5. Threat Visibility, Audit-Ready Catalogs & ATT&CK v20.0 Intelligence
+Bridge the gap between detection engineering code, CTI analysis, SOC operations, and leadership reporting:
 - **Multi-Format Detection Catalogs:** Export unified catalogs in interactive terminal tables, CSV spreadsheets, Markdown documentation (`docs/RULE_CATALOG.md`), or JSON for ingestion into security data lakes, BigQuery, Polars, or BI dashboards.
-- **MITRE ATT&CK Enterprise v19.2 Matrix:** Built-in evaluation of tactics and sub-techniques (`TAxxxx:Tyyyy.zzz`) with automated cross-engine technique normalization and coverage analysis.
-- **Official Navigator Layer Generation:** Generate color-graded MITRE ATT&CK Navigator v4.5/v5.2 layer files (`exports/secops_coverage.json`) with embedded rule metadata, deployment status, and direct source links for interactive heatmap visualization in the official ATT&CK Navigator.
+- **MITRE ATT&CK Enterprise v20.0 Matrix & CTI Intelligence (`graft mitre`):** Offline evaluation of tactics, sub-techniques (`TAxxxx:Tyyyy.zzz`), Detection Strategies (`DETxxxx`), Analytics (`ANxxxx`), Data Components (`DCxxxx`), Threat Groups (`Gxxxx`), and Mitigations (`Mxxxx`), plus 3-state gap analysis (`covered`, `partial`, `uncovered`) and one-command taxonomy upgrades (`graft mitre update`).
+- **Official Navigator Layer Generation:** Generate color-graded MITRE ATT&CK Navigator v4.5/v5.2 layer files (`exports/secops_coverage.json`) with embedded rule metadata, deployment status, optional STIX enrichments (`--enrich`), uncovered gap overlays (`--include-gaps`), and direct source links for interactive heatmap visualization in the official ATT&CK Navigator.
 
 ```bash
 $ graft export catalog
@@ -224,11 +224,12 @@ graft secops new gcti_breach_network_indicator_matched --managed 433faf9e-4d51-f
 graft new engine sentinel
 ```
 
-Graft also includes repository-native AI agent skills under [`.agents/skills/`](.agents/skills/) for composable rule and dataset engineering (see [Rule Authoring Guide](docs/analysts/rule_authoring.md#ai-assisted-rule-authoring--review-agentsskills)):
+Graft also includes repository-native AI agent skills under [`.agents/skills/`](.agents/skills/) for composable rule, dataset, and CTI coverage engineering (see [Rule Authoring Guide](docs/analysts/rule_authoring.md)):
 - `/scaffold-dataset <context_or_path>`: Runs `graft new dataset` and populates `metadata` and `values` for a reusable string dataset.
-- `/scaffold-rule <context_or_path>`: Runs `graft new rule` and populates `metadata` and `runbook` while leaving `logic`, `deployment`, and `tests` untouched.
+- `/scaffold-rule <context_or_path>`: Runs `graft new rule`, inspects MITRE analytics via `graft --json mitre inspect`, and populates `metadata` and `runbook` while leaving `logic`, `deployment`, and `tests` untouched.
 - `/scaffold-tests <rule_path>`: Parses authored `logic` predicates to generate positive (`match_*`) and negative (`ignore_*`) synthetic event vectors in `tests`.
-- `/review-rule [path_or_dir]`: Runs `graft lint` and performs a read-only 5-block engineering audit (including `%<dataset>.value` cross-checks).
+- `/review-rule [path_or_dir]`: Runs `graft lint` and performs a read-only 5-block engineering audit (including `%<dataset>.value` cross-checks and MITRE analytic alignment).
+- `/cti-coverage [scope_or_question]`: Chains `graft --json mitre coverage`, `gaps`, and `inspect` to surface cross-perimeter blind spots, Threat Group (`Gxxxx`) exposure, and prioritized detection blueprints.
 
 #### 3. Pre-Merge Verification & Staging Replay Testing
 ```bash
@@ -280,17 +281,19 @@ graft secops pull --target datasets --env production
 graft secops managed pull --env production
 ```
 
-#### 6. Threat Matrix & Visibility Catalogs
+#### 6. MITRE Intelligence, Threat Matrix & Visibility Catalogs
 ```bash
 # Render on-screen detection catalog table (default format)
 graft export catalog
 
-# Filter catalog or matrix by target engine
-graft export catalog --engine secops
-graft export matrix --format table --engine secops
+# Inspect MITRE ATT&CK coverage, 3-state gaps, and targeted analytics/threat groups
+graft mitre coverage --enrich
+graft mitre gaps --platform IaaS --top 10
+graft mitre inspect T1098.001 --analytics --platform IaaS
+graft mitre update --check
 
-# Generate official MITRE ATT&CK Enterprise v19.2 Navigator layer (custom color gradient)
-graft export matrix --format navigator --engine secops --color "#4285F4" --out exports/secops_coverage.json
+# Generate official MITRE ATT&CK Enterprise Navigator layer (custom color gradient; matrix/mitre aliases supported)
+graft export navigator --engine secops --color "#4285F4" --out exports/secops_coverage.json
 
 # Export detection catalog for audits and documentation pipelines
 graft export catalog --format csv --out exports/detection_catalog.csv

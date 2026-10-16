@@ -59,7 +59,7 @@ def test_export_navigator_layer_structure() -> None:
 
     assert layer["name"] == "Test Layer"
     assert layer["domain"] == "enterprise-attack"
-    assert layer["versions"]["attack"] == "19.2"
+    assert tuple(int(p) for p in str(layer["versions"]["attack"]).split(".")) >= (19, 2)
     assert layer["versions"]["navigator"] == "5.2.0"
     assert layer["versions"]["layer"] == "4.5"
     assert layer["selectTechniquesAcrossTactics"] is False
@@ -157,3 +157,33 @@ def test_export_navigator_layer_managed_rule_type_and_explicit_status() -> None:
 
     fallback_report = calculate_mitre_coverage([managed_rule])
     assert fallback_report.tactic_coverages[0].statuses == ["disabled"]
+
+
+def test_matrix_filtering_enrich_and_include_gaps() -> None:
+    rule_cloud = make_dummy_rule("rule_cloud", {"persistence": ("T1098.001",)})
+    rule_phish = make_dummy_rule("rule_phish", {"initial-access": ("T1566.002",)})
+
+    # Filter by platform IaaS (T1098.001 is IaaS; T1566.002 is not IaaS)
+    report_iaas = calculate_mitre_coverage(
+        [rule_cloud, rule_phish],
+        platform="IaaS",
+    )
+    assert [t.technique_id for t in report_iaas.techniques] == ["T1098.001"]
+
+    # Export navigator layer with platform, enrich, and include_gaps
+    layer = export_navigator_layer(
+        report_iaas,
+        platform="IaaS",
+        enrich=True,
+        include_gaps=True,
+    )
+    assert layer["filters"]["platforms"] == ["IaaS"]
+    covered_cells = [t for t in layer["techniques"] if t["score"] > 0]
+    gap_cells = [t for t in layer["techniques"] if t["score"] == 0]
+    assert len(covered_cells) == 1
+    assert len(gap_cells) >= 1
+    meta_names = [m["name"] for m in covered_cells[0]["metadata"]]
+    assert "platforms" in meta_names
+    assert "data_components" in meta_names
+    assert "mitigations" in meta_names
+    assert "group_count" in meta_names

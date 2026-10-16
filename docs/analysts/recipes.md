@@ -240,7 +240,7 @@ Rules placed in any underscore-prefixed folder (e.g. `_archived/`, `_deprecated/
 ## Recipe 9: Generating MITRE ATT&CK Matrices & Catalogs
 
 ### Objective
-Export objective detection catalogs across formats (`table`, `csv`, `json`, `markdown`) and generate MITRE ATT&CK Enterprise v19.2 matrices and Navigator layers for coverage tracking and multi-engine gap analysis.
+Export objective detection catalogs across formats (`table`, `csv`, `json`, `markdown`), inspect MITRE ATT&CK coverage and 3-state gaps (`graft mitre`), and generate MITRE ATT&CK Enterprise Navigator layers (`graft export navigator` / `graft export matrix`) for coverage tracking and multi-engine gap analysis.
 
 ### Catalog Commands
 ```bash
@@ -260,19 +260,23 @@ graft export catalog --format markdown --out docs/RULE_CATALOG.md
 graft export catalog --format json --out exports/rules.json
 ```
 
-### Threat Matrix & MITRE Navigator Commands
+### MITRE Intelligence & Navigator Commands
 ```bash
-# View terminal table of MITRE ATT&CK technique coverage
-graft export matrix --format table
+# View terminal table of MITRE ATT&CK technique coverage (with optional STIX enrichments)
+graft mitre coverage
+graft mitre coverage --enrich --platform IaaS
 
-# Filter matrix table by engine
-graft export matrix --format table --engine secops
+# Compute prioritized 3-state coverage gaps ranked by Threat Group (Gxxxx) prevalence
+graft mitre gaps --platform IaaS --top 10
+
+# Inspect a technique, Detection Strategy (DETxxxx), Analytic (ANxxxx), or Threat Group (Gxxxx)
+graft mitre inspect T1098.001 --analytics --platform IaaS
 
 # Generate official MITRE ATT&CK Navigator v4.5 JSON layer (default greenish gradient: #008744)
-graft export matrix --format navigator --out exports/enterprise_coverage.json
+graft export navigator --out exports/enterprise_coverage.json
 
-# Generate engine-scoped Navigator layer with a custom gradient color
-graft export matrix --format navigator --engine secops --color "#4285F4" --out exports/secops_coverage.json
+# Generate engine-scoped Navigator layer with a custom gradient color (matrix/mitre aliases supported)
+graft export navigator --engine secops --color "#4285F4" --out exports/secops_coverage.json
 ```
 
 ### Multi-Engine Gap Analysis in MITRE Navigator
@@ -311,11 +315,10 @@ Each technique in the layer is enriched with:
      - **Score 5 (High / Green / Low Risk):** Multi-engine redundancy. Both platforms actively detect the adversary behavior.
      - **Score 0 / Unscored (White):** Total blind spot across all platforms.
 
-### MITRE ATT&CK Enterprise v19.2 Taxonomy
-Graft stays current with modern adversary tactics and techniques, pinning to ATT&CK Enterprise v19.2:
-- **Stealth Tactic (`TA0005`):** In v19.2, MITRE renamed `TA0005` from "Defense Evasion" to "Stealth". The corresponding YAML tactic name is `stealth`.
-- **Defense Impairment Tactic (`TA0112`):** Introduced in v19.2 to capture actions that disable, corrupt, or modify defenses. The corresponding YAML tactic name is `defense-impairment`.
-- **Technique Revocations & Replacements:** Techniques revoked by MITRE are rejected by `graft lint`. For example, `T1562.001` (Disable or Modify Tools) was revoked in v19.2 and replaced by `T1685` under `defense-impairment`. Graft adopts the latest taxonomy forward.
+### MITRE ATT&CK Enterprise Taxonomy & Version Upgrades
+Graft ships with pre-compiled MITRE ATT&CK Enterprise STIX data (currently **v20.0**, upgradable anytime via `uv run graft mitre update`):
+- **Stealth Tactic (`TA0005`) & Defense Impairment (`TA0112`):** Starting in v19.2+, MITRE split legacy `defense-evasion` into `stealth` (`TA0005`) and `defense-impairment` (`TA0112`). If a rule uses legacy `defense-evasion`, `graft lint` flags it and tells you whether the mapped technique belongs to `stealth` or `defense-impairment`.
+- **Technique Revocations & Replacements:** Techniques revoked or deprecated by MITRE are rejected by `graft lint` with exact replacement pointers (for example, `T1562.001` Disable or Modify Tools was revoked and replaced by `T1685` under `defense-impairment`). During `graft <engine> pull`, revoked techniques are upgraded automatically to their active replacements.
 
 ### Objective Catalog Schema (15 Fields)
 Every catalog export (`table`, `csv`, `json`, `markdown`) normalizes to 15 objective indicators:

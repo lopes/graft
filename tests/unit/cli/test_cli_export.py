@@ -115,7 +115,7 @@ def test_export_matrix_navigator_json_stdout(
     captured = capsys.readouterr()
     data = json.loads(captured.out)
     assert data["domain"] == "enterprise-attack"
-    assert data["versions"]["attack"] == "19.2"
+    assert tuple(int(p) for p in str(data["versions"]["attack"]).split(".")) >= (19, 2)
     assert data["versions"]["navigator"] == "5.2.0"
     assert data["versions"]["layer"] == "4.5"
     assert data["gradient"]["colors"] == ["#ffffff", "#008744"]
@@ -315,3 +315,122 @@ values:
     assert "known_scanner_ips" in csv_out
     assert "198.51.100.10;198.51.100.30" in csv_out
     assert "198.51.100.20" not in csv_out
+
+
+def test_export_navigator_and_mitre_aliases_with_filters_and_enrich(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    rules_dir = _write_sample_rulesets(tmp_path)
+    rc = main(
+        [
+            "export",
+            "navigator",
+            "--platform",
+            "IaaS",
+            "--enrich",
+            "--include-gaps",
+            "--rules-dir",
+            str(rules_dir),
+        ]
+    )
+    assert rc == 0
+    layer = json.loads(capsys.readouterr().out)
+    assert layer["filters"]["platforms"] == ["IaaS"]
+    assert any(t["score"] == 0 for t in layer["techniques"])
+
+    rc_alias = main(
+        [
+            "export",
+            "mitre",
+            "--platform",
+            "IaaS",
+            "--rules-dir",
+            str(rules_dir),
+        ]
+    )
+    assert rc_alias == 0
+    layer_alias = json.loads(capsys.readouterr().out)
+    assert layer_alias["filters"]["platforms"] == ["IaaS"]
+
+
+def test_mitre_cli_coverage_gaps_inspect_and_update_check(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    from unittest.mock import patch
+
+    rules_dir = _write_sample_rulesets(tmp_path)
+
+    # 1. graft --json mitre coverage --enrich --tag iam
+    rc_cov = main(
+        [
+            "--json",
+            "mitre",
+            "coverage",
+            "--tag",
+            "iam",
+            "--enrich",
+            "--rules-dir",
+            str(rules_dir),
+        ]
+    )
+    assert rc_cov == 0
+    cov_data = json.loads(capsys.readouterr().out)
+    assert cov_data["success"] is True
+    assert cov_data["covered_techniques"] == 1
+    assert cov_data["techniques"][0]["technique_id"] == "T1098.001"
+    assert "detection_strategies" in cov_data["techniques"][0]
+
+    # 2. graft --json mitre gaps --platform IaaS --top 5
+    rc_gaps = main(
+        [
+            "--json",
+            "mitre",
+            "gaps",
+            "--platform",
+            "IaaS",
+            "--top",
+            "5",
+            "--rules-dir",
+            str(rules_dir),
+        ]
+    )
+    assert rc_gaps == 0
+    gaps_data = json.loads(capsys.readouterr().out)
+    assert gaps_data["success"] is True
+    assert len(gaps_data["gaps"]) <= 5
+
+    # 3. graft --json mitre inspect T1098.001 --analytics --platform IaaS
+    rc_insp = main(
+        [
+            "--json",
+            "mitre",
+            "inspect",
+            "T1098.001",
+            "--analytics",
+            "--platform",
+            "IaaS",
+            "--rules-dir",
+            str(rules_dir),
+        ]
+    )
+    assert rc_insp == 0
+    insp_data = json.loads(capsys.readouterr().out)
+    assert insp_data["success"] is True
+    assert insp_data["items"][0]["id"] == "T1098.001"
+    assert "analytics" in insp_data["items"][0]
+
+    # 4. graft mitre update --check
+    with patch(
+        "graft.cli.commands_core.check_upstream_mitre_version",
+        return_value={
+            "current_version": "19.2",
+            "latest_version": "20.0",
+            "update_available": True,
+            "latest_url": "https://example.com/20.0.json",
+            "offline": False,
+        },
+    ):
+        rc_chk = main(["mitre", "update", "--check"])
+        assert rc_chk == 0
+        chk_out = capsys.readouterr()
+        assert "20.0" in chk_out.out or "20.0" in chk_out.err

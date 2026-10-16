@@ -23,7 +23,7 @@ flowchart TD
     subgraph DrivingCore["Driving Core (src/graft/core/)"]
         PORTS["Core Ports (typing.Protocol)<br/>• EngineAdapter<br/>• RuleCompilerPort<br/>• RuleDeployerPort<br/>• ManagedEnginePort<br/>• ReplayHarnessPort"]
         MODELS["Domain Models (dataclasses)<br/>• RuleEnvelope<br/>• ManagedState<br/>• CompilationResult<br/>• ReconciliationDiff"]
-        SERVICES["Core Services<br/>• SchemaValidator<br/>• MitreValidator<br/>• GitOpsReconciler<br/>• GitBlameExtractor<br/>• Matrix & Catalog Exporters"]
+        SERVICES["Core Services<br/>• SchemaValidator &amp; MitreValidator<br/>• MitreIntelligence (Coverage, 3-State Gaps, Inspect)<br/>• Dataset &amp; GitOps Reconcilers<br/>• GitBlameExtractor<br/>• Navigator &amp; Catalog Exporters"]
         REGISTRY["EngineRegistry<br/>(Dynamic Manifest Discovery)"]
     end
 

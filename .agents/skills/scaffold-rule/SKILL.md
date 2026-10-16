@@ -17,7 +17,7 @@ Before generating any fields, ground your decisions in:
 - [Base Custom Rule Schema](../../../src/graft/core/schemas/base_custom.schema.json)
 - [Base Managed Rule Schema](../../../src/graft/core/schemas/base_managed.schema.json)
 - [Base Dataset Schema](../../../src/graft/core/schemas/base_dataset.schema.json)
-- [Pinned MITRE ATT&CK v19.2 Matrix](../../../src/graft/data/mitre_attack.json)
+- [Visibility, Threat Matrix & Catalog Tooling](../../../docs/analysts/visibility_and_matrix.md) (query MITRE taxonomy and analytics via `uv run graft --json mitre inspect <Txxxx> --analytics`; never read `src/graft/data/mitre_*.json` directly into context)
 
 ---
 
@@ -31,9 +31,10 @@ flowchart TD
     MODE -->|"New Managed Rule"| LOOKUP["Lookup vendor ID in<br/>rulesets/&lt;engine&gt;/managed/index.yaml"]
     LOOKUP --> CLI2["Run: uv run graft new rule &lt;name&gt; --engine &lt;engine&gt; --managed &lt;id&gt;"]
     MODE -->|"Existing YAML File"| READ["Read existing YAML envelope"]
-    CLI1 --> EDIT["Update ONLY metadata &amp; runbook blocks<br/>(Preserve id, owners, logic, deployment/managed, tests)"]
-    CLI2 --> EDIT
-    READ --> EDIT
+    CLI1 --> MITRE["Inspect candidate technique enrichment:<br/>uv run graft --json mitre inspect &lt;Txxxx&gt; --analytics"]
+    CLI2 --> MITRE
+    READ --> MITRE
+    MITRE --> EDIT["Update ONLY metadata &amp; runbook blocks<br/>(Preserve id, owners, logic, deployment/managed, tests)"]
     EDIT --> LINT["Run: uv run graft lint &lt;rule_path&gt;"]
 ```
 
@@ -90,7 +91,11 @@ flowchart TD
 ### `metadata.mitre`
 - Required mapping of normalized MITRE Enterprise tactic shortnames (`^[a-z0-9-]+$`) to lists of valid technique or sub-technique IDs (`^T\d{4}(\.\d{3})?$`).
 - Always prefer the **most specific sub-technique** (e.g., `T1566.002` Spearphishing Link or `T1566.001` Spearphishing Attachment rather than parent `T1566` when telemetry specifies the vector).
-- Every tactic key and technique ID **must** be valid in [`src/graft/data/mitre_attack.json`](../../../src/graft/data/mitre_attack.json) and the technique must belong to that tactic in the STIX bundle (e.g., `initial-access: ["T1566.002"]`).
+- Before finalizing `metadata.mitre` and `runbook`, inspect the candidate technique via the CLI (never read `src/graft/data/mitre_*.json` directly into context):
+  ```bash
+  uv run graft --json mitre inspect <Txxxx.xxx> --analytics
+  ```
+- Verify the technique is `"active"` (not revoked or deprecated) and belongs to the mapped tactic shortnames (e.g., `initial-access: ["T1566.002"]`, `stealth`, `defense-impairment`).
 
 ### `metadata.tags`
 - Required list of `1..32` unique lowercase strings matching `^[a-z0-9_/\\-]+$`.
@@ -103,15 +108,15 @@ flowchart TD
 
 ### `runbook.context`
 - Required string (`1..2048` characters).
-- Explain the threat mechanics: how adversaries abuse this vector, why the correlated telemetry signals risk, and realistic false-positive scenarios to keep in mind.
+- Explain the threat mechanics: how adversaries (including relevant `Gxxxx` threat groups from `graft mitre inspect`) abuse this vector, why the correlated telemetry (`DCxxxx` / `DETxxxx`) signals risk, and realistic false-positive scenarios (`mutable_elements`) to keep in mind.
 
 ### `runbook.triage`
 - Required string (`1..4096` characters), formatted as a multi-line YAML block (`|`) with a numbered checklist (`1. ...`, `2. ...`).
-- Provide 3–5 prioritized, concrete investigation steps tailored to the specific telemetry surface (e.g., checking recipient actions, sender authentication headers, registrar age, or blast radius across other principals).
+- Provide 3–5 prioritized, concrete investigation steps grounded in the telemetry surface and MITRE `ANxxxx` analytic (`log_sources` and `mutable_elements` such as caller baselines, time windows, or registrar age).
 
 ### `runbook.response`
 - Required string (`1..4096` characters), formatted as a multi-line YAML block (`|`) with a numbered checklist (`1. ...`, `2. ...`).
-- Provide 2–4 graduated containment and remediation steps (e.g., quarantining messages, blocking domains/indicators, revoking sessions/keys, isolating hosts).
+- Provide 2–4 graduated containment and remediation steps informed by the platform and MITRE `Mxxxx` mitigations (e.g., quarantining messages, blocking domains/indicators, revoking sessions/keys, enforcing MFA or privileged account controls).
 
 ---
 

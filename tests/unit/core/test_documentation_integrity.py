@@ -171,7 +171,13 @@ def test_engine_docs_co_located_in_engine_packages() -> None:
 
 
 def test_agent_skills_frontmatter_and_structure() -> None:
-    expected_skills = ("scaffold-dataset", "scaffold-rule", "scaffold-tests", "review-rule")
+    expected_skills = (
+        "scaffold-dataset",
+        "scaffold-rule",
+        "scaffold-tests",
+        "review-rule",
+        "cti-coverage",
+    )
     skills_root = Path(".agents/skills")
     assert skills_root.is_dir(), "Missing .agents/skills directory"
 

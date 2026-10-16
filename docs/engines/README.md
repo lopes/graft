@@ -1,6 +1,8 @@
 # Graft Detection Engines
 
-In Graft, **Engines** are driven adapters that connect the platform-agnostic detection core to concrete SIEMs, EDR platforms, and cloud telemetry services.
+In Graft, a **Detection Engine** is defined as **any system or platform that ingests and processes raw telemetry, evaluates detection logic against it, and generates security alerts**.
+
+Graft intentionally names its adapters and ruleset namespaces **`engines`** (`src/graft/engines/<engine>/`, `rulesets/<engine>/`) rather than `siems`. In modern security operations, threat detection is not confined to a single log aggregator: any tool that processes telemetry and produces alerts—including **SIEMs** (Google SecOps, Microsoft Sentinel, Splunk), **EDRs/XDRs** (CrowdStrike, Microsoft Defender), **CNAPPs & Cloud Runtime Protectors** (Wiz, AWS GuardDuty, Falco), **NDRs**, and **Identity Threat Detection (ITDR)** platforms—is a Detection Engine that can implement Graft's Core port contracts.
 
 ---
 

@@ -8,7 +8,7 @@
 
 ## 1. Architectural Philosophy: Hexagonal Boundaries
 
-In Graft, detection business logic, domain models, schema validators, and governance tools remain 100% engine-agnostic. The core never adapts to an external SIEM or detection engine; engines adapt to Core via port contracts.
+In Graft, a **Detection Engine** is any system or platform that processes raw telemetry, evaluates detection logic, and generates security alerts—encompassing SIEMs, EDRs/XDRs, CNAPPs, NDRs, and identity runtime protectors under a single architectural abstraction. Detection business logic, domain models, schema validators, and governance tools remain 100% engine-agnostic: the Core never adapts to an external detection engine; engines adapt to Core via port contracts.
 
 ```mermaid
 flowchart TD
@@ -20,7 +20,7 @@ flowchart TD
     subgraph DrivingCore["Driving Core (src/graft/core/)"]
         PORTS["Engine Ports (typing.Protocol)<br/>• DatasetPort<br/>• RuleCompilerPort<br/>• RuleDeployerPort<br/>• ManagedEnginePort<br/>• ReplayHarnessPort"]
         MODELS["Domain Models (dataclasses)<br/>• DatasetEnvelope<br/>• RuleEnvelope<br/>• ManagedState<br/>• CompilationResult<br/>• ReconciliationDiff"]
-        SERVICES["Core Services<br/>• SchemaValidator<br/>• MitreValidator<br/>• DatasetReconciler &amp; GitOpsReconciler<br/>• GitBlameExtractor<br/>• Matrix &amp; Catalog Exporters"]
+        SERVICES["Core Services<br/>• SchemaValidator &amp; MitreValidator<br/>• MitreIntelligence (Coverage, 3-State Gaps, Inspect)<br/>• DatasetReconciler &amp; GitOpsReconciler<br/>• GitBlameExtractor<br/>• Navigator &amp; Catalog Exporters"]
         REGISTRY["EngineRegistry<br/>(Dynamic Manifest Discovery)"]
     end
 

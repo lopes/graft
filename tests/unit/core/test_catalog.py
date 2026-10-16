@@ -341,3 +341,42 @@ def test_export_catalog_json() -> None:
     assert "has_runbook" not in payload[0]
     assert "severity" not in payload[0]
     assert "has_tests" not in payload[0]
+
+
+def test_export_catalog_with_enrich_flag() -> None:
+    rule = RuleEnvelope(
+        metadata=RuleMetadata(
+            id="00000000-0000-0000-0000-000000000001",
+            name="gcp_sa_key_created",
+            description="Detects SA key creation",
+            owners=("Joe Lopes",),
+            mitre={"persistence": ("T1098.001",)},
+            tags=("gcp", "iam"),
+        ),
+        logic="events: $e condition: $e",
+        deployment=BaseDeploymentConfig(enabled=True, alerting=True),
+        runbook=Runbook(context="ctx", triage="tr", response="res"),
+        tests=(),
+    )
+    entry = build_catalog_entry_from_rule(rule, engine="siem_alpha")
+
+    # Default JSON has 15 keys (no enrichment bloat)
+    default_json = export_catalog_json([entry], enrich=False)
+    assert "platforms" not in default_json[0]
+
+    # Enriched JSON includes MITRE enrichments
+    enriched_json = export_catalog_json([entry], enrich=True)
+    assert "IaaS" in enriched_json[0]["platforms"]
+    assert "data_components" in enriched_json[0]
+    assert "mitigations" in enriched_json[0]
+    assert "group_count" in enriched_json[0]
+
+    enriched_csv = export_catalog_csv([entry], enrich=True)
+    assert "platforms" in enriched_csv
+    assert "IaaS" in enriched_csv
+
+    enriched_md = export_catalog_markdown([entry], enrich=True)
+    assert "Platforms" in enriched_md
+
+    enriched_table = render_catalog_table([entry], enrich=True)
+    assert "Platforms" in enriched_table
