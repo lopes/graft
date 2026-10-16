@@ -17,6 +17,7 @@ Ground every review finding in:
 - [Synthetic Replay Testing Guide](../../../docs/analysts/replay_testing.md)
 - [Base Custom Rule Schema](../../../src/graft/core/schemas/base_custom.schema.json)
 - [Base Managed Rule Schema](../../../src/graft/core/schemas/base_managed.schema.json)
+- [Visibility, Threat Matrix & Catalog Tooling](../../../docs/analysts/visibility_and_matrix.md) (query MITRE taxonomy and analytics via `uv run graft --json mitre inspect <Txxxx> --analytics`; never read `src/graft/data/mitre_*.json` directly into context)
 
 ---
 
@@ -29,7 +30,8 @@ flowchart TD
     TARGET -->|"No path provided"| GIT["Find modified/untracked YAML files<br/>under rulesets/ via git status/diff"]
     USE --> LINT["Run: uv run graft lint &lt;target&gt;"]
     GIT --> LINT
-    LINT --> AUDIT["Audit all blocks against Graft standards:<br/>1. metadata  2. logic  3. deployment/managed  4. runbook  5. tests"]
+    LINT --> MITRE["Inspect mapped techniques via CLI:<br/>uv run graft --json mitre inspect &lt;Txxxx&gt; --analytics"]
+    MITRE --> AUDIT["Audit all blocks against Graft standards:<br/>1. metadata  2. logic  3. deployment/managed  4. runbook  5. tests"]
     AUDIT --> REPORT["Output structured PASS / WARN / FAIL report<br/>with exact YAML/query remediation snippets"]
 ```
 
@@ -58,8 +60,8 @@ Evaluate each rule across all blocks and classify every check as `PASS`, `WARN`,
 - **Owners:**
   - Is `metadata.owners` populated with a real owner or team (flagging generic placeholders if left unreviewed)?
 - **MITRE ATT&CK Mapping:**
-  - Are tactics and techniques valid in `src/graft/data/mitre_attack.json`?
-  - Does the mapping use the **most specific sub-technique** (`TXXXX.XXX`) that reflects the telemetry in `logic`?
+  - Run `uv run graft --json mitre inspect <Txxxx> --analytics` for each mapped technique (never read `src/graft/data/mitre_*.json` directly into context).
+  - Verify tactics and techniques are active (flagging any revoked or deprecated IDs) and use the **most specific sub-technique** (`TXXXX.XXX`) that reflects the telemetry in `logic`.
   - Flag leftover `graft new rule` stub mappings (`execution: ["T1059.001"]`) when the rule is unrelated to PowerShell.
 - **Tags:**
   - Does `metadata.tags` contain 2–3 broad, reusable lowercase platform/surface labels (e.g., `gcp`, `iam`, `workspace`, `email`, `whois`, `gcti`, `network`)?
@@ -69,7 +71,7 @@ Evaluate each rule across all blocks and classify every check as `PASS`, `WARN`,
 
 ### Block 2: `logic` *(Custom Rules Only)*
 - **Stub Detection:** Flag immediately (`FAIL`) if `logic` still contains the default `USER_LOGIN` stub from `graft new rule`.
-- **Semantic Alignment:** Does the query actually detect the behavior claimed in `metadata.description` and `runbook.context`?
+- **Semantic Alignment:** Does the query actually detect the behavior claimed in `metadata.description`, `runbook.context`, and the technique's MITRE `DETxxxx` / `ANxxxx` analytics (`log_sources` and `mutable_elements`)?
 - **Query Hygiene & Performance:**
   - Are event variable names descriptive (`$mail`, `$whois`, `$iam` rather than `$e1`, `$e2`)?
   - Are multi-event joins selective and bounded by an explicit, justified `match:` time window?
@@ -88,9 +90,9 @@ Evaluate each rule across all blocks and classify every check as `PASS`, `WARN`,
 ### Block 4: `runbook`
 - **Stub & Boilerplate Detection:** Flag (`FAIL`) if `context`, `triage`, or `response` still contain the default `graft new rule` placeholder text (`"Context and background regarding this detection."`, `"1. Verify principal user and host."`).
 - **Operational Specificity:**
-  - Does `runbook.context` explain the threat model and realistic false-positive scenarios?
-  - Does `runbook.triage` reference the actual entities, fields, or outcome variables produced by `logic`?
-  - Does `runbook.response` provide concrete, graduated containment and remediation steps specific to the affected platform?
+  - Does `runbook.context` explain the threat model, relevant `Gxxxx` threat groups, and realistic false-positive scenarios (`mutable_elements`)?
+  - Does `runbook.triage` reference the actual entities, fields, or outcome variables produced by `logic` and align with the technique's `ANxxxx` analytic?
+  - Does `runbook.response` provide concrete, graduated containment and remediation steps informed by the platform and MITRE `Mxxxx` mitigations?
 
 ### Block 5: `tests` *(Custom Rules)*
 - **Coverage:** Does `tests` include at least one positive vector (`id: "match_*"`, `expect: 1`) and one negative vector (`id: "ignore_*"`, `expect: 0`)?

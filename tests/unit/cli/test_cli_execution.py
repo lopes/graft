@@ -238,7 +238,20 @@ def test_main_new_rule_via_root_command(tmp_path: Path, monkeypatch: pytest.Monk
 
 
 def test_main_update_mitre(capsys: pytest.CaptureFixture[str]) -> None:
-    exit_code = main(["update-mitre"])
+    with patch(
+        "graft.cli.commands_core.update_mitre_taxonomy",
+        return_value={
+            "version": "19.2",
+            "techniques": {"T1059": {}},
+            "tactics": {"execution": {}},
+            "groups": {"G0096": {}},
+            "mitigations": {"M1045": {}},
+            "detection_strategies": {"DET0010": {}},
+            "data_components": {"DC0064": {}},
+            "analytics_count": 10,
+        },
+    ):
+        exit_code = main(["update-mitre"])
     assert exit_code == 0
     captured = capsys.readouterr()
     assert "MITRE" in captured.out

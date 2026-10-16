@@ -13,7 +13,7 @@ Graft is an open-source, extensible Detection-as-Code (DaC) platform written in 
 | **Analysts** | [`docs/analysts/README.md`](docs/analysts/README.md) — [`rule_authoring.md`](docs/analysts/rule_authoring.md) · [`recipes.md`](docs/analysts/recipes.md) · [`replay_testing.md`](docs/analysts/replay_testing.md) · [`visibility_and_matrix.md`](docs/analysts/visibility_and_matrix.md) |
 | **Operators** | [`docs/operators/README.md`](docs/operators/README.md) — [`adoption.md`](docs/operators/adoption.md) · [`gitops_reconciliation.md`](docs/operators/gitops_reconciliation.md) · [`cicd_and_infrastructure.md`](docs/operators/cicd_and_infrastructure.md) · [`security.md`](docs/operators/security.md) |
 | **Engines** | [`docs/engines/README.md`](docs/engines/README.md) — Co-located engine guides at `src/graft/engines/<engine>/docs/README.md` (discover via `uv run graft --json engines`) |
-| **Agent Skills** | [`.agents/skills/`](.agents/skills/) — [`scaffold-rule`](.agents/skills/scaffold-rule/SKILL.md) · [`scaffold-dataset`](.agents/skills/scaffold-dataset/SKILL.md) · [`scaffold-tests`](.agents/skills/scaffold-tests/SKILL.md) · [`review-rule`](.agents/skills/review-rule/SKILL.md) |
+| **Agent Skills** | [`.agents/skills/`](.agents/skills/) — [`scaffold-rule`](.agents/skills/scaffold-rule/SKILL.md) · [`scaffold-dataset`](.agents/skills/scaffold-dataset/SKILL.md) · [`scaffold-tests`](.agents/skills/scaffold-tests/SKILL.md) · [`review-rule`](.agents/skills/review-rule/SKILL.md) · [`cti-coverage`](.agents/skills/cti-coverage/SKILL.md) |
 
 ---
 
@@ -48,7 +48,8 @@ Malformed YAML, invalid UTF-8 bytes, missing file paths, or unexpected API paylo
 Trigger, inspect, and test every transformation from the CLI without writing throwaway scripts or requiring live cloud credentials:
 - `uv run graft --json engines` — Introspect registered engines, capability flags, environments, and schema paths.
 - `uv run graft --json lint [paths...]` — Validate datasets, custom rules, managed manifests, `%<name>.value` references, and 1-to-1 ID uniqueness offline.
-- `uv run graft --json export datasets | catalog | matrix` — Inspect active datasets (after UTC `ttl:YYYY-MM-DD` filtering), Git-attributed catalogs, and ATT&CK Navigator layers.
+- `uv run graft --json mitre coverage | gaps | inspect | update` — Analyze MITRE ATT&CK coverage, 3-state gap roll-ups (`covered`/`partial`/`uncovered`), targeted STIX enrichments (`DETxxxx`, `ANxxxx`, `DCxxxx`, `Gxxxx`, `Mxxxx`), and taxonomy updates offline.
+- `uv run graft --json export datasets | catalog | navigator` — Inspect active datasets (after UTC `ttl:YYYY-MM-DD` filtering), Git-attributed catalogs, and ATT&CK Navigator layers (`matrix` / `mitre` aliases supported).
 - `uv run graft --json <engine> render [paths...] [--all]` — Synthesize engine-native queries (e.g., full rule with injected metadata) completely offline.
 - `uv run graft --json <engine> verify | test | diff | apply | pull` — Execute remote compilation, staging replay, and GitOps reconciliation.
 

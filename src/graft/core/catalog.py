@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Any
 
 from graft.core.blame import extract_git_metadata
+from graft.core.mitre_intelligence import enrich_rule_mitre_metadata
 from graft.core.models.managed import ManagedState
 from graft.core.models.rule import RuleEnvelope
 from graft.core.ports.engine import EngineAdapter
@@ -39,6 +40,11 @@ def _get_tactic_id_map() -> dict[str, str]:
     data: dict[str, Any] = json.loads(resource.read_text(encoding="utf-8"))
     tactics: dict[str, dict[str, str]] = data.get("tactics", {})
     return {slug: info.get("id", slug.upper()) for slug, info in tactics.items()}
+
+
+def _enrich_from_pairs(mitre_pairs: Sequence[str]) -> dict[str, Any]:
+    techs = [p.split(":", 1)[1] for p in mitre_pairs if ":" in p]
+    return enrich_rule_mitre_metadata({"_": techs})
 
 
 def resolve_mitre_attack_pairs(
@@ -116,7 +122,7 @@ def build_catalog_entry_from_rule(
     )
 
 
-def render_catalog_table(entries: Sequence[CatalogEntry]) -> str:
+def render_catalog_table(entries: Sequence[CatalogEntry], enrich: bool = False) -> str:
     if not entries:
         return "No rules found in catalog."
 
@@ -130,22 +136,33 @@ def render_catalog_table(entries: Sequence[CatalogEntry]) -> str:
         "Reviews",
         "Updated",
     ]
+    if enrich:
+        headers.extend(["Platforms", "Data Components", "Groups"])
+
     rows: list[list[str]] = []
     for e in entries:
         mitre_str = ", ".join(e.mitre_attack) if e.mitre_attack else "-"
         owners_str = ", ".join(e.owners) if e.owners else "-"
-        rows.append(
-            [
-                e.name,
-                e.engine,
-                e.rule_type,
-                e.status,
-                mitre_str,
-                owners_str,
-                str(e.review_count),
-                e.last_modified_at if e.last_modified_at != "Unknown" else "-",
-            ]
-        )
+        row = [
+            e.name,
+            e.engine,
+            e.rule_type,
+            e.status,
+            mitre_str,
+            owners_str,
+            str(e.review_count),
+            e.last_modified_at if e.last_modified_at != "Unknown" else "-",
+        ]
+        if enrich:
+            enr = _enrich_from_pairs(e.mitre_attack)
+            row.extend(
+                [
+                    ", ".join(enr["platforms"]) or "-",
+                    ", ".join(enr["data_components"]) or "-",
+                    str(enr["group_count"]),
+                ]
+            )
+        rows.append(row)
 
     col_widths = [len(h) for h in headers]
     for row in rows:
@@ -163,7 +180,7 @@ def render_catalog_table(entries: Sequence[CatalogEntry]) -> str:
     return "\n".join(lines)
 
 
-def export_catalog_markdown(entries: Sequence[CatalogEntry]) -> str:
+def export_catalog_markdown(entries: Sequence[CatalogEntry], enrich: bool = False) -> str:
     headers = [
         "Rule Name",
         "Engine",
@@ -178,6 +195,9 @@ def export_catalog_markdown(entries: Sequence[CatalogEntry]) -> str:
         "Reviews",
         "Contributors",
     ]
+    if enrich:
+        headers.extend(["Platforms", "Data Components", "Mitigations", "Groups"])
+
     lines: list[str] = [
         f"| {' | '.join(headers)} |",
         f"| {' | '.join(['---'] * len(headers))} |",
@@ -200,12 +220,22 @@ def export_catalog_markdown(entries: Sequence[CatalogEntry]) -> str:
             str(e.review_count),
             str(e.contributor_count),
         ]
+        if enrich:
+            enr = _enrich_from_pairs(e.mitre_attack)
+            row.extend(
+                [
+                    ", ".join(enr["platforms"]) or "-",
+                    ", ".join(enr["data_components"]) or "-",
+                    ", ".join(enr["mitigations"]) or "-",
+                    str(enr["group_count"]),
+                ]
+            )
         lines.append(f"| {' | '.join(row)} |")
 
     return "\n".join(lines)
 
 
-def export_catalog_csv(entries: Sequence[CatalogEntry]) -> str:
+def export_catalog_csv(entries: Sequence[CatalogEntry], enrich: bool = False) -> str:
     fieldnames = [
         "id",
         "name",
@@ -223,6 +253,8 @@ def export_catalog_csv(entries: Sequence[CatalogEntry]) -> str:
         "review_count",
         "contributor_count",
     ]
+    if enrich:
+        fieldnames.extend(["platforms", "data_components", "mitigations", "group_count"])
 
     output = io.StringIO()
     writer = csv.DictWriter(output, fieldnames=fieldnames)
@@ -233,17 +265,31 @@ def export_catalog_csv(entries: Sequence[CatalogEntry]) -> str:
         row["mitre_attack"] = ";".join(e.mitre_attack)
         row["tags"] = ";".join(e.tags)
         row["owners"] = ";".join(e.owners)
+        if enrich:
+            enr = _enrich_from_pairs(e.mitre_attack)
+            row["platforms"] = ";".join(enr["platforms"])
+            row["data_components"] = ";".join(enr["data_components"])
+            row["mitigations"] = ";".join(enr["mitigations"])
+            row["group_count"] = enr["group_count"]
         writer.writerow(row)
 
     return output.getvalue()
 
 
-def export_catalog_json(entries: Sequence[CatalogEntry]) -> list[dict[str, Any]]:
+def export_catalog_json(
+    entries: Sequence[CatalogEntry], enrich: bool = False
+) -> list[dict[str, Any]]:
     payload: list[dict[str, Any]] = []
     for e in entries:
         d = asdict(e)
         d["mitre_attack"] = list(e.mitre_attack)
         d["tags"] = list(e.tags)
         d["owners"] = list(e.owners)
+        if enrich:
+            enr = _enrich_from_pairs(e.mitre_attack)
+            d["platforms"] = enr["platforms"]
+            d["data_components"] = enr["data_components"]
+            d["mitigations"] = enr["mitigations"]
+            d["group_count"] = enr["group_count"]
         payload.append(d)
     return payload

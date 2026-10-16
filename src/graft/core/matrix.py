@@ -5,6 +5,11 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from graft.core.mitre_intelligence import (
+    evaluate_technique_coverage_state,
+    filter_technique_ids,
+    resolve_platform_name,
+)
 from graft.core.models.rule import RuleEnvelope
 
 
@@ -15,6 +20,10 @@ class TechniqueCoverage:
     tactics: list[str]
     rule_count: int
     rule_names: list[str]
+    platforms: list[str] = field(default_factory=list)
+    data_components: list[str] = field(default_factory=list)
+    mitigations: list[str] = field(default_factory=list)
+    group_count: int = 0
 
 
 @dataclass(frozen=True)
@@ -28,6 +37,10 @@ class TechniqueTacticCoverage:
     statuses: list[str]
     links: list[dict[str, str]]
     rule_types: list[str] = field(default_factory=list)
+    platforms: list[str] = field(default_factory=list)
+    data_components: list[str] = field(default_factory=list)
+    mitigations: list[str] = field(default_factory=list)
+    group_count: int = 0
 
 
 @dataclass(frozen=True)
@@ -36,17 +49,23 @@ class MatrixCoverageReport:
     covered_techniques: int
     techniques: list[TechniqueCoverage]
     tactic_coverages: list[TechniqueTacticCoverage]
+    version: str = ""
 
 
-def _load_mitre_taxonomy() -> dict[str, dict[str, Any]]:
+def _load_mitre_full_db() -> dict[str, Any]:
     try:
         resource = importlib.resources.files("graft.data").joinpath("mitre_attack.json")
         content = resource.read_text(encoding="utf-8")
         data: dict[str, Any] = json.loads(content)
-        techniques: dict[str, dict[str, Any]] = data.get("techniques", {})
-        return techniques
+        return data
     except (OSError, ValueError, TypeError):
-        return {}
+        return {"version": "", "techniques": {}}
+
+
+def _load_mitre_taxonomy() -> dict[str, dict[str, Any]]:
+    data = _load_mitre_full_db()
+    techniques: dict[str, dict[str, Any]] = data.get("techniques", {})
+    return techniques
 
 
 def calculate_mitre_coverage(
@@ -56,10 +75,27 @@ def calculate_mitre_coverage(
         | tuple[RuleEnvelope, str, Path | str | None, str]
     ],
     matrix_data: dict[str, dict[str, Any]] | None = None,
+    *,
+    platform: str | None = None,
+    group: str | None = None,
+    data_component: str | None = None,
 ) -> MatrixCoverageReport:
-    techniques_db = matrix_data if matrix_data is not None else _load_mitre_taxonomy()
+    full_db = _load_mitre_full_db()
+    techniques_db = matrix_data if matrix_data is not None else full_db.get("techniques", {})
+    version = str(full_db.get("version", ""))
 
-    # Normalize rules input
+    has_scope_filter = any(x is not None for x in (platform, group, data_component))
+    allowed_techs = (
+        filter_technique_ids(
+            full_db,
+            platform=platform,
+            group=group,
+            data_component=data_component,
+        )
+        if has_scope_filter
+        else None
+    )
+
     normalized: list[tuple[RuleEnvelope, str, str | None, str | None]] = []
     for item in rules:
         if isinstance(item, tuple):
@@ -73,9 +109,8 @@ def calculate_mitre_coverage(
 
     tech_rules_map: dict[str, set[str]] = {}
     tech_tactics_map: dict[str, set[str]] = {}
-
-    # (technique_id, tactic_shortname) -> metadata collectors
     pair_map: dict[tuple[str, str], dict[str, Any]] = {}
+    matched_rule_names: set[str] = set()
 
     for rule, engine, path, explicit_status in normalized:
         rule_name = rule.metadata.name
@@ -90,6 +125,9 @@ def calculate_mitre_coverage(
 
         for tactic, tech_list in rule.metadata.mitre.items():
             for tech_id in tech_list:
+                if allowed_techs is not None and tech_id not in allowed_techs:
+                    continue
+                matched_rule_names.add(rule_name)
                 tech_rules_map.setdefault(tech_id, set()).add(rule_name)
                 tech_tactics_map.setdefault(tech_id, set()).add(tactic)
 
@@ -123,6 +161,12 @@ def calculate_mitre_coverage(
         else:
             tactics = sorted(tech_tactics_map.get(tech_id, set()))
 
+        platforms = [str(p) for p in tech_meta.get("platforms", [])]
+        dcs = [str(dc) for dc in tech_meta.get("data_components", [])]
+        mits = [str(m) for m in tech_meta.get("mitigations", [])]
+        groups_raw = tech_meta.get("groups", [])
+        group_count = len(groups_raw) if isinstance(groups_raw, list) else 0
+
         coverage_list.append(
             TechniqueCoverage(
                 technique_id=tech_id,
@@ -130,6 +174,10 @@ def calculate_mitre_coverage(
                 tactics=tactics,
                 rule_count=len(rule_names),
                 rule_names=rule_names,
+                platforms=platforms,
+                data_components=dcs,
+                mitigations=mits,
+                group_count=group_count,
             )
         )
 
@@ -137,6 +185,12 @@ def calculate_mitre_coverage(
     for (tech_id, shortname), details in sorted(pair_map.items()):
         tech_meta = techniques_db.get(tech_id, {})
         tech_name = str(tech_meta.get("name", "Unknown Technique"))
+        platforms = [str(p) for p in tech_meta.get("platforms", [])]
+        dcs = [str(dc) for dc in tech_meta.get("data_components", [])]
+        mits = [str(m) for m in tech_meta.get("mitigations", [])]
+        groups_raw = tech_meta.get("groups", [])
+        group_count = len(groups_raw) if isinstance(groups_raw, list) else 0
+
         tactic_coverage_list.append(
             TechniqueTacticCoverage(
                 technique_id=tech_id,
@@ -148,14 +202,20 @@ def calculate_mitre_coverage(
                 statuses=sorted(details["statuses"]),
                 links=details["links"],
                 rule_types=sorted(details["rule_types"]),
+                platforms=platforms,
+                data_components=dcs,
+                mitigations=mits,
+                group_count=group_count,
             )
         )
 
+    total_rules_count = len(matched_rule_names) if has_scope_filter else len(normalized)
     return MatrixCoverageReport(
-        total_rules=len(normalized),
+        total_rules=total_rules_count,
         covered_techniques=len(coverage_list),
         techniques=coverage_list,
         tactic_coverages=tactic_coverage_list,
+        version=version,
     )
 
 
@@ -163,19 +223,27 @@ def export_navigator_layer(
     report: MatrixCoverageReport,
     layer_name: str = "Graft Detection Coverage",
     color: str = "#008744",
-    attack_version: str = "19.2",
+    attack_version: str | None = None,
+    *,
+    platform: str | None = None,
+    group: str | None = None,
+    data_component: str | None = None,
+    enrich: bool = False,
+    include_gaps: bool = False,
 ) -> dict[str, Any]:
+    full_db = _load_mitre_full_db()
+    resolved_version = attack_version or report.version or str(full_db.get("version", ""))
     max_score = max((t.rule_count for t in report.techniques), default=1)
 
     techniques_payload: list[dict[str, Any]] = []
-
-    # Use tactic-scoped coverage if available
     sources = report.tactic_coverages if report.tactic_coverages else []
+    seen_pairs: set[tuple[str, str]] = set()
 
     if sources:
         for t in sources:
             if t.tactic_shortname == "none":
                 continue
+            seen_pairs.add((t.technique_id, t.tactic_shortname))
             comment = (
                 f"Covered by {t.rule_count} rule(s): {', '.join(t.rule_names)}"
                 if t.rule_count > 1
@@ -188,6 +256,15 @@ def export_navigator_layer(
                 {"name": "rules", "value": ", ".join(t.rule_names)},
                 {"name": "status", "value": ", ".join(t.statuses)},
             ]
+            if enrich:
+                metadata.extend(
+                    [
+                        {"name": "platforms", "value": ", ".join(t.platforms)},
+                        {"name": "data_components", "value": ", ".join(t.data_components)},
+                        {"name": "mitigations", "value": ", ".join(t.mitigations)},
+                        {"name": "group_count", "value": str(t.group_count)},
+                    ]
+                )
 
             techniques_payload.append(
                 {
@@ -205,6 +282,14 @@ def export_navigator_layer(
     else:
         for tc in report.techniques:
             comment = f"Covered by {tc.rule_count} rule(s): {', '.join(tc.rule_names)}"
+            meta_list: list[dict[str, str]] = []
+            if enrich:
+                meta_list = [
+                    {"name": "platforms", "value": ", ".join(tc.platforms)},
+                    {"name": "data_components", "value": ", ".join(tc.data_components)},
+                    {"name": "mitigations", "value": ", ".join(tc.mitigations)},
+                    {"name": "group_count", "value": str(tc.group_count)},
+                ]
             techniques_payload.append(
                 {
                     "techniqueID": tc.technique_id,
@@ -212,16 +297,98 @@ def export_navigator_layer(
                     "color": "",
                     "comment": comment,
                     "enabled": True,
-                    "metadata": [],
+                    "metadata": meta_list,
                     "links": [],
                     "showSubtechniques": True,
                 }
             )
 
+    if include_gaps:
+        in_scope_ids = filter_technique_ids(
+            full_db,
+            platform=platform,
+            group=group,
+            data_component=data_component,
+        )
+        covered_ids = {t.technique_id for t in report.techniques}
+        techniques_db = full_db.get("techniques", {})
+        all_tech_ids = set(techniques_db.keys())
+
+        for tid in sorted(in_scope_ids):
+            state = evaluate_technique_coverage_state(tid, covered_ids, all_tech_ids)
+            if state == "covered":
+                continue
+            tinfo = techniques_db.get(tid, {})
+            t_tactics = [str(tac) for tac in tinfo.get("tactics", []) if str(tac) != "none"]
+            gap_color = "#fff8e1" if state == "partial" else "#ffebee"
+            gap_comment = (
+                "Partial coverage (parent or sub-technique covered)"
+                if state == "partial"
+                else "Uncovered gap"
+            )
+            for tac_slug in t_tactics:
+                if (tid, tac_slug) in seen_pairs:
+                    continue
+                seen_pairs.add((tid, tac_slug))
+                gap_meta = [{"name": "coverage_state", "value": state}]
+                if enrich:
+                    gap_meta.extend(
+                        [
+                            {
+                                "name": "platforms",
+                                "value": ", ".join(str(p) for p in tinfo.get("platforms", [])),
+                            },
+                            {
+                                "name": "data_components",
+                                "value": ", ".join(
+                                    str(dc) for dc in tinfo.get("data_components", [])
+                                ),
+                            },
+                            {
+                                "name": "mitigations",
+                                "value": ", ".join(str(m) for m in tinfo.get("mitigations", [])),
+                            },
+                            {
+                                "name": "group_count",
+                                "value": str(len(tinfo.get("groups", []))),
+                            },
+                        ]
+                    )
+                techniques_payload.append(
+                    {
+                        "techniqueID": tid,
+                        "tactic": tac_slug,
+                        "score": 0,
+                        "color": gap_color,
+                        "comment": gap_comment,
+                        "enabled": True,
+                        "metadata": gap_meta,
+                        "links": [],
+                        "showSubtechniques": True,
+                    }
+                )
+
+    default_platforms = [
+        "Linux",
+        "macOS",
+        "Windows",
+        "Network Devices",
+        "ESXi",
+        "Containers",
+        "IaaS",
+        "SaaS",
+        "Google Workspace",
+        "Office Suite",
+        "Identity Provider",
+    ]
+    resolved_platforms = (
+        [resolve_platform_name(platform, full_db)] if platform else default_platforms
+    )
+
     return {
         "name": layer_name,
         "versions": {
-            "attack": attack_version,
+            "attack": resolved_version,
             "navigator": "5.2.0",
             "layer": "4.5",
         },
@@ -230,21 +397,7 @@ def export_navigator_layer(
             f"Graft Detection Coverage Matrix Layer "
             f"({report.total_rules} rules, {report.covered_techniques} techniques)."
         ),
-        "filters": {
-            "platforms": [
-                "Linux",
-                "macOS",
-                "Windows",
-                "Network Devices",
-                "ESXi",
-                "Containers",
-                "IaaS",
-                "SaaS",
-                "Google Workspace",
-                "Office Suite",
-                "Identity Provider",
-            ]
-        },
+        "filters": {"platforms": resolved_platforms},
         "sorting": 3,
         "layout": {
             "layout": "side",
@@ -265,25 +418,52 @@ def export_navigator_layer(
     }
 
 
-def render_matrix_table(report: MatrixCoverageReport) -> str:
+def render_matrix_table(report: MatrixCoverageReport, enrich: bool = False) -> str:
     summary_header = (
         f"MITRE ATT&CK Detection Matrix "
         f"(Total Rules: {report.total_rules} | Covered Techniques: {report.covered_techniques})"
     )
-    lines: list[str] = [
+    if not enrich:
+        lines: list[str] = [
+            summary_header,
+            "=" * 90,
+            f"{'Technique ID':<15} {'Technique Name':<32} {'Rules':<7} {'Rules / Detections'}",
+            "-" * 90,
+        ]
+
+        for t in report.techniques:
+            rule_summary = ", ".join(t.rule_names)
+            if len(rule_summary) > 32:
+                rule_summary = rule_summary[:29] + "..."
+            tech_name = t.technique_name
+            if len(tech_name) > 30:
+                tech_name = tech_name[:27] + "..."
+            lines.append(f"{t.technique_id:<15} {tech_name:<32} {t.rule_count:<7} {rule_summary}")
+
+        return "\n".join(lines)
+
+    lines = [
         summary_header,
-        "=" * 90,
-        f"{'Technique ID':<15} {'Technique Name':<32} {'Rules':<7} {'Rules / Detections'}",
-        "-" * 90,
+        "=" * 116,
+        (
+            f"{'Technique ID':<14} {'Technique Name':<28} {'Rules':<6} {'Groups':<7} "
+            f"{'Platforms':<20} {'Data Components':<16} {'Rules / Detections'}"
+        ),
+        "-" * 116,
     ]
-
     for t in report.techniques:
+        tech_name = (
+            t.technique_name[:25] + "..." if len(t.technique_name) > 28 else t.technique_name
+        )
+        plats = ", ".join(t.platforms)
+        if len(plats) > 18:
+            plats = plats[:15] + "..."
+        dcs = ", ".join(t.data_components[:2])
         rule_summary = ", ".join(t.rule_names)
-        if len(rule_summary) > 32:
-            rule_summary = rule_summary[:29] + "..."
-        tech_name = t.technique_name
-        if len(tech_name) > 30:
-            tech_name = tech_name[:27] + "..."
-        lines.append(f"{t.technique_id:<15} {tech_name:<32} {t.rule_count:<7} {rule_summary}")
-
+        if len(rule_summary) > 24:
+            rule_summary = rule_summary[:21] + "..."
+        lines.append(
+            f"{t.technique_id:<14} {tech_name:<28} {t.rule_count:<6} "
+            f"{t.group_count:<7} {plats:<20} {dcs:<16} {rule_summary}"
+        )
     return "\n".join(lines)
