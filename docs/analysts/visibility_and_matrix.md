@@ -75,10 +75,29 @@ T1685         Disable or Modify Tools    1     33     DET0497      DC0018,DC0032
 ```
 
 ### 2. Three-State Gap Analysis (`graft mitre gaps`)
-Compute prioritized detection gaps across the MITRE ATT&CK matrix using a **3-state parent/sub-technique roll-up** (`covered`, `partial`, `uncovered`) ranked by Threat Group (`Gxxxx`) prevalence:
-- **`covered`**: The technique (or every in-scope sub-technique under a parent) has at least one active rule.
-- **`partial`**: Only the parent technique is mapped without specific sub-techniques, or only a subset of in-scope sub-techniques are covered (e.g., covering `T1078.004` Cloud Accounts while leaving sibling `T1078` sub-techniques uncovered).
-- **`uncovered`**: Zero rules cover the parent technique or any of its sub-techniques.
+Compute prioritized detection gaps across the MITRE ATT&CK matrix using a **3-state parent/sub-technique roll-up** (`covered`, `partial`, `uncovered`) ranked by Threat Group (`Gxxxx`) prevalence.
+
+#### How "In Scope" (`In Scope: N`) Is Defined
+`graft mitre gaps` starts with the universe of all **active Enterprise ATT&CK techniques and sub-techniques** in `src/graft/data/mitre_attack.json` (706 in v20.0; synthetic `T0000`, `revoked`, and `deprecated` techniques are excluded). It narrows that universe **strictly by the CLI filter flags you pass** (intersected with `AND`):
+- **No filter flags (`graft mitre gaps`):** All active Enterprise techniques and sub-techniques across all 9 MITRE platforms (`Windows`, `Linux`, `macOS`, `IaaS`, `SaaS`, `Office Suite`, `Identity Provider`, `Network Devices`, `Containers`) are in scope. Graft never guesses or restricts platforms implicitly when flags are omitted.
+- **`--platform <name>`:** Keeps only techniques whose STIX `x_mitre_platforms` includes that platform (e.g., `--platform IaaS` narrows 706 down to 104).
+- **`--group <G-ID or alias>`:** Keeps only techniques used by that Threat Group in STIX (`uses` relationships).
+- **`--data-component <DC-ID or name>`:** Keeps only techniques linked to a `DETxxxx` strategy that uses that `DCxxxx` data component.
+- **`--tactic <TA-ID or shortname>`:** Keeps only techniques belonging to that tactic.
+
+#### How "Covered" & the 3-State Roll-Up Are Evaluated
+Graft collects all technique IDs mapped in `metadata.mitre` across non-archived rules in `rulesets/` (or `--engine <name>`), including both `custom/*.yaml` and registered `managed/<rule>.yaml`. Each in-scope technique is then classified based on the parent/sub-technique hierarchy within the evaluated scope:
+
+| Technique Type | `covered` | `partial` | `uncovered` |
+| :--- | :--- | :--- | :--- |
+| **Parent with in-scope sub-techniques** (e.g. `T1078`) | **Every** in-scope sub-technique (`T1078.xxx`) is covered by a rule | Either only parent `T1078` is mapped, **or** at least one (but not all) in-scope sub-technique is covered (e.g. `T1078.004` is covered while `.001`/`.002`/`.003` are not) | Neither parent `T1078` nor any of its sub-techniques is covered |
+| **Sub-technique** (e.g. `T1098.001`) | `T1098.001` is directly mapped in a rule | `T1098.001` is not mapped, **but** a rule mapped parent `T1098` generically | Neither `T1098.001` nor parent `T1098` is mapped |
+| **Standalone technique (no sub-techniques)** (e.g. `T1685`) | `T1685` is mapped in a rule | *(N/A)* | `T1685` is not mapped in any rule |
+
+#### Ranking, Slicing (`--top`), and Operational Nuances
+1. **Ranking & Slicing:** Techniques evaluating to `covered` are omitted from the gap table. Remaining `partial` and `uncovered` techniques are sorted by **`(-group_count, technique_id)`** so techniques abused by the most MITRE Threat Groups (`Gxxxx`) appear first. `--top N` (default `25`; `--top 0` for all) slices the displayed rows while keeping the header totals (`In Scope | Covered | Partial | Uncovered`) across the full in-scope set.
+2. **Both Parents and Sub-Techniques Count in `In Scope`:** Both parent techniques (`T1078`) and their in-scope sub-techniques (`T1078.001..004`) are evaluated in `In Scope`. Because STIX frequently attaches Threat Group relationships (`Gxxxx`) to the parent technique ID, a `partial` parent like `T1078` (49 groups) will surface near the top alongside its `uncovered` sibling sub-techniques while covered sub-techniques (`T1078.004`) are counted in `Covered`.
+3. **Rule Deployment Status (`enabled` / `silent` / `disabled`):** Any non-archived rule in `rulesets/` counts toward technique coverage regardless of whether its deployment status is `enabled`, `silent`, or `disabled`. When auditing live posture, cross-check `graft export catalog` (or `graft mitre inspect <Txxxx>`) to verify whether coverage relies on a `disabled` rule.
 
 ```bash
 # Top 10 uncovered/partial gaps on IaaS ranked by Threat Group prevalence

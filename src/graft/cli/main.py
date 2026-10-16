@@ -61,7 +61,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     lint_p.add_argument("--fail-fast", action="store_true", help="Stop execution on first error")
 
-    # 2. mitre (coverage | gaps | inspect | update) + backward-compatible update-mitre
+    # 2. mitre (coverage | gaps | inspect | update)
     mitre_root_p = subparsers.add_parser(
         "mitre",
         help="MITRE ATT&CK coverage, gap analysis, entity inspection, and taxonomy updates",
@@ -196,18 +196,6 @@ def build_parser() -> argparse.ArgumentParser:
         "--check",
         action="store_true",
         help="Check if a newer MITRE ATT&CK version is available upstream without updating files",
-    )
-
-    mitre_p = subparsers.add_parser(
-        "update-mitre",
-        help="Update pinned MITRE ATT&CK Enterprise taxonomy (alias for 'mitre update')",
-    )
-    mitre_p.add_argument("--source", help="URL of remote STIX bundle")
-    mitre_p.add_argument("--version", help="Specific ATT&CK Enterprise version to fetch")
-    mitre_p.add_argument(
-        "--check",
-        action="store_true",
-        help="Check if a newer MITRE ATT&CK version is available upstream",
     )
 
     # 3. export
@@ -380,14 +368,6 @@ def main(argv: Sequence[str] | None = None) -> int:
                     version=getattr(args, "version", None),
                     check_only=bool(getattr(args, "check", False)),
                 )
-
-        if cmd == "update-mitre":
-            return execute_update_mitre(
-                source_url=getattr(args, "source", None),
-                json_output=args.json,
-                version=getattr(args, "version", None),
-                check_only=bool(getattr(args, "check", False)),
-            )
 
         if cmd == "export":
             return execute_export(

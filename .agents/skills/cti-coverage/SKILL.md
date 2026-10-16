@@ -63,10 +63,19 @@ uv run graft --json mitre gaps --group "APT29" --platform "IaaS" --top 15
 uv run graft --json mitre gaps --data-component "DC0002" --top 15
 ```
 
-Understand Graft's 3-state parent/sub-technique roll-up:
-- **`covered`**: The technique (or every in-scope sub-technique under a parent) has at least one active rule.
-- **`partial`**: Either only the parent technique is mapped without specific sub-techniques, or only a subset of in-scope sub-techniques are covered (e.g., covering `T1078.004` Cloud Accounts while leaving `T1078.001` Default Accounts or `T1078.003` Local Accounts uncovered).
-- **`uncovered`**: Zero rules cover the parent technique or any of its sub-techniques.
+Keep these exact `graft mitre gaps` scoping and roll-up mechanics in mind during your analysis:
+1. **How "In Scope" (`total_in_scope`) Is Defined:**
+   - Starts with all **active** Enterprise ATT&CK techniques and sub-techniques in `src/graft/data/mitre_attack.json` (706 in v20.0; synthetic `T0000`, `revoked`, and `deprecated` techniques are excluded).
+   - Narrows that universe **strictly by the CLI filter flags passed** (`--platform`, `--group`, `--data-component`, `--tactic`, intersected with `AND`).
+   - **Never run bare `graft mitre gaps` without `--platform` (or `--data-component` / `--group`) when analyzing a platform-specific repository:** without filter flags, all 9 MITRE platforms (`Windows`, `Linux`, `macOS`, `IaaS`, `SaaS`, `Office Suite`, `Identity Provider`, `Network Devices`, `Containers`) are in scope. Always scope to the platforms discovered in Step 1.
+2. **How the 3-State Parent/Sub-Technique Roll-Up Works:**
+   - **`covered`**: For a parent with in-scope sub-techniques, **every** in-scope sub-technique is covered by a rule; for a sub-technique or standalone technique, the technique ID itself is directly mapped in a rule.
+   - **`partial`**: For a parent with in-scope sub-techniques, either only the parent ID is mapped or at least one (but not all) in-scope sub-technique is covered (e.g., covering `T1078.004` Cloud Accounts marks parent `T1078` as `partial` while `.001`/`.002`/`.003` remain `uncovered`). For a sub-technique, a rule mapped the parent ID generically without the specific sub-technique.
+   - **`uncovered`**: Neither the technique nor any of its parent/sub-techniques is mapped in any rule.
+3. **Ranking, Parent/Sub-Technique Coexistence, and `disabled` Rules:**
+   - **Ranking (`-group_count, technique_id`):** `covered` techniques are omitted from `gaps`; `partial` and `uncovered` techniques are sorted by Threat Group (`Gxxxx`) count descending, then sliced by `--top N` (while `total_in_scope`, `covered_count`, `partial_count`, and `uncovered_count` reflect the full unsliced scope).
+   - **Both Parents and Sub-Techniques Count in `total_in_scope`:** Because STIX frequently attaches Threat Group (`Gxxxx`) relationships to parent technique IDs (e.g., `T1078` has 49 groups), a `partial` parent often ranks near the top alongside its `uncovered` sub-techniques. Inspect the sub-techniques under any `partial` parent to pinpoint which specific vector is missing.
+   - **`disabled` Rules Count as Covered in `gaps`:** `graft mitre gaps` includes all non-archived rules in `rulesets/` regardless of deployment status (`enabled`, `silent`, or `disabled`). Always cross-reference `graft --json export catalog --format json` from Step 1 and flag any "covered" technique that relies solely on a `disabled` rule.
 
 ### Step 3: Detect Cross-Perimeter & Multi-Cloud Asymmetry
 When the repository monitors multiple perimeters or cloud providers (for example, rules tagged `aws` and `gcp`, or `workspace` and `iam`), check whether techniques, Detection Strategies (`DETxxxx`), or Threat Groups (`Gxxxx`) covered in one perimeter are missing in the sibling perimeter:

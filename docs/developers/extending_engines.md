@@ -320,7 +320,7 @@ class SentinelDeployerAdapter(RuleDeployerPort):
 
 ## 8. Step 7: Assemble the Composite Adapter (`adapter.py`)
 
-The composite adapter implements [`EngineAdapter`](../../src/graft/core/ports/engine.py). Inheriting from `EngineAdapter` provides default implementations for `resolve_deployment_status`, `are_rules_equal`, `deconstruct_rule`, `load_managed_manifest`, `dump_managed_manifest`, and `has_managed_rule_id`, which your adapter can override when needed (for example, `SecOpsAdapter` overrides `are_rules_equal` and `deconstruct_rule` to inject/extract YAML `metadata` and `runbook` fields into the YARA-L `meta:` block):
+The composite adapter implements [`EngineAdapter`](../../src/graft/core/ports/engine.py). Inheriting from `EngineAdapter` provides default implementations for `resolve_deployment_status`, `are_rules_equal`, `deconstruct_rule`, `load_managed_manifest`, `dump_managed_manifest`, and `has_managed_rule_id`, which your adapter can override when needed (for example, `SecOpsAdapter` overrides `are_rules_equal` and `deconstruct_rule` to inject/extract YAML `metadata` and `runbook` fields into the YARA-L `meta:` block, delegating MITRE token extraction to `MitreValidator().reconstruct_mitre_mapping(raw_tokens)` so tactics and `revoked-by` techniques are resolved and upgraded automatically):
 
 ```python
 from __future__ import annotations
