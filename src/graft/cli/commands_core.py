@@ -764,6 +764,7 @@ def execute_mitre_gaps(
     group: str | None = None,
     tactic: str | None = None,
     data_component: str | None = None,
+    infer_scope: bool = False,
     top: int | None = None,
     format_type: str | None = None,
     out_path: str | None = None,
@@ -778,6 +779,7 @@ def execute_mitre_gaps(
         group=group,
         tactic=tactic,
         data_component=data_component,
+        infer_scope=infer_scope,
         top=effective_top,
     )
     if fmt == "json":

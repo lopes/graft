@@ -380,7 +380,7 @@ def test_mitre_cli_coverage_gaps_inspect_and_update_check(
     assert cov_data["techniques"][0]["technique_id"] == "T1098.001"
     assert "detection_strategies" in cov_data["techniques"][0]
 
-    # 2. graft --json mitre gaps --platform IaaS --top 5
+    # 2. graft --json mitre gaps --platform IaaS --top 5 and --infer-scope
     rc_gaps = main(
         [
             "--json",
@@ -398,6 +398,24 @@ def test_mitre_cli_coverage_gaps_inspect_and_update_check(
     gaps_data = json.loads(capsys.readouterr().out)
     assert gaps_data["success"] is True
     assert len(gaps_data["gaps"]) <= 5
+    assert "inferred_scope" in gaps_data
+
+    rc_infer = main(
+        [
+            "--json",
+            "mitre",
+            "gaps",
+            "--infer-scope",
+            "--top",
+            "5",
+            "--rules-dir",
+            str(rules_dir),
+        ]
+    )
+    assert rc_infer == 0
+    infer_data = json.loads(capsys.readouterr().out)
+    assert infer_data["success"] is True
+    assert infer_data["scope"]["infer_scope"] == "true"
 
     # 3. graft --json mitre inspect T1098.001 --analytics --platform IaaS
     rc_insp = main(

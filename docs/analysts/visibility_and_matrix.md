@@ -32,7 +32,7 @@ To keep daily operations (`graft lint`, `graft mitre coverage`, `graft export`) 
 
 ## 2. MITRE ATT&CK Intelligence & CTI Analysis (`graft mitre`)
 
-While `graft export` generates portable artifacts for external tools, `graft mitre` is the interactive CLI workspace for detection engineers, CTI analysts, and AI skills (`/cti-coverage`, `/scaffold-rule`, `/review-rule`).
+While `graft export` generates portable artifacts for external tools, `graft mitre` is the interactive CLI workspace for detection engineers, CTI analysts, and AI skills (`/analyze-coverage`, `/scaffold-rule`, `/review-rule`).
 
 ```mermaid
 flowchart LR
@@ -41,7 +41,35 @@ flowchart LR
     ENGINE --> COV["<code>graft mitre coverage</code><br/>Covered techniques &amp; enrichments"]
     ENGINE --> GAPS["<code>graft mitre gaps</code><br/>3-state roll-up ranked by Gxxxx"]
     ENGINE --> INSP["<code>graft mitre inspect</code><br/>Targeted T / DET / AN / DC / G / M lookup"]
+    INSP -.->|"Feedback loop:<br/>harden rules or scaffold companions"| RULES
 ```
+
+### How to Reason About MITRE ATT&CK Coverage in Graft
+
+Before interpreting `graft mitre coverage`, `graft mitre gaps`, or an ATT&CK Navigator heatmap, operators and leadership must understand three foundational realities of detection coverage:
+
+#### 1. Techniques as a Relational Foreign Key & The Calibration Problem
+Adversaries do not plan operations by consulting the MITRE ATT&CK matrix; they chain opportunistic actions to achieve objectives. ATT&CK is a **defender's taxonomy** designed so CTI, detection engineering, purple teams, and leadership speak a common language.
+
+- **Subjectivity at the Entry Point:** Mapping a detection rule to `metadata.mitre` is inherently subjective—two analysts looking at the same behavior will rarely map the exact same techniques (`==`). Teams should reduce variance through joint mapping exercises, peer review in Git pull requests, and consistent review guardrails (`/review-rule`, `/scaffold-rule`).
+- **The Technique ID (`Txxxx.xxx`) as a Foreign Key:** Once a rule has a calibrated `Txxxx.xxx` mapping, Graft treats that ID as a **relational foreign key** into the STIX graph. Without bloating rule YAML files, Graft joins `Txxxx.xxx` against STIX relationships to pull Threat Groups (`Gxxxx`), Detection Strategies (`DETxxxx`), behavioral Analytics (`ANxxxx`), required Data Components (`DCxxxx`), and Mitigations (`Mxxxx`).
+- **The Engineering Feedback Loop:** The true purpose of those relationships is not a static executive scorecard—it is an iterative feedback loop. Inspecting a mapped technique's relationships (`graft mitre inspect <Txxxx.xxx> --analytics`) exposes its behavioral strategies, log channels, and tunable `mutable_elements`, giving engineers concrete insights to **harden the existing rule** or **author companion rules** for sibling procedures.
+
+#### 2. The 3-Pillar Coverage Model vs. Graft's Partial View (No CMDB)
+True, precise coverage requires the intersection of three distinct datasets:
+1. **Rule Data (What you detect):** Active (`enabled` or `silent`) detection logic in `rulesets/`.
+2. **CTI Data (How adversaries operate):** Global STIX relationships (built into Graft), narrowed to your organization's threat profile (`--group`).
+3. **CMDB & Telemetry Inventory (What exists in your environment):** The authoritative inventory of platforms, cloud providers, operating systems, identity planes, and log channels running in production.
+
+Because Graft is a Detection-as-Code platform rather than a CMDB, it operates offline with **only two of the three pillars** (Rule Data + MITRE CTI Data). Without a CMDB, rule-only analysis faces the **Zero-Rule Ambiguity**: if your repository has `IaaS` and `Office Suite` rules but **zero** `Linux` rules, Graft cannot tell whether you *do not run Linux* (out of scope) or *run Linux everywhere with zero detections* (a 100% blind spot).
+- **Guessing from Rules Present (`--infer-scope`):** By joining active rules' mapped techniques against STIX, Graft infers which **platforms** and **data components (`DCxxxx`)** your SIEM is already proven to ingest, finding gaps *within known surfaces*.
+- **Operator-Supplied Scope (`--platform`, `--data-component`, `--group`, `--tactic`):** When evaluating a surface where you have zero rules today—or targeting a specific threat actor (`--group`)—you act as the CMDB by supplying explicit CLI filter flags.
+
+#### 3. The Procedure Fallacy (Why TT Matrices Become Misinformation)
+Even with a perfect CMDB, the MITRE ATT&CK matrix—and any ATT&CK Navigator heatmap—stops at **Tactics and Techniques (TT)**. It stops above the second **P** in **TTPs: Procedures**:
+- **One Technique $\neq$ One Behavior:** Beneath a single technique cell (`Txxxx.xxx`) sit many distinct adversary **Procedures**—specific tools, CLI flags, API calls, OS mechanisms, and cloud control planes.
+- **Single-Tool / Single-Perimeter Illusion:** You might write one rule mapped to `T1098.001` (*Additional Cloud Credentials*) that detects GCP Service Account key creation, or one endpoint rule under `T1003.001` that catches `mimikatz.exe`. In a table or CISO heatmap, that technique cell turns green (`covered`). If an adversary switches to another tool, or creates an AWS IAM access key in your AWS environment under the exact same `T1098.001` technique, your detection fails. Treating a green technique cell as complete protection turns coverage metrics into **misinformation**.
+- **How to Audit Depth:** Always treat `covered` in Graft as **"at least one active rule maps to this technique ID"**—an index pointer to begin auditing procedural and multi-perimeter depth via `graft mitre inspect <Txxxx.xxx> --analytics` and `/analyze-coverage`.
 
 ### 1. Coverage Summary & Enrichments (`graft mitre coverage`)
 Inspect covered techniques across all engines (or filtered by `--engine`, `--platform`, `--group`, or `--data-component`). Pass `--enrich` to surface associated Threat Groups (`Gxxxx`), Detection Strategies (`DETxxxx`), Data Components (`DCxxxx`), and Mitigations (`Mxxxx`):
@@ -79,27 +107,31 @@ Compute prioritized detection gaps across the MITRE ATT&CK matrix using a **3-st
 
 #### How "In Scope" (`In Scope: N`) Is Defined
 `graft mitre gaps` starts with the universe of all **active Enterprise ATT&CK techniques and sub-techniques** in `src/graft/data/mitre_attack.json` (706 in v20.0; synthetic `T0000`, `revoked`, and `deprecated` techniques are excluded). It narrows that universe **strictly by the CLI filter flags you pass** (intersected with `AND`):
-- **No filter flags (`graft mitre gaps`):** All active Enterprise techniques and sub-techniques across all 9 MITRE platforms (`Windows`, `Linux`, `macOS`, `IaaS`, `SaaS`, `Office Suite`, `Identity Provider`, `Network Devices`, `Containers`) are in scope. Graft never guesses or restricts platforms implicitly when flags are omitted.
+- **No filter flags (`graft mitre gaps`):** All active Enterprise techniques and sub-techniques across all 9 MITRE platforms (`Windows`, `Linux`, `macOS`, `IaaS`, `SaaS`, `Office Suite`, `Identity Provider`, `Network Devices`, `Containers`) are in scope. Graft never restricts platforms silently when flags are omitted, but prints a `Rule-Inferred Footprint` header line showing the platforms and `DCxxxx` data components inferred from your active rules.
+- **`--infer-scope`:** Automatically restricts `In Scope` to techniques matching the MITRE platforms and `DCxxxx` data components already proven by your repository's active rules (ideal for finding gaps inside known, actively ingested surfaces).
 - **`--platform <name>`:** Keeps only techniques whose STIX `x_mitre_platforms` includes that platform (e.g., `--platform IaaS` narrows 706 down to 104).
 - **`--group <G-ID or alias>`:** Keeps only techniques used by that Threat Group in STIX (`uses` relationships).
 - **`--data-component <DC-ID or name>`:** Keeps only techniques linked to a `DETxxxx` strategy that uses that `DCxxxx` data component.
 - **`--tactic <TA-ID or shortname>`:** Keeps only techniques belonging to that tactic.
 
 #### How "Covered" & the 3-State Roll-Up Are Evaluated
-Graft collects all technique IDs mapped in `metadata.mitre` across non-archived rules in `rulesets/` (or `--engine <name>`), including both `custom/*.yaml` and registered `managed/<rule>.yaml`. Each in-scope technique is then classified based on the parent/sub-technique hierarchy within the evaluated scope:
+Graft collects all technique IDs mapped in `metadata.mitre` across **active** (`enabled` and `silent`, excluding `disabled` and `_archived/`) rules in `rulesets/` (or `--engine <name>`), including both `custom/*.yaml` and registered `managed/<rule>.yaml`. Each in-scope technique is then classified based on the parent/sub-technique hierarchy within the evaluated scope:
 
 | Technique Type | `covered` | `partial` | `uncovered` |
 | :--- | :--- | :--- | :--- |
-| **Parent with in-scope sub-techniques** (e.g. `T1078`) | **Every** in-scope sub-technique (`T1078.xxx`) is covered by a rule | Either only parent `T1078` is mapped, **or** at least one (but not all) in-scope sub-technique is covered (e.g. `T1078.004` is covered while `.001`/`.002`/`.003` are not) | Neither parent `T1078` nor any of its sub-techniques is covered |
-| **Sub-technique** (e.g. `T1098.001`) | `T1098.001` is directly mapped in a rule | `T1098.001` is not mapped, **but** a rule mapped parent `T1098` generically | Neither `T1098.001` nor parent `T1098` is mapped |
-| **Standalone technique (no sub-techniques)** (e.g. `T1685`) | `T1685` is mapped in a rule | *(N/A)* | `T1685` is not mapped in any rule |
+| **Parent with in-scope sub-techniques** (e.g. `T1078`) | **Every** in-scope sub-technique (`T1078.xxx`) is covered by an active rule | Either only parent `T1078` is mapped, **or** at least one (but not all) in-scope sub-technique is covered (e.g. `T1078.004` is covered while `.001`/`.002`/`.003` are not) | Neither parent `T1078` nor any of its sub-techniques is covered |
+| **Sub-technique** (e.g. `T1098.001`) | `T1098.001` is directly mapped in an active rule | `T1098.001` is not mapped, **but** an active rule mapped parent `T1098` generically | Neither `T1098.001` nor parent `T1098` is mapped |
+| **Standalone technique (no sub-techniques)** (e.g. `T1685`) | `T1685` is mapped in an active rule | *(N/A)* | `T1685` is not mapped in any active rule |
 
 #### Ranking, Slicing (`--top`), and Operational Nuances
-1. **Ranking & Slicing:** Techniques evaluating to `covered` are omitted from the gap table. Remaining `partial` and `uncovered` techniques are sorted by **`(-group_count, technique_id)`** so techniques abused by the most MITRE Threat Groups (`Gxxxx`) appear first. `--top N` (default `25`; `--top 0` for all) slices the displayed rows while keeping the header totals (`In Scope | Covered | Partial | Uncovered`) across the full in-scope set.
+1. **Ranking & Slicing:** Techniques evaluating to `covered` are omitted from the gap table. Remaining `partial` and `uncovered` techniques are sorted by **`(-group_count, 0 if state == "uncovered" else 1, technique_id)`** so techniques abused by the most MITRE Threat Groups (`Gxxxx`) appear first. `--top N` (default `25` in table mode; unsliced in JSON/CSV/Markdown) slices the displayed rows while keeping the header totals (`In Scope | Covered | Partial | Uncovered`) across the full in-scope set.
 2. **Both Parents and Sub-Techniques Count in `In Scope`:** Both parent techniques (`T1078`) and their in-scope sub-techniques (`T1078.001..004`) are evaluated in `In Scope`. Because STIX frequently attaches Threat Group relationships (`Gxxxx`) to the parent technique ID, a `partial` parent like `T1078` (49 groups) will surface near the top alongside its `uncovered` sibling sub-techniques while covered sub-techniques (`T1078.004`) are counted in `Covered`.
-3. **Rule Deployment Status (`enabled` / `silent` / `disabled`):** Any non-archived rule in `rulesets/` counts toward technique coverage regardless of whether its deployment status is `enabled`, `silent`, or `disabled`. When auditing live posture, cross-check `graft export catalog` (or `graft mitre inspect <Txxxx>`) to verify whether coverage relies on a `disabled` rule.
+3. **Rule Deployment Status (`enabled` / `silent` vs. `disabled`):** Rules with status `disabled` (`deployment.enabled: false` or disabled in `managed/index.yaml`) are **excluded** from counting toward `covered` in `graft mitre gaps`, `graft mitre inspect`, and `graft export navigator --include-gaps` so inactive rules never hide gaps. Both `enabled` (alerting) and `silent` (`enabled: true, alerting: false`) rules count as active coverage; cross-check `graft export catalog` to verify whether a covered technique relies on a `silent` rule.
 
 ```bash
+# Gaps within the platforms and DCxxxx log sources inferred from your active rules
+uv run graft mitre gaps --infer-scope --top 10
+
 # Top 10 uncovered/partial gaps on IaaS ranked by Threat Group prevalence
 uv run graft mitre gaps --platform IaaS --top 10
 
@@ -134,7 +166,7 @@ uv run graft mitre inspect T1098.001 --analytics --platform IaaS
 # Inspect a Detection Strategy, Analytic, Threat Group, or Data Component directly
 uv run graft mitre inspect DET0531 AN1470 G0016 DC0010
 
-# Structured JSON output for AI skills (/cti-coverage, /scaffold-rule, /review-rule)
+# Structured JSON output for AI skills (/analyze-coverage, /scaffold-rule, /review-rule)
 uv run graft --json mitre inspect T1098.001 --analytics --platform IaaS
 ```
 
@@ -151,7 +183,7 @@ uv run graft export navigator --out exports/graft_coverage.json
 # Export engine-scoped layer with custom gradient color
 uv run graft export navigator --engine secops --color "#4285F4" --out exports/secops_coverage.json
 
-# Export filtered Navigator layer with STIX enrichments and uncovered gaps highlighted in red (#ea4335, score 0)
+# Export filtered Navigator layer with STIX enrichments and partial (#fff8e1) / uncovered (#ffebee) gaps (score 0)
 uv run graft export navigator --platform IaaS --enrich --include-gaps --out exports/iaas_posture.json
 
 # Backward-compatible matrix alias (supports --format table | navigator)

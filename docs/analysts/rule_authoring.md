@@ -327,17 +327,18 @@ flowchart LR
     LOGIC["<b>2. Analyst Authors Logic</b><br/>Write &amp; tune engine query<br/>in <code>logic</code> block"]
     S2["<b>3. /scaffold-tests</b><br/>Parses <code>logic</code> predicates to generate<br/><code>match_*</code> &amp; <code>ignore_*</code> in <code>tests</code>"]
     S3["<b>4. /review-rule</b><br/>Read-only 5-block audit + <code>graft lint</code><br/>with concrete remediation snippets"]
-    S4["<b>5. /cti-coverage</b><br/>Runs <code>graft --json mitre</code> to surface<br/>cross-perimeter &amp; threat group gaps"]
+    S4["<b>5. /analyze-coverage</b><br/>Runs <code>graft --json mitre</code> to audit<br/>procedural depth &amp; surface gaps"]
 
     S0 -.-> LOGIC
     S1 --> LOGIC --> S2 --> S3 --> S4
+    S4 -.->|"Feedback loop: harden rules or scaffold companions"| S1
 ```
 
 - **[`/scaffold-dataset`](../../.agents/skills/scaffold-dataset/SKILL.md)**: Accepts a natural-language dataset concept (or an existing `datasets/<name>.yaml` path), derives a plural noun phrase `<context>_<entity_plural>` identifier, runs `uv run graft new dataset <name>`, populates `metadata` and `values` (preserving inline `#` comments for contextual traceability), and validates via `uv run graft lint`.
 - **[`/scaffold-rule`](../../.agents/skills/scaffold-rule/SKILL.md)**: Accepts a natural-language detection concept (or an existing `.yaml` rule path), derives a `<subject>_<fact>` identifier, runs `uv run graft new rule <name> --engine <engine>` (or `--managed <id>`), inspects MITRE `DETxxxx`/`ANxxxx` analytics and `Mxxxx` mitigations via `uv run graft --json mitre inspect <Txxxx> --analytics`, and populates **only `metadata` and `runbook`** (preserving the generated UUIDv4, Git owner, `logic`, `deployment`, and `tests`), followed by `uv run graft lint`.
 - **[`/scaffold-tests`](../../.agents/skills/scaffold-tests/SKILL.md)**: Reads the authored `logic` block of a custom rule and populates **only the `tests` block** with positive (`id: "match_*"`, `expect: 1`) and negative (`id: "ignore_*"`, `expect: 0`) synthetic event vectors matching the query's predicates, joins, and time windows, followed by `uv run graft lint`.
 - **[`/review-rule`](../../.agents/skills/review-rule/SKILL.md)**: Performs a read-only audit of one or more rule files across all 5 blocks against this guide's structural and semantic guardrails (including `%<dataset>.value` cross-checks and `graft --json mitre inspect` analytic alignment), running `uv run graft lint` and outputting a `PASS / WARN / FAIL` table with suggested fixes.
-- **[`/cti-coverage`](../../.agents/skills/cti-coverage/SKILL.md)**: Chains `uv run graft --json mitre coverage --enrich`, `graft --json mitre gaps`, and `graft --json mitre inspect` to analyze Threat Group (`Gxxxx`) exposure, 3-state parent/sub-technique roll-ups, and cross-perimeter blind spots (e.g., AWS vs. GCP or endpoint vs. cloud) without loading raw STIX JSON files into context.
+- **[`/analyze-coverage`](../../.agents/skills/analyze-coverage/SKILL.md)**: Chains `uv run graft --json mitre coverage --enrich`, `graft --json mitre gaps --infer-scope`, and `graft --json mitre inspect --analytics` to audit procedural depth on mapped techniques (TT vs. TTP), uncover cross-perimeter blind spots (e.g., AWS vs. GCP or endpoint vs. cloud), and feed hardening and companion-rule recommendations back into the authoring loop without loading raw STIX JSON files into context.
 
 ### Validating Rules & Datasets Offline
 

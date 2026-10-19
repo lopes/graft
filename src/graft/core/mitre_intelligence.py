@@ -67,6 +67,8 @@ class MitreGapReport:
     partial_count: int
     uncovered_count: int
     gaps: list[TechniqueGapEntry]
+    inferred_platforms: list[str] = field(default_factory=list)
+    inferred_data_components: list[str] = field(default_factory=list)
 
 
 @functools.lru_cache(maxsize=1)
@@ -244,18 +246,28 @@ def evaluate_technique_coverage_state(
     all_technique_ids: set[str] | None = None,
 ) -> str:
     tid = technique_id.strip().upper()
-    if tid in covered_technique_ids:
-        return "covered"
-
     if "." in tid:
+        if tid in covered_technique_ids:
+            return "covered"
         parent_id = tid.split(".", 1)[0]
         if parent_id in covered_technique_ids:
             return "partial"
-    else:
-        prefix = f"{tid}."
-        if any(c.startswith(prefix) for c in covered_technique_ids):
-            return "partial"
+        return "uncovered"
 
+    prefix = f"{tid}."
+    if all_technique_ids is not None:
+        sub_ids = {t for t in all_technique_ids if t.startswith(prefix)}
+        if sub_ids:
+            if sub_ids <= covered_technique_ids:
+                return "covered"
+            if tid in covered_technique_ids or bool(sub_ids & covered_technique_ids):
+                return "partial"
+            return "uncovered"
+
+    if tid in covered_technique_ids:
+        return "covered"
+    if any(c.startswith(prefix) for c in covered_technique_ids):
+        return "partial"
     return "uncovered"
 
 
@@ -587,6 +599,7 @@ def calculate_mitre_gaps(
     group: str | None = None,
     tactic: str | None = None,
     data_component: str | None = None,
+    infer_scope: bool = False,
     top: int | None = None,
 ) -> MitreGapReport:
     data = db if db is not None else load_mitre_database()
@@ -610,20 +623,53 @@ def calculate_mitre_gaps(
     normalized = _normalize_rules(rules)
     covered_ids: set[str] = set()
     tech_to_rules: dict[str, set[str]] = {}
-    for rule_obj, _, _, _ in normalized:
+    for rule_obj, _, _, status in normalized:
+        if status == "disabled":
+            continue
         for techs in rule_obj.metadata.mitre.values():
             for tid in techs:
                 covered_ids.add(tid)
                 tech_to_rules.setdefault(tid, set()).add(rule_obj.metadata.name)
 
-    all_tech_ids = set(techniques_db.keys())
+    inferred_plats_set: set[str] = set()
+    inferred_dcs_set: set[str] = set()
+    for cid in covered_ids:
+        cinfo = techniques_db.get(cid, {})
+        if isinstance(cinfo, Mapping):
+            for p in cinfo.get("platforms", []):
+                inferred_plats_set.add(str(p))
+            for dc in cinfo.get("data_components", []):
+                inferred_dcs_set.add(str(dc))
+
+    inferred_platforms = sorted(inferred_plats_set)
+    inferred_data_components = sorted(inferred_dcs_set)
+
+    if infer_scope and (inferred_plats_set or inferred_dcs_set):
+        narrowed: set[str] = set()
+        for tid in in_scope_ids:
+            tinfo = techniques_db.get(tid, {})
+            if not isinstance(tinfo, Mapping):
+                continue
+            t_plats = {str(p) for p in tinfo.get("platforms", [])}
+            t_dcs = {str(dc) for dc in tinfo.get("data_components", [])}
+            if (
+                resolved_platform is None
+                and inferred_plats_set
+                and not (t_plats & inferred_plats_set)
+            ):
+                continue
+            if resolved_dc is None and inferred_dcs_set and not (t_dcs & inferred_dcs_set):
+                continue
+            narrowed.add(tid)
+        in_scope_ids = narrowed
+
     covered_count = 0
     partial_count = 0
     uncovered_count = 0
     gap_entries: list[TechniqueGapEntry] = []
 
     for tid in sorted(in_scope_ids):
-        state = evaluate_technique_coverage_state(tid, covered_ids, all_tech_ids)
+        state = evaluate_technique_coverage_state(tid, covered_ids, in_scope_ids)
         if state == "covered":
             covered_count += 1
             continue
@@ -648,6 +694,7 @@ def calculate_mitre_gaps(
                 parent_id = tid.split(".", 1)[0]
                 partial_rules.update(tech_to_rules.get(parent_id, set()))
             else:
+                partial_rules.update(tech_to_rules.get(tid, set()))
                 prefix = f"{tid}."
                 for c_id, r_names in tech_to_rules.items():
                     if c_id.startswith(prefix):
@@ -674,19 +721,25 @@ def calculate_mitre_gaps(
     if top is not None and top >= 0:
         gap_entries = gap_entries[:top]
 
+    scope_dict: dict[str, str | None] = {
+        "platform": resolved_platform,
+        "group": resolved_group,
+        "tactic": resolved_tactic,
+        "data_component": resolved_dc,
+    }
+    if infer_scope:
+        scope_dict["infer_scope"] = "true"
+
     return MitreGapReport(
         version=version,
-        scope={
-            "platform": resolved_platform,
-            "group": resolved_group,
-            "tactic": resolved_tactic,
-            "data_component": resolved_dc,
-        },
+        scope=scope_dict,
         total_in_scope=len(in_scope_ids),
         covered_count=covered_count,
         partial_count=partial_count,
         uncovered_count=uncovered_count,
         gaps=gap_entries,
+        inferred_platforms=inferred_platforms,
+        inferred_data_components=inferred_data_components,
     )
 
 
@@ -699,6 +752,18 @@ def render_gaps_table(report: MitreGapReport) -> str:
         f"Partial: {report.partial_count} | Uncovered: {report.uncovered_count} "
         f"(Showing {len(report.gaps)} gaps)"
     )
+    if (
+        not report.scope.get("platform")
+        and not report.scope.get("data_component")
+        and not report.scope.get("infer_scope")
+        and report.inferred_platforms
+    ):
+        plats_preview = ", ".join(report.inferred_platforms)
+        dcs_count = len(report.inferred_data_components)
+        header += (
+            f"\nRule-Inferred Footprint: platforms=[{plats_preview}] | "
+            f"data_components=[{dcs_count} DCs] (pass --infer-scope to restrict)"
+        )
     lines = [
         header,
         "=" * 112,
@@ -724,6 +789,10 @@ def export_gaps_json(report: MitreGapReport) -> dict[str, Any]:
         "success": True,
         "version": report.version,
         "scope": report.scope,
+        "inferred_scope": {
+            "platforms": report.inferred_platforms,
+            "data_components": report.inferred_data_components,
+        },
         "total_in_scope": report.total_in_scope,
         "covered_count": report.covered_count,
         "partial_count": report.partial_count,
@@ -836,11 +905,12 @@ def inspect_mitre_entities(
     normalized = _normalize_rules(rules)
     covered_ids: set[str] = set()
     tech_to_rules: dict[str, set[str]] = {}
-    for rule_obj, _, _, _ in normalized:
+    for rule_obj, _, _, status in normalized:
         for techs in rule_obj.metadata.mitre.values():
             for tid in techs:
-                covered_ids.add(tid)
                 tech_to_rules.setdefault(tid, set()).add(rule_obj.metadata.name)
+                if status != "disabled":
+                    covered_ids.add(tid)
 
     all_tech_ids = set(techniques_db.keys())
     results: list[dict[str, Any]] = []
