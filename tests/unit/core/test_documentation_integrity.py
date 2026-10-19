@@ -176,7 +176,7 @@ def test_agent_skills_frontmatter_and_structure() -> None:
         "scaffold-rule",
         "scaffold-tests",
         "review-rule",
-        "cti-coverage",
+        "analyze-coverage",
     )
     skills_root = Path(".agents/skills")
     assert skills_root.is_dir(), "Missing .agents/skills directory"

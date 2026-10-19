@@ -310,12 +310,18 @@ def export_navigator_layer(
             group=group,
             data_component=data_component,
         )
-        covered_ids = {t.technique_id for t in report.techniques}
+        if report.tactic_coverages:
+            covered_ids = {
+                tc.technique_id
+                for tc in report.tactic_coverages
+                if any(s != "disabled" for s in tc.statuses)
+            }
+        else:
+            covered_ids = {t.technique_id for t in report.techniques}
         techniques_db = full_db.get("techniques", {})
-        all_tech_ids = set(techniques_db.keys())
 
         for tid in sorted(in_scope_ids):
-            state = evaluate_technique_coverage_state(tid, covered_ids, all_tech_ids)
+            state = evaluate_technique_coverage_state(tid, covered_ids, in_scope_ids)
             if state == "covered":
                 continue
             tinfo = techniques_db.get(tid, {})

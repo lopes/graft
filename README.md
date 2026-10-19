@@ -229,7 +229,7 @@ Graft also includes repository-native AI agent skills under [`.agents/skills/`](
 - `/scaffold-rule <context_or_path>`: Runs `graft new rule`, inspects MITRE analytics via `graft --json mitre inspect`, and populates `metadata` and `runbook` while leaving `logic`, `deployment`, and `tests` untouched.
 - `/scaffold-tests <rule_path>`: Parses authored `logic` predicates to generate positive (`match_*`) and negative (`ignore_*`) synthetic event vectors in `tests`.
 - `/review-rule [path_or_dir]`: Runs `graft lint` and performs a read-only 5-block engineering audit (including `%<dataset>.value` cross-checks and MITRE analytic alignment).
-- `/cti-coverage [scope_or_question]`: Chains `graft --json mitre coverage`, `gaps`, and `inspect` to surface cross-perimeter blind spots, Threat Group (`Gxxxx`) exposure, and prioritized detection blueprints.
+- `/analyze-coverage [scope_or_question]`: Chains `graft --json mitre coverage`, `gaps`, and `inspect` to audit procedural depth (TT vs. TTP), surface cross-perimeter blind spots, and produce prioritized detection blueprints.
 
 #### 3. Pre-Merge Verification & Staging Replay Testing
 ```bash

@@ -127,6 +127,12 @@ def build_parser() -> argparse.ArgumentParser:
         help="Scope gaps to a MITRE Data Component ID or name",
     )
     mitre_gaps_p.add_argument(
+        "--infer-scope",
+        action="store_true",
+        dest="infer_scope",
+        help="Restrict gaps to platforms and data components inferred from active rules",
+    )
+    mitre_gaps_p.add_argument(
         "--top",
         type=int,
         default=None,
@@ -346,6 +352,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                     group=getattr(args, "group", None),
                     tactic=getattr(args, "tactic", None),
                     data_component=getattr(args, "data_component", None),
+                    infer_scope=bool(getattr(args, "infer_scope", False)),
                     top=getattr(args, "top", None),
                     format_type=getattr(args, "format", None),
                     out_path=getattr(args, "out", None),

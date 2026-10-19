@@ -161,14 +161,19 @@ def test_export_navigator_layer_managed_rule_type_and_explicit_status() -> None:
 
 def test_matrix_filtering_enrich_and_include_gaps() -> None:
     rule_cloud = make_dummy_rule("rule_cloud", {"persistence": ("T1098.001",)})
+    rule_disabled = make_dummy_rule("rule_disabled", {"initial-access": ("T1078.004",)})
     rule_phish = make_dummy_rule("rule_phish", {"initial-access": ("T1566.002",)})
 
-    # Filter by platform IaaS (T1098.001 is IaaS; T1566.002 is not IaaS)
+    # Filter by platform IaaS (T1098.001 and T1078.004 are IaaS; T1566.002 is not IaaS)
     report_iaas = calculate_mitre_coverage(
-        [rule_cloud, rule_phish],
+        [
+            (rule_cloud, "siem_alpha", None, "enabled"),
+            (rule_disabled, "siem_alpha", None, "disabled"),
+            (rule_phish, "siem_alpha", None, "enabled"),
+        ],
         platform="IaaS",
     )
-    assert [t.technique_id for t in report_iaas.techniques] == ["T1098.001"]
+    assert [t.technique_id for t in report_iaas.techniques] == ["T1078.004", "T1098.001"]
 
     # Export navigator layer with platform, enrich, and include_gaps
     layer = export_navigator_layer(
@@ -180,8 +185,15 @@ def test_matrix_filtering_enrich_and_include_gaps() -> None:
     assert layer["filters"]["platforms"] == ["IaaS"]
     covered_cells = [t for t in layer["techniques"] if t["score"] > 0]
     gap_cells = [t for t in layer["techniques"] if t["score"] == 0]
-    assert len(covered_cells) == 1
+    assert len(covered_cells) >= 1
     assert len(gap_cells) >= 1
+    # Because T1078.004 is only backed by a disabled rule, parent T1078 must be uncovered in gaps
+    t1078_gaps = [t for t in gap_cells if t["techniqueID"] == "T1078"]
+    assert t1078_gaps
+    assert any(
+        m["name"] == "coverage_state" and m["value"] == "uncovered"
+        for m in t1078_gaps[0]["metadata"]
+    )
     meta_names = [m["name"] for m in covered_cells[0]["metadata"]]
     assert "platforms" in meta_names
     assert "data_components" in meta_names

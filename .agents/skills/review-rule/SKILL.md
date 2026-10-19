@@ -59,9 +59,9 @@ Evaluate each rule across all blocks and classify every check as `PASS`, `WARN`,
   - Flag leftover `graft new rule` stubs (`"Detection rule for ..."`).
 - **Owners:**
   - Is `metadata.owners` populated with a real owner or team (flagging generic placeholders if left unreviewed)?
-- **MITRE ATT&CK Mapping:**
+- **MITRE ATT&CK Mapping (Relational Foreign Key):**
   - Run `uv run graft --json mitre inspect <Txxxx> --analytics` for each mapped technique (never read `src/graft/data/mitre_*.json` directly into context).
-  - Verify tactics and techniques are active (flagging any revoked or deprecated IDs) and use the **most specific sub-technique** (`TXXXX.XXX`) that reflects the telemetry in `logic`.
+  - Verify tactics and techniques are active (flagging any revoked or deprecated IDs) and use the **most specific sub-technique** (`TXXXX.XXX`) that reflects the telemetry in `logic` so downstream foreign-key joins (`Gxxxx`, `DETxxxx`, `ANxxxx`, `DCxxxx`, `Mxxxx`) remain accurate.
   - Flag leftover `graft new rule` stub mappings (`execution: ["T1059.001"]`) when the rule is unrelated to PowerShell.
 - **Tags:**
   - Does `metadata.tags` contain 2–3 broad, reusable lowercase platform/surface labels (e.g., `gcp`, `iam`, `workspace`, `email`, `whois`, `gcti`, `network`)?
@@ -71,7 +71,7 @@ Evaluate each rule across all blocks and classify every check as `PASS`, `WARN`,
 
 ### Block 2: `logic` *(Custom Rules Only)*
 - **Stub Detection:** Flag immediately (`FAIL`) if `logic` still contains the default `USER_LOGIN` stub from `graft new rule`.
-- **Semantic Alignment:** Does the query actually detect the behavior claimed in `metadata.description`, `runbook.context`, and the technique's MITRE `DETxxxx` / `ANxxxx` analytics (`log_sources` and `mutable_elements`)?
+- **Semantic Alignment & Procedural Depth:** Does the query actually detect the behavior claimed in `metadata.description`, `runbook.context`, and the technique's MITRE `DETxxxx` / `ANxxxx` analytics (`log_sources` and `mutable_elements`)? Flag if the query is brittle (e.g., matching a single tool filename when the underlying `DCxxxx` data component supports a broader behavioral predicate, or hardcoding thresholds/allowlists that belong in a dataset).
 - **Query Hygiene & Performance:**
   - Are event variable names descriptive (`$mail`, `$whois`, `$iam` rather than `$e1`, `$e2`)?
   - Are multi-event joins selective and bounded by an explicit, justified `match:` time window?

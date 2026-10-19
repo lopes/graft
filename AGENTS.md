@@ -13,7 +13,7 @@ Graft is an open-source, extensible Detection-as-Code (DaC) platform written in 
 | **Analysts** | [`docs/analysts/README.md`](docs/analysts/README.md) — [`rule_authoring.md`](docs/analysts/rule_authoring.md) · [`recipes.md`](docs/analysts/recipes.md) · [`replay_testing.md`](docs/analysts/replay_testing.md) · [`visibility_and_matrix.md`](docs/analysts/visibility_and_matrix.md) |
 | **Operators** | [`docs/operators/README.md`](docs/operators/README.md) — [`adoption.md`](docs/operators/adoption.md) · [`gitops_reconciliation.md`](docs/operators/gitops_reconciliation.md) · [`cicd_and_infrastructure.md`](docs/operators/cicd_and_infrastructure.md) · [`security.md`](docs/operators/security.md) |
 | **Engines** | [`docs/engines/README.md`](docs/engines/README.md) — Co-located engine guides at `src/graft/engines/<engine>/docs/README.md` (discover via `uv run graft --json engines`) |
-| **Agent Skills** | [`.agents/skills/`](.agents/skills/) — [`scaffold-rule`](.agents/skills/scaffold-rule/SKILL.md) · [`scaffold-dataset`](.agents/skills/scaffold-dataset/SKILL.md) · [`scaffold-tests`](.agents/skills/scaffold-tests/SKILL.md) · [`review-rule`](.agents/skills/review-rule/SKILL.md) · [`cti-coverage`](.agents/skills/cti-coverage/SKILL.md) |
+| **Agent Skills** | [`.agents/skills/`](.agents/skills/) — [`scaffold-rule`](.agents/skills/scaffold-rule/SKILL.md) · [`scaffold-dataset`](.agents/skills/scaffold-dataset/SKILL.md) · [`scaffold-tests`](.agents/skills/scaffold-tests/SKILL.md) · [`review-rule`](.agents/skills/review-rule/SKILL.md) · [`analyze-coverage`](.agents/skills/analyze-coverage/SKILL.md) |
 
 ---
 

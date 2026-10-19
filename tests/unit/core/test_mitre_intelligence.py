@@ -74,17 +74,24 @@ def test_resolvers_for_group_platform_data_component_and_tactic() -> None:
 
 
 def test_evaluate_technique_coverage_state_three_state_rollup() -> None:
-    covered_ids = {"T1098.001", "T1566"}
-    all_techniques = {"T1098", "T1098.001", "T1098.004", "T1566", "T1566.001", "T1059"}
+    covered_ids = {"T1098.001", "T1566", "T1685"}
+    all_techniques = {"T1098", "T1098.001", "T1098.004", "T1566", "T1566.001", "T1059", "T1685"}
 
     assert evaluate_technique_coverage_state("T1098.001", covered_ids, all_techniques) == "covered"
     assert evaluate_technique_coverage_state("T1098", covered_ids, all_techniques) == "partial"
     assert (
         evaluate_technique_coverage_state("T1098.004", covered_ids, all_techniques) == "uncovered"
     )
-    assert evaluate_technique_coverage_state("T1566", covered_ids, all_techniques) == "covered"
+    # T1566 has in-scope sub-technique T1566.001 which is not covered, so T1566 is partial
+    assert evaluate_technique_coverage_state("T1566", covered_ids, all_techniques) == "partial"
     assert evaluate_technique_coverage_state("T1566.001", covered_ids, all_techniques) == "partial"
+    # T1685 is a standalone technique with no sub-techniques in scope, so it is covered
+    assert evaluate_technique_coverage_state("T1685", covered_ids, all_techniques) == "covered"
     assert evaluate_technique_coverage_state("T1059", covered_ids, all_techniques) == "uncovered"
+
+    # When all in-scope sub-techniques of a parent are covered, parent rolls up to covered
+    all_subs_covered = {"T1098.001", "T1098.004"}
+    assert evaluate_technique_coverage_state("T1098", all_subs_covered, all_techniques) == "covered"
 
 
 def test_build_mitre_coverage_report_and_filters() -> None:
@@ -152,7 +159,15 @@ def test_calculate_mitre_gaps_rollup_and_prevalence_ranking() -> None:
         {"persistence": ("T1098.001",)},
         tags=("aws", "iam"),
     )
-    rules = [(r_aws, "siem_alpha", None, "enabled")]
+    r_disabled = _make_rule(
+        "disabled_storage_rule",
+        {"initial-access": ("T1078.004",)},
+        tags=("gcp", "storage"),
+    )
+    rules = [
+        (r_aws, "siem_alpha", None, "enabled"),
+        (r_disabled, "siem_alpha", None, "disabled"),
+    ]
 
     gaps_report = calculate_mitre_gaps(
         rules,
@@ -163,20 +178,35 @@ def test_calculate_mitre_gaps_rollup_and_prevalence_ranking() -> None:
     assert gaps_report.scope["platform"] == "IaaS"
     assert gaps_report.scope["tactic"] == "persistence"
     assert len(gaps_report.gaps) <= 10
+    assert "IaaS" in gaps_report.inferred_platforms
+    assert len(gaps_report.inferred_data_components) >= 1
 
     # Verify sorted descending by group_count
     counts = [g.group_count for g in gaps_report.gaps]
     assert counts == sorted(counts, reverse=True)
 
-    # T1098.001 is covered so it must not be in gaps; parent T1098 is partial
-    gap_ids = {
-        g.technique_id: g.coverage_state for g in calculate_mitre_gaps(rules, platform="IaaS").gaps
-    }
+    # T1098.001 is covered so it must not be in gaps; parent T1098 is partial.
+    # T1078.004 is backed only by a disabled rule, so it must NOT count as covered.
+    iaas_report = calculate_mitre_gaps(rules, platform="IaaS")
+    gap_ids = {g.technique_id: g.coverage_state for g in iaas_report.gaps}
     assert "T1098.001" not in gap_ids
     assert gap_ids.get("T1098") == "partial"
+    assert gap_ids.get("T1078.004") == "uncovered"
+
+    # Unfiltered gaps report includes Rule-Inferred Footprint hint in table header
+    unfiltered_report = calculate_mitre_gaps(rules, top=5)
+    assert "Rule-Inferred Footprint:" in render_gaps_table(unfiltered_report)
+
+    # --infer-scope restricts total_in_scope to active rules' inferred platforms & data components
+    inferred_report = calculate_mitre_gaps(rules, infer_scope=True)
+    assert inferred_report.scope.get("infer_scope") == "true"
+    assert inferred_report.total_in_scope < unfiltered_report.total_in_scope
 
     assert "T1098" in render_gaps_table(gaps_report) or len(gaps_report.gaps) >= 1
-    assert export_gaps_json(gaps_report)["total_gaps"] >= 1
+    gaps_json = export_gaps_json(gaps_report)
+    assert gaps_json["total_gaps"] >= 1
+    assert "inferred_scope" in gaps_json
+    assert "IaaS" in gaps_json["inferred_scope"]["platforms"]
     assert "technique_id" in export_gaps_csv(gaps_report)
     assert "Technique" in export_gaps_markdown(gaps_report)
 
