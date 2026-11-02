@@ -52,6 +52,8 @@ def extract_git_metadata(path: Path | str, cwd: Path | None = None) -> RuleGitMe
         proc = subprocess.run(  # noqa: S603
             [
                 git_bin,
+                "-c",
+                "core.quotepath=false",
                 "log",
                 "--follow",
                 "--format=%aI%x00%aN%x00%aE",
@@ -62,6 +64,7 @@ def extract_git_metadata(path: Path | str, cwd: Path | None = None) -> RuleGitMe
             capture_output=True,
             text=True,
             check=False,
+            timeout=10,
         )
         lines = [line.strip() for line in proc.stdout.splitlines() if line.strip()]
         if lines:

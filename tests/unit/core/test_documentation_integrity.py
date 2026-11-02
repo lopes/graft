@@ -1,4 +1,6 @@
 import re
+import shutil
+import subprocess
 from pathlib import Path
 
 import yaml
@@ -26,10 +28,29 @@ FENCED_BLOCK_RE = re.compile(r"```.*?```", re.DOTALL)
 
 
 def _tracked_files() -> list[Path]:
+    git_bin = shutil.which("git") or "git"
+    try:
+        proc = subprocess.run(  # noqa: S603
+            [git_bin, "ls-files", "-z"],
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=10,
+        )
+        if proc.returncode == 0 and proc.stdout:
+            return sorted(
+                Path(raw) for raw in proc.stdout.split("\0") if raw and Path(raw).is_file()
+            )
+    except (subprocess.SubprocessError, OSError):
+        pass
+
     root = Path(".")
+    excluded = EXCLUDED_DIRS | {"exports", "layers"}
     files: list[Path] = []
     for p in sorted(root.rglob("*")):
-        if any(part in EXCLUDED_DIRS or part.endswith(".egg-info") for part in p.parts):
+        if any(part in excluded or part.endswith(".egg-info") for part in p.parts):
+            continue
+        if p.name.startswith(".env"):
             continue
         if p.is_file():
             files.append(p)

@@ -326,7 +326,7 @@ def test_pull_excludes_datasets_on_target_all_and_pulls_on_target_datasets(
     monkeypatch.setattr(reg, "load_adapter", lambda name, env="production": adapter)
     controller = EngineCommandController(_make_manifest(), reg)
 
-    # 1. Default pull (--target all) must NOT pull datasets
+    # 1. Default pull (--target all) pulls datasets first in GitOps order
     args_all = argparse.Namespace(
         engine_command="pull",
         env="production",
@@ -338,11 +338,14 @@ def test_pull_excludes_datasets_on_target_all_and_pulls_on_target_datasets(
     )
     rc_all = controller.execute(args_all, json_output=True)
     assert rc_all == 0
-    assert "datasets:list" not in call_order
-    assert not (tmp_path / "datasets" / "known_scanner_ips.yaml").exists()
+    assert "datasets:list" in call_order
+    pulled_file = tmp_path / "datasets" / "known_scanner_ips.yaml"
+    assert pulled_file.is_file()
     capsys.readouterr()
 
-    # 2. Explicit --target datasets pulls compatible datasets into datasets/
+    # 2. Explicit --target datasets also pulls compatible datasets into datasets/
+    pulled_file.unlink()
+    call_order.clear()
     args_ds = argparse.Namespace(
         engine_command="pull",
         env="production",
@@ -355,7 +358,6 @@ def test_pull_excludes_datasets_on_target_all_and_pulls_on_target_datasets(
     rc_ds = controller.execute(args_ds, json_output=True)
     assert rc_ds == 0
     assert "datasets:list" in call_order
-    pulled_file = tmp_path / "datasets" / "known_scanner_ips.yaml"
     assert pulled_file.is_file()
     loaded = load_dataset_from_yaml(pulled_file)
     assert loaded.metadata.name == "known_scanner_ips"

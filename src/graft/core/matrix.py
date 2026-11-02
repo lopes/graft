@@ -128,6 +128,8 @@ def calculate_mitre_coverage(
                 if allowed_techs is not None and tech_id not in allowed_techs:
                     continue
                 matched_rule_names.add(rule_name)
+                if status == "disabled":
+                    continue
                 tech_rules_map.setdefault(tech_id, set()).add(rule_name)
                 tech_tactics_map.setdefault(tech_id, set()).add(tactic)
 

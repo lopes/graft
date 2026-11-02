@@ -15,7 +15,7 @@ from graft.core.models.rule import (
     TestEvent,
     TestVector,
 )
-from graft.core.validation.mitre_validator import MitreValidator
+from graft.core.validation.mitre_validator import get_default_mitre_validator
 from graft.core.validation.schema_validator import SchemaValidator
 
 RULE_IDENTIFIER_PATTERN = re.compile(r"^[a-z0-9]+(?:_[a-z0-9]+)*$")
@@ -71,15 +71,18 @@ def load_rule_from_str(
     if not isinstance(data, dict):
         raise RuleLoadError("Rule content must be a YAML mapping")
 
-    schema_validator = SchemaValidator()
-    errors = schema_validator.validate(data, schema_name=schema_name)
+    try:
+        schema_validator = SchemaValidator()
+        errors = schema_validator.validate(data, schema_name=schema_name)
+    except (KeyError, FileNotFoundError, OSError) as exc:
+        raise RuleLoadError(f"Schema validation error for '{schema_name}': {exc}") from exc
     if errors:
         error_lines = "\n".join(f"- {err.path}: {err.message}" for err in errors)
         raise RuleLoadError(f"Schema validation failed:\n{error_lines}")
 
     metadata_raw: dict[str, Any] = data.get("metadata", {})
     if validate_mitre and "mitre" in metadata_raw:
-        mitre_validator = MitreValidator()
+        mitre_validator = get_default_mitre_validator()
         mitre_errors = mitre_validator.validate(metadata_raw["mitre"])
         if mitre_errors:
             error_lines = "\n".join(f"- {err.tactic}: {err.message}" for err in mitre_errors)
@@ -127,11 +130,16 @@ def load_rule_from_str(
     )
 
     tests_list: list[TestVector] = []
+    seen_test_ids: set[str] = set()
     tests_raw = data.get("tests", [])
     if isinstance(tests_raw, list):
         for t in tests_raw:
             if not isinstance(t, dict):
                 continue
+            test_id = str(t["id"])
+            if test_id in seen_test_ids:
+                raise RuleLoadError(f"Duplicate test vector id '{test_id}' in rule tests")
+            seen_test_ids.add(test_id)
             events_list: list[TestEvent] = []
             events_raw = t.get("events", [])
             if isinstance(events_raw, list):
@@ -148,7 +156,7 @@ def load_rule_from_str(
                     )
             tests_list.append(
                 TestVector(
-                    id=str(t["id"]),
+                    id=test_id,
                     description=str(t.get("description", "")),
                     expect=int(t.get("expect", 1)),
                     events=tuple(events_list),
@@ -183,25 +191,33 @@ def load_rule_from_yaml(
 
     if schema_name is None:
         parts = file_path.parts
-        is_managed_dir = "managed" in parts
+        sub_parts: tuple[str, ...] | None = None
         for folder in ("rulesets", "rules"):
             if folder in parts:
-                idx = parts.index(folder)
+                idx = len(parts) - 1 - parts[::-1].index(folder)
                 if idx + 1 < len(parts):
-                    engine = parts[idx + 1]
-                    if idx + 2 < len(parts) and parts[idx + 2] == "managed":
-                        is_managed_dir = True
-                    validator = SchemaValidator()
-                    avail = validator.available_schemas()
-                    if is_managed_dir:
-                        schema_name = "base_managed"
-                    else:
-                        if f"{engine}:custom" in avail:
-                            schema_name = f"{engine}:custom"
-                        elif f"{engine}_custom" in avail:
-                            schema_name = f"{engine}_custom"
+                    sub_parts = parts[idx + 1 :]
                 break
-        if schema_name is None:
+
+        if sub_parts is not None and len(sub_parts) >= 2:
+            engine = sub_parts[0]
+            is_managed_dir = "managed" in sub_parts[:-1]
+            validator = SchemaValidator()
+            avail = validator.available_schemas()
+            if is_managed_dir:
+                schema_name = "base_managed"
+            elif f"{engine}:custom" in avail:
+                schema_name = f"{engine}:custom"
+            elif f"{engine}_custom" in avail:
+                schema_name = f"{engine}_custom"
+            else:
+                schema_name = "base_custom"
+        else:
+            try:
+                rel_parts = file_path.resolve().relative_to(Path.cwd().resolve()).parts
+                is_managed_dir = "managed" in rel_parts[:-1]
+            except ValueError:
+                is_managed_dir = file_path.parent.name == "managed"
             schema_name = "base_managed" if is_managed_dir else "base_custom"
 
     return load_rule_from_str(content, schema_name=schema_name, validate_mitre=validate_mitre)
@@ -264,7 +280,16 @@ def _extract_active_dataset_values(
     fallback_values: tuple[str, ...],
     effective_date: date,
 ) -> tuple[str, ...]:
-    root_node = yaml.compose(content)
+    try:
+        for ev in yaml.parse(content):
+            if isinstance(ev, yaml.AliasEvent) or getattr(ev, "anchor", None) is not None:
+                raise DatasetLoadError(
+                    "YAML anchors and aliases are not supported in dataset definitions"
+                )
+        root_node = yaml.compose(content)
+    except yaml.YAMLError as exc:
+        raise DatasetLoadError(f"YAML compose error: {exc}") from exc
+
     if not isinstance(root_node, yaml.MappingNode):
         return fallback_values
 
@@ -273,15 +298,21 @@ def _extract_active_dataset_values(
         if isinstance(key_node, yaml.ScalarNode) and key_node.value == "values":
             if isinstance(val_node, yaml.SequenceNode):
                 values_node = val_node
+            else:
+                raise DatasetLoadError("Dataset 'values' must be a YAML sequence of scalar strings")
             break
 
     if values_node is None:
         return fallback_values
 
     active_values: list[str] = []
+    seen_node_ids: set[int] = set()
     for item_node in values_node.value:
-        if not isinstance(item_node, yaml.ScalarNode):
-            continue
+        if not isinstance(item_node, yaml.ScalarNode) or id(item_node) in seen_node_ids:
+            raise DatasetLoadError(
+                "Dataset 'values' must contain only plain scalar strings without aliases"
+            )
+        seen_node_ids.add(id(item_node))
         val_str = str(item_node.value)
         end_line_idx = item_node.end_mark.line
         line_no = end_line_idx + 1
@@ -335,8 +366,11 @@ def load_dataset_from_str(
     if not isinstance(data, dict):
         raise DatasetLoadError("Dataset content must be a YAML mapping")
 
-    schema_validator = SchemaValidator()
-    errors = schema_validator.validate(data, schema_name=schema_name)
+    try:
+        schema_validator = SchemaValidator()
+        errors = schema_validator.validate(data, schema_name=schema_name)
+    except (KeyError, FileNotFoundError, OSError) as exc:
+        raise DatasetLoadError(f"Schema validation error for '{schema_name}': {exc}") from exc
     if errors:
         error_lines = "\n".join(f"- {err.path}: {err.message}" for err in errors)
         raise DatasetLoadError(f"Schema validation failed:\n{error_lines}")

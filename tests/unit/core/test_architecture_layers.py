@@ -272,3 +272,24 @@ def test_repository_corpora_lossless_round_trip(tmp_path: Path) -> None:
             if not original_rule.is_managed:
                 adapter = registry.load_adapter(engine_name)
                 assert adapter.are_rules_equal(original_rule, reloaded_rule)
+
+
+def test_all_six_core_port_protocols_are_runtime_checkable() -> None:
+    from graft.core.ports.compiler import RuleCompilerPort
+    from graft.core.ports.dataset import DatasetPort
+    from graft.core.ports.deployer import RuleDeployerPort
+    from graft.core.ports.engine import EngineAdapter
+    from graft.core.ports.managed import ManagedEnginePort
+    from graft.core.ports.replay import ReplayHarnessPort
+
+    for proto in (
+        EngineAdapter,
+        DatasetPort,
+        RuleCompilerPort,
+        RuleDeployerPort,
+        ManagedEnginePort,
+        ReplayHarnessPort,
+    ):
+        assert getattr(proto, "_is_runtime_protocol", False) is True, (
+            f"Port protocol {proto.__name__} must be decorated with @runtime_checkable"
+        )

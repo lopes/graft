@@ -171,6 +171,7 @@ class GitOpsReconciler:
                 continue
             curr_rs = current_rs_map[rs_id]
             curr_deps = {d.type: d for d in curr_rs.deployments}
+            des_deps = {d.type: d for d in desired_rs.deployments}
             for des_dep in desired_rs.deployments:
                 curr_dep = curr_deps.get(des_dep.type)
                 curr_enabled = curr_dep.enabled if curr_dep else False
@@ -188,6 +189,21 @@ class GitOpsReconciler:
                 )
                 if diff_entry.has_changes:
                     deployment_diffs.append(diff_entry)
+            for curr_dep in curr_rs.deployments:
+                if curr_dep.type not in des_deps and (curr_dep.enabled or curr_dep.alerting):
+                    deployment_diffs.append(
+                        DeploymentDiff(
+                            ruleset_id=rs_id,
+                            ruleset_name=desired_rs.name,
+                            category=desired_rs.category,
+                            deployment_type=curr_dep.type,
+                            current_enabled=curr_dep.enabled,
+                            desired_enabled=False,
+                            current_alerting=curr_dep.alerting,
+                            desired_alerting=False,
+                            category_id=desired_rs.category_id or curr_rs.category_id,
+                        )
+                    )
 
         curr_by_id = {e.id: e for e in current.exclusions}
         curr_by_desc = {e.description: e for e in current.exclusions if e.description}
@@ -198,10 +214,12 @@ class GitOpsReconciler:
 
         for des_excl in desired.exclusions:
             curr_match: ManagedExclusion | None = None
-            if des_excl.id in curr_by_id:
+            if des_excl.id in curr_by_id and des_excl.id not in matched_curr_ids:
                 curr_match = curr_by_id[des_excl.id]
             elif des_excl.description and des_excl.description in curr_by_desc:
-                curr_match = curr_by_desc[des_excl.description]
+                candidate = curr_by_desc[des_excl.description]
+                if candidate.id not in matched_curr_ids:
+                    curr_match = candidate
 
             if curr_match is None:
                 exclusions_to_create.append(des_excl)
@@ -362,10 +380,7 @@ class GitOpsReconciler:
 
         logger.info(
             "Managed state reconciliation complete. %d actions executed.",
-            len(reconcile_diff.deployment_diffs)
-            + len(reconcile_diff.exclusions_to_delete)
-            + len(reconcile_diff.exclusions_to_update)
-            + len(reconcile_diff.exclusions_to_create),
+            len(applied_labels),
         )
         return reconcile_diff
 
@@ -428,6 +443,7 @@ class CustomRuleReconciler:
             deployment_equal = (
                 des_rule.deployment.enabled == curr_rule.deployment.enabled
                 and des_rule.deployment.alerting == curr_rule.deployment.alerting
+                and des_rule.deployment.run_frequency == curr_rule.deployment.run_frequency
             )
             name_equal = des_rule.metadata.name == curr_rule.metadata.name
 

@@ -1,7 +1,9 @@
 import functools
 import importlib.resources
 import json
+import os
 import re
+import tempfile
 import urllib.request
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
@@ -20,6 +22,8 @@ _TACTIC_ID_RE = re.compile(r"^TA\d{4}$", re.IGNORECASE)
 _TECHNIQUE_ID_RE = re.compile(r"^T\d{4}(?:\.\d{3})?$", re.IGNORECASE)
 _CITATION_RE = re.compile(r"\s*\(Citation:[^)]+\)")
 _MD_LINK_RE = re.compile(r"\[([^\]]+)\]\([^)]+\)")
+_VERSION_RE = re.compile(r"^\d+(?:\.\d+)*$")
+_LEADING_DIGITS_RE = re.compile(r"^\d+")
 
 
 def _extract_mitre_external_id(obj: Mapping[str, Any]) -> str | None:
@@ -57,8 +61,10 @@ def _detect_bundle_version(stix_data: Mapping[str, Any], fallback: str = "19.2")
 def _parse_version_tuple(version_str: str) -> tuple[int, ...]:
     parts: list[int] = []
     for token in version_str.strip().lstrip("vV").split("."):
-        digits = "".join(ch for ch in token if ch.isdigit())
-        parts.append(int(digits) if digits else 0)
+        m = _LEADING_DIGITS_RE.match(token.strip())
+        parts.append(int(m.group(0)) if m else 0)
+    while len(parts) > 1 and parts[-1] == 0:
+        parts.pop()
     return tuple(parts)
 
 
@@ -419,6 +425,10 @@ def resolve_upstream_stix_release(
 ) -> tuple[str, str]:
     if version is not None:
         cleaned = version.strip().lstrip("vV")
+        if not _VERSION_RE.match(cleaned):
+            raise ValueError(
+                f"Invalid MITRE ATT&CK version '{version}': must match {_VERSION_RE.pattern}"
+            )
         return cleaned, f"{DEFAULT_ATTACK_STIX_BASE_URL}/enterprise-attack-{cleaned}.json"
 
     target_index_url = index_url or DEFAULT_ATTACK_INDEX_URL
@@ -481,6 +491,21 @@ def check_upstream_mitre_version(
         }
 
 
+def _atomic_write_text(dest: Path, text: str) -> None:
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    fd, tmp_name = tempfile.mkstemp(dir=dest.parent, prefix=f".{dest.name}.", suffix=".tmp")
+    tmp_path = Path(tmp_name)
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as fh:
+            fh.write(text)
+            fh.flush()
+            os.fsync(fh.fileno())
+        os.replace(tmp_path, dest)
+    except Exception:
+        tmp_path.unlink(missing_ok=True)
+        raise
+
+
 def update_mitre_taxonomy(
     source_url: str | None = None,
     target_path: Path | None = None,
@@ -504,7 +529,7 @@ def update_mitre_taxonomy(
         )
 
     req = urllib.request.Request(url, headers={"User-Agent": "graft-updater"})  # noqa: S310
-    with urllib.request.urlopen(req) as resp:  # noqa: S310
+    with urllib.request.urlopen(req, timeout=30.0) as resp:  # noqa: S310
         stix_data: dict[str, Any] = json.loads(resp.read().decode("utf-8"))
 
     payload = parse_attack_stix_bundle(stix_data, version=requested_version)
@@ -526,11 +551,8 @@ def update_mitre_taxonomy(
         an_resource = importlib.resources.files("graft.data").joinpath("mitre_analytics.json")
         an_dest = Path(str(an_resource))
 
-    dest.parent.mkdir(parents=True, exist_ok=True)
-    dest.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
-
-    an_dest.parent.mkdir(parents=True, exist_ok=True)
-    an_dest.write_text(json.dumps(analytics_payload, indent=2) + "\n", encoding="utf-8")
+    _atomic_write_text(dest, json.dumps(payload, indent=2) + "\n")
+    _atomic_write_text(an_dest, json.dumps(analytics_payload, indent=2) + "\n")
 
     get_default_mitre_validator.cache_clear()
     payload["analytics_count"] = len(analytics_payload.get("analytics", {}))

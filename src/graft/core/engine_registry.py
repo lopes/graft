@@ -65,6 +65,11 @@ class EngineRegistry:
 
             try:
                 manifest = self._load_manifest_file(manifest_file, validator)
+                if manifest.name != item.name:
+                    raise EngineManifestLoadError(
+                        f"Engine manifest name '{manifest.name}' in {manifest_file} "
+                        f"must match directory name '{item.name}'"
+                    )
                 self._manifests[manifest.name] = manifest
             except Exception as exc:
                 logger.warning("Failed loading engine manifest at %s: %s", manifest_file, exc)
@@ -75,8 +80,10 @@ class EngineRegistry:
     def _load_manifest_file(self, path: Path, validator: SchemaValidator) -> EngineManifest:
         try:
             raw_data: Any = yaml.safe_load(path.read_text(encoding="utf-8"))
-        except yaml.YAMLError as exc:
-            raise EngineManifestLoadError(f"YAML parsing error in {path}: {exc}") from exc
+        except (yaml.YAMLError, UnicodeDecodeError, OSError) as exc:
+            raise EngineManifestLoadError(
+                f"Error reading/parsing manifest at {path}: {exc}"
+            ) from exc
 
         if not isinstance(raw_data, dict):
             raise EngineManifestLoadError(f"Engine manifest at {path} must be a YAML mapping")
@@ -152,10 +159,12 @@ class EngineRegistry:
         try:
             module = importlib.import_module(module_path)
             adapter_cls = getattr(module, class_name)
-        except (ImportError, AttributeError) as exc:
+            instance = adapter_cls(env=env)
+        except EngineError:
+            raise
+        except (ImportError, AttributeError, TypeError, ValueError) as exc:
             raise EngineError(f"Failed loading adapter class '{target}': {exc}") from exc
 
-        instance = adapter_cls(env=env)
         if not isinstance(instance, EngineAdapter):
             raise EngineError(f"Class '{target}' does not conform to EngineAdapter protocol")
         return instance
