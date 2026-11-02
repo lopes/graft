@@ -44,7 +44,7 @@ class SecOpsManagedAdapter(ManagedEnginePort):
             logger.debug("Failed resolving category names: %s", exc)
 
     def fetch_managed_state(self) -> ManagedState:
-        logger.info("Fetching curated rulesets from Google SecOps API")
+        logger.debug("Fetching curated rulesets from Google SecOps API")
         raw_rulesets: list[dict[str, object]] = []
         page_token: str | None = None
         while True:
@@ -183,7 +183,7 @@ class SecOpsManagedAdapter(ManagedEnginePort):
             )
 
         # Fetch exclusions (findingsRefinements)
-        logger.info("Fetching findings refinements from Google SecOps API")
+        logger.debug("Fetching findings refinements from Google SecOps API")
         raw_exclusions: list[dict[str, object]] = []
         ex_page_token: str | None = None
         while True:
@@ -337,7 +337,7 @@ class SecOpsManagedAdapter(ManagedEnginePort):
             f"curatedRuleSetCategories/{cat}/curatedRuleSets/{ruleset_id}/curatedRuleSetDeployments/"
             f"{deployment_type.lower()}"
         )
-        logger.info(
+        logger.debug(
             "Setting ruleset deployment: %s (%s) [enabled=%s, alerting=%s]",
             ruleset_id,
             deployment_type,
@@ -358,7 +358,7 @@ class SecOpsManagedAdapter(ManagedEnginePort):
             "query": exclusion.expression,
             "type": "DETECTION_EXCLUSION",
         }
-        logger.info("Creating findings refinement '%s' (%s)", exclusion.id, exclusion.description)
+        logger.debug("Creating findings refinement '%s' (%s)", exclusion.id, exclusion.description)
         resp = self._client.request(
             "POST",
             "findingsRefinements",
@@ -390,13 +390,16 @@ class SecOpsManagedAdapter(ManagedEnginePort):
         if app:
             dep_body["detectionExclusionApplication"] = app
 
-        logger.info("Configuring findings refinement deployment for '%s'", created_id)
+        update_mask = (
+            "enabled,archived,detectionExclusionApplication" if app else "enabled,archived"
+        )
+        logger.debug("Configuring findings refinement deployment for '%s'", created_id)
         try:
             self._client.request(
                 "PATCH",
                 f"findingsRefinements/{created_id}/deployment",
                 body=dep_body,
-                params={"updateMask": "enabled,archived,detectionExclusionApplication"},
+                params={"updateMask": update_mask},
                 api_version="v1alpha",
             )
         except Exception:
@@ -414,7 +417,7 @@ class SecOpsManagedAdapter(ManagedEnginePort):
             "displayName": exclusion.description,
             "query": exclusion.expression,
         }
-        logger.info("Updating findings refinement '%s'", exclusion.id)
+        logger.debug("Updating findings refinement '%s'", exclusion.id)
         self._client.request(
             "PATCH",
             f"findingsRefinements/{exclusion.id}",
@@ -445,13 +448,16 @@ class SecOpsManagedAdapter(ManagedEnginePort):
         if app:
             dep_body["detectionExclusionApplication"] = app
 
-        logger.info("Updating findings refinement deployment for '%s'", exclusion.id)
+        update_mask = (
+            "enabled,archived,detectionExclusionApplication" if app else "enabled,archived"
+        )
+        logger.debug("Updating findings refinement deployment for '%s'", exclusion.id)
         try:
             self._client.request(
                 "PATCH",
                 f"findingsRefinements/{exclusion.id}/deployment",
                 body=dep_body,
-                params={"updateMask": "enabled,archived,detectionExclusionApplication"},
+                params={"updateMask": update_mask},
                 api_version="v1alpha",
             )
         except Exception:
@@ -463,7 +469,7 @@ class SecOpsManagedAdapter(ManagedEnginePort):
             raise
 
     def delete_exclusion(self, exclusion_id: str) -> None:
-        logger.info(
+        logger.debug(
             "Retiring findings refinement exclusion '%s' by disabling and archiving deployment",
             exclusion_id,
         )

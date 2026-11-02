@@ -13,6 +13,7 @@ class SecOpsDeployerAdapter(RuleDeployerPort):
         self._client = client
         self._remote_ids_by_name: dict[str, str] = {}
         self._remote_ids_by_meta_id: dict[str, str] = {}
+        self._cache_populated: bool = False
 
     def _resolve_remote_id(self, rule_id: str, rule_name: str = "") -> str:
         if rule_id.startswith("ru_"):
@@ -21,6 +22,13 @@ class SecOpsDeployerAdapter(RuleDeployerPort):
             return self._remote_ids_by_meta_id[rule_id]
         if rule_name and rule_name in self._remote_ids_by_name:
             return self._remote_ids_by_name[rule_name]
+        if not self._cache_populated:
+            self._cache_populated = True
+            self.list_rules()
+            if rule_id in self._remote_ids_by_meta_id:
+                return self._remote_ids_by_meta_id[rule_id]
+            if rule_name and rule_name in self._remote_ids_by_name:
+                return self._remote_ids_by_name[rule_name]
         return rule_id
 
     def list_rules(self) -> tuple[RuleEnvelope, ...]:
@@ -49,8 +57,16 @@ class SecOpsDeployerAdapter(RuleDeployerPort):
                 dep_params["pageToken"] = dep_page_token
             try:
                 dep_response = self._client.request("GET", "rules/-/deployments", params=dep_params)
-            except SecOpsApiError:
-                break
+            except SecOpsApiError as exc:
+                if exc.status_code == 404:
+                    logger.debug("Bulk rule deployments endpoint returned 404; defaulting states")
+                    break
+                logger.warning(
+                    "Failed fetching rule deployments on tenant (HTTP %s): %s",
+                    exc.status_code,
+                    exc,
+                )
+                raise
             raw_deps = dep_response.get("ruleDeployments", [])
             if isinstance(raw_deps, list):
                 for dep in raw_deps:
@@ -72,6 +88,7 @@ class SecOpsDeployerAdapter(RuleDeployerPort):
 
         self._remote_ids_by_name.clear()
         self._remote_ids_by_meta_id.clear()
+        self._cache_populated = True
 
         envelopes: list[RuleEnvelope] = []
         for raw in raw_rules:
@@ -141,6 +158,17 @@ class SecOpsDeployerAdapter(RuleDeployerPort):
                 rule.deployment.enabled,
                 rule.deployment.alerting,
             )
+            try:
+                self.delete_rule(secops_id)
+                self._remote_ids_by_name.pop(rule.metadata.name, None)
+                self._remote_ids_by_meta_id.pop(rule.metadata.id, None)
+                self._remote_ids_by_meta_id.pop(secops_id, None)
+            except Exception as rollback_err:
+                logger.warning(
+                    "Failed rolling back newly created rule %s after deployment failure: %s",
+                    secops_id,
+                    rollback_err,
+                )
             raise
         return secops_id
 

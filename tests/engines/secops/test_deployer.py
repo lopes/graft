@@ -370,3 +370,85 @@ def test_update_rule_logs_warning_when_deployment_step_fails(
         in msg
         for msg in warnings
     )
+
+
+def test_list_rules_propagates_non_404_deployments_api_error(mock_client: MagicMock) -> None:
+    from graft.engines.secops.client import SecOpsApiError
+
+    mock_client.request.side_effect = [
+        {
+            "rules": [
+                {
+                    "name": "projects/p/locations/l/instances/i/rules/ru_12345",
+                    "displayName": "custom_login_detection",
+                    "text": "rule custom_login_detection { condition: true }",
+                },
+            ],
+        },
+        SecOpsApiError("Permission denied", 403, status="PERMISSION_DENIED"),
+    ]
+
+    deployer = SecOpsDeployerAdapter(client=mock_client)
+    with pytest.raises(SecOpsApiError, match="403"):
+        deployer.list_rules()
+
+
+def test_resolve_remote_id_lazily_populates_cache_for_graft_uuid(
+    mock_client: MagicMock, sample_rule: RuleEnvelope
+) -> None:
+    import dataclasses
+
+    graft_uuid = "b1d72370-5fa3-4cb8-a579-22a468d6f101"
+    yaral_text = f"""rule test_rule {{
+  meta:
+    id = "{graft_uuid}"
+    description = "Test rule"
+  events:
+    $e.metadata.event_type = "PROCESS_LAUNCH"
+  condition:
+    $e
+}}"""
+    rule_with_graft_uuid = dataclasses.replace(
+        sample_rule,
+        metadata=dataclasses.replace(sample_rule.metadata, id=graft_uuid, name="test_rule"),
+    )
+    mock_client.request.side_effect = [
+        # Lazy list_rules(): GET rules
+        {
+            "rules": [
+                {
+                    "name": "projects/p/locations/l/instances/i/rules/ru_resolved_777",
+                    "displayName": "test_rule",
+                    "text": yaral_text,
+                }
+            ]
+        },
+        # Lazy list_rules(): GET rules/-/deployments
+        {"ruleDeployments": []},
+        # DELETE rules/ru_resolved_777
+        {},
+    ]
+
+    deployer = SecOpsDeployerAdapter(client=mock_client)
+    deployer.delete_rule(rule_with_graft_uuid.metadata.id)
+
+    delete_call = mock_client.request.call_args_list[-1]
+    assert delete_call[0] == ("DELETE", "rules/ru_resolved_777")
+
+
+def test_create_rule_rolls_back_created_rule_when_set_rule_state_fails(
+    mock_client: MagicMock, sample_rule: RuleEnvelope
+) -> None:
+    from graft.engines.secops.client import SecOpsApiError
+
+    mock_client.request.side_effect = [
+        {"name": "projects/p/locations/l/instances/i/rules/ru_leaked_999"},
+        SecOpsApiError("Deployment patch failed", 403, status="PERMISSION_DENIED"),
+        {},  # DELETE rules/ru_leaked_999 rollback
+    ]
+
+    deployer = SecOpsDeployerAdapter(client=mock_client)
+    with pytest.raises(SecOpsApiError, match="403"):
+        deployer.create_rule(sample_rule)
+
+    mock_client.request.assert_any_call("DELETE", "rules/ru_leaked_999")

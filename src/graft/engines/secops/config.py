@@ -27,61 +27,41 @@ class SecOpsConfig:
         )
 
     @classmethod
+    def _read_tier(
+        cls,
+        prefixes: tuple[str, ...],
+    ) -> tuple[str | None, str | None, str | None, str | None]:
+        def _first(suffix: str) -> str | None:
+            for prefix in prefixes:
+                val = os.environ.get(f"{prefix}{suffix}")
+                if val:
+                    return val
+            return None
+
+        return (
+            _first("PROJECT"),
+            _first("LOCATION"),
+            _first("INSTANCE_ID"),
+            _first("SA_EMAIL"),
+        )
+
+    @classmethod
     def from_env(cls, target: Literal["staging", "prod"] = "staging") -> Self:
         tgt = target.upper()
 
         # 1. Engine-scoped targeted variables (e.g. GRAFT_SECOPS_STAGING_PROJECT)
-        project = os.environ.get(f"GRAFT_SECOPS_{tgt}_PROJECT") or os.environ.get(
-            f"GRAFT_{tgt}_PROJECT"
-        )
-        location = os.environ.get(f"GRAFT_SECOPS_{tgt}_LOCATION") or os.environ.get(
-            f"GRAFT_{tgt}_LOCATION"
-        )
-        instance_id = os.environ.get(f"GRAFT_SECOPS_{tgt}_INSTANCE_ID") or os.environ.get(
-            f"GRAFT_{tgt}_INSTANCE_ID"
-        )
-        sa_email = os.environ.get(f"GRAFT_SECOPS_{tgt}_SA_EMAIL") or os.environ.get(
-            f"GRAFT_{tgt}_SA_EMAIL"
+        project, location, instance_id, sa_email = cls._read_tier(
+            (f"GRAFT_SECOPS_{tgt}_", f"GRAFT_{tgt}_")
         )
 
         # 2. Engine-scoped lab / single-tenant fallback (e.g. GRAFT_SECOPS_PROJECT)
         if not project:
-            project = os.environ.get("GRAFT_SECOPS_PROJECT") or os.environ.get("GRAFT_PROJECT")
-            location = (
-                location
-                or os.environ.get("GRAFT_SECOPS_LOCATION")
-                or os.environ.get("GRAFT_LOCATION")
-            )
-            instance_id = (
-                instance_id
-                or os.environ.get("GRAFT_SECOPS_INSTANCE_ID")
-                or os.environ.get("GRAFT_INSTANCE_ID")
-            )
-            sa_email = (
-                sa_email
-                or os.environ.get("GRAFT_SECOPS_SA_EMAIL")
-                or os.environ.get("GRAFT_SA_EMAIL")
-            )
+            project, location, instance_id, sa_email = cls._read_tier(("GRAFT_SECOPS_", "GRAFT_"))
 
         # 3. Staging fallback to production coordinates when staging is not separated
         if not project and target == "staging":
-            project = os.environ.get("GRAFT_SECOPS_PROD_PROJECT") or os.environ.get(
-                "GRAFT_PROD_PROJECT"
-            )
-            location = (
-                location
-                or os.environ.get("GRAFT_SECOPS_PROD_LOCATION")
-                or os.environ.get("GRAFT_PROD_LOCATION")
-            )
-            instance_id = (
-                instance_id
-                or os.environ.get("GRAFT_SECOPS_PROD_INSTANCE_ID")
-                or os.environ.get("GRAFT_PROD_INSTANCE_ID")
-            )
-            sa_email = (
-                sa_email
-                or os.environ.get("GRAFT_SECOPS_PROD_SA_EMAIL")
-                or os.environ.get("GRAFT_PROD_SA_EMAIL")
+            project, location, instance_id, sa_email = cls._read_tier(
+                ("GRAFT_SECOPS_PROD_", "GRAFT_PROD_")
             )
 
         missing: list[str] = []

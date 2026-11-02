@@ -487,3 +487,36 @@ values:
         "dataTables",
         "dataTables/known_scanner_ips/dataTableRows:bulkReplace",
     ]
+
+
+def test_clear_rows_ignores_404_and_fetch_rows_stops_at_max_rows() -> None:
+    client = MockSecOpsClient()
+    # GET rows returns 2 rows; first DELETE returns 404 (already deleted), second DELETE succeeds
+    client.queue_response(
+        {
+            "dataTableRows": [
+                {"name": ".../dataTableRows/row_gone", "values": ["1.1.1.1"]},
+                {"name": ".../dataTableRows/row_live", "values": ["2.2.2.2"]},
+            ]
+        }
+    )
+    client.queue_response(SecOpsApiError("Row not found", status_code=404))
+    client.queue_response({})
+
+    adapter = SecOpsDatasetAdapter(client=client)
+    adapter._clear_rows("known_scanner_ips")
+    delete_calls = [c for c in client.calls if c["method"] == "DELETE"]
+    assert len(delete_calls) == 2
+
+    # _fetch_rows with exactly _MAX_DATASET_ROWS items and nextPageToken stops without extra page
+    client_max = MockSecOpsClient()
+    client_max.queue_response(
+        {
+            "dataTableRows": [{"values": [f"val_{i}"]} for i in range(1000)],
+            "nextPageToken": "unnecessary_page_2",
+        }
+    )
+    adapter_max = SecOpsDatasetAdapter(client=client_max)
+    fetched = adapter_max._fetch_rows("known_scanner_ips")
+    assert len(fetched) == 1000
+    assert len(client_max.calls) == 1

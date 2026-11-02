@@ -56,6 +56,7 @@ def test_auth_resolver_gcloud_default(monkeypatch: pytest.MonkeyPatch) -> None:
         capture_output=True,
         text=True,
         check=False,
+        timeout=15.0,
     )
 
 
@@ -91,6 +92,7 @@ def test_auth_resolver_gcloud_impersonation(monkeypatch: pytest.MonkeyPatch) -> 
         capture_output=True,
         text=True,
         check=False,
+        timeout=15.0,
     )
 
 
@@ -123,3 +125,42 @@ def test_auth_resolver_gcloud_not_found(monkeypatch: pytest.MonkeyPatch) -> None
     resolver = SecOpsAuthResolver()
     with pytest.raises(SecOpsAuthError, match="gcloud CLI not found"):
         resolver.get_token()
+
+
+def test_auth_resolver_gcloud_timeout_and_token_caching(monkeypatch: pytest.MonkeyPatch) -> None:
+    for key in ("GRAFT_SECOPS_TOKEN", "GRAFT_GCP_TOKEN", "GRAFT_TOKEN"):
+        monkeypatch.delenv(key, raising=False)
+
+    def mock_timeout(*args: object, **kwargs: object) -> None:
+        raise subprocess.TimeoutExpired(cmd=["gcloud", "auth", "print-access-token"], timeout=15.0)
+
+    monkeypatch.setattr(subprocess, "run", mock_timeout)
+    resolver = SecOpsAuthResolver()
+    with pytest.raises(SecOpsAuthError, match="timed out"):
+        resolver.get_token()
+
+    mock_run = MagicMock(
+        side_effect=[
+            subprocess.CompletedProcess(
+                args=["gcloud", "auth", "print-access-token"],
+                returncode=0,
+                stdout="cached-token-1\n",
+                stderr="",
+            ),
+            subprocess.CompletedProcess(
+                args=["gcloud", "auth", "print-access-token"],
+                returncode=0,
+                stdout="refreshed-token-2\n",
+                stderr="",
+            ),
+        ]
+    )
+    monkeypatch.setattr(subprocess, "run", mock_run)
+    cached_resolver = SecOpsAuthResolver()
+    assert cached_resolver.get_token() == "cached-token-1"
+    assert cached_resolver.get_token() == "cached-token-1"
+    assert mock_run.call_count == 1
+
+    cached_resolver.invalidate()
+    assert cached_resolver.get_token() == "refreshed-token-2"
+    assert mock_run.call_count == 2

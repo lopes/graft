@@ -114,7 +114,7 @@ def load_managed_manifest_from_str(content: str) -> ManagedState:
 def load_managed_manifest_from_yaml(path: Path | str) -> ManagedState:
     file_path = Path(path)
     if not file_path.is_file():
-        raise FileNotFoundError(f"Manifest file not found: {file_path}")
+        raise ManagedManifestLoadError(f"Manifest file not found: {file_path}")
     try:
         content = file_path.read_text(encoding="utf-8")
     except (UnicodeDecodeError, OSError) as exc:
@@ -131,12 +131,16 @@ def dump_managed_manifest_to_yaml(state: ManagedState, path: Path | str | None =
         cat_key = rs.category or "default"
         if cat_key not in categories_map:
             cat_id = getattr(rs, "category_id", "")
-            if not cat_id:
+            if cat_id:
+                cat_id = "".join(
+                    c if c.isalnum() or c in ("-", "_") else "_" for c in cat_id.lower()
+                )
+            else:
                 cat_id = "".join(
                     c if c.isalnum() or c in ("-", "_") else "_" for c in cat_key.lower()
                 )
-                if not cat_id:
-                    cat_id = "default"
+            if not cat_id:
+                cat_id = "default"
             categories_map[cat_key] = {
                 "name": cat_key,
                 "id": cat_id,

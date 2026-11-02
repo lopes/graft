@@ -214,3 +214,60 @@ def test_secops_adapter_validate_rule_dataset_references() -> None:
             ),
             {"known_scanner_ips"},
         )
+
+
+def test_secops_rule_content_matches_multi_tactic_and_url_literals() -> None:
+    from graft.core.models.rule import BaseDeploymentConfig, RuleEnvelope, RuleMetadata, Runbook
+    from graft.engines.secops.compiler import synthesize_yaral_rule
+
+    adapter = SecOpsAdapter()
+    url_rule = RuleEnvelope(
+        metadata=RuleMetadata(
+            id="c4e9b8f2-89b1-4f81-9b16-928d54128f73",
+            name="scanner_url_rule",
+            description="desc",
+        ),
+        logic=(
+            'events:\n  $e.target.url = "https://evil.test" '
+            "and $e.principal.ip in %known_scanner_ips.ip\n"
+            "condition:\n  $e"
+        ),
+        deployment=BaseDeploymentConfig(enabled=True, alerting=True),
+        runbook=Runbook(context="c", triage="t", response="r"),
+        tests=(),
+    )
+    with pytest.raises(ValueError, match="must be referenced as"):
+        adapter.validate_rule_dataset_references(url_rule, {"known_scanner_ips"})
+
+    desired = RuleEnvelope(
+        metadata=RuleMetadata(
+            id="c4e9b8f2-89b1-4f81-9b16-928d54128f73",
+            name="multi_tactic_rule",
+            description="Detects privilege escalation and persistence via cloud accounts",
+            owners=("Detection Team",),
+            mitre={
+                "privilege-escalation": ("T1098.001", "T1078.004"),
+                "persistence": ("T1098.001",),
+            },
+        ),
+        logic='events:\n  $e.metadata.event_type = "USER_LOGIN"\ncondition:\n  $e',
+        deployment=BaseDeploymentConfig(enabled=True, alerting=True, run_frequency="hourly"),
+        runbook=Runbook(context="c", triage="t", response="r"),
+        tests=(),
+    )
+    synth_text, _ = synthesize_yaral_rule(desired)
+    remote = RuleEnvelope(
+        metadata=RuleMetadata(
+            id="ru_remote_id",
+            name="multi_tactic_rule",
+            description="",
+        ),
+        logic=synth_text + "\n// trailing comment\n",
+        deployment=BaseDeploymentConfig(enabled=True, alerting=True, run_frequency="hourly"),
+        runbook=Runbook(context="", triage="", response=""),
+        tests=(),
+    )
+    assert secops_rule_content_matches(desired, remote) is True
+
+    deconstructed = adapter.deconstruct_rule(remote)
+    assert deconstructed.deployment.run_frequency == "hourly"

@@ -354,3 +354,117 @@ def test_deconstruct_sanitizes_and_truncates_rule_slug() -> None:
     index_rule = "rule __index__ {\n  events:\n    $e\n  condition:\n    $e\n}"
     index_meta, _ = deconstruct_yaral_rule(index_rule)
     assert index_meta.name == "index_rule"
+
+
+def test_yaral_backslash_and_quote_lossless_roundtrip(sample_rule: RuleEnvelope) -> None:
+    import dataclasses
+
+    tricky_desc = r'Detects "cmd.exe" dropped in C:\Windows\Temp\ with \\unc\share'
+    rule_with_paths = dataclasses.replace(
+        sample_rule,
+        metadata=dataclasses.replace(sample_rule.metadata, description=tricky_desc),
+    )
+    synth_text, _ = synthesize_yaral_rule(rule_with_paths)
+    assert (
+        r'description = "Detects \"cmd.exe\" dropped in C:\\Windows\\Temp\\ with \\\\unc\\share"'
+        in synth_text
+    )
+
+    decon_meta, decon_logic = deconstruct_yaral_rule(
+        synth_text,
+        fallback_id=rule_with_paths.metadata.id,
+        fallback_name=rule_with_paths.metadata.name,
+    )
+    assert decon_meta.description == tricky_desc
+    assert decon_logic.strip() == sample_rule.logic.strip()
+
+    # CR/LF in description is sanitized so synthesized meta string never spans raw newlines
+    multiline_rule = dataclasses.replace(
+        sample_rule,
+        metadata=dataclasses.replace(
+            sample_rule.metadata, description="Line one\r\nLine two\nLine three"
+        ),
+    )
+    synth_multiline, _ = synthesize_yaral_rule(multiline_rule)
+    assert 'description = "Line one Line two Line three"' in synth_multiline
+
+
+def test_deconstruct_yaral_recognizes_outcome_and_options_sections() -> None:
+    yaral_options_first = """rule options_after_meta {
+  meta:
+    id = "b1d72370-5fa3-4cb8-a579-22a468d6f101"
+    description = "Rule with options immediately after meta"
+  options:
+    suppression_window = 5m
+  events:
+    $e.metadata.event_type = "USER_LOGIN"
+  outcome:
+    $risk_score = 80
+  condition:
+    $e
+}"""
+    meta, logic = deconstruct_yaral_rule(yaral_options_first)
+    assert meta.description == "Rule with options immediately after meta"
+    assert logic.startswith("options:")
+    assert "suppression_window = 5m" in logic
+    assert "outcome:" in logic
+
+
+def test_verify_rule_preserves_original_rule_text_after_dataset_substitution(
+    tmp_path: object,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from pathlib import Path
+
+    assert isinstance(tmp_path, Path)
+    monkeypatch.chdir(tmp_path)
+    ds_dir = tmp_path / "datasets"
+    ds_dir.mkdir()
+    (ds_dir / "known_scanner_ips.yaml").write_text(
+        """metadata:
+  name: "known_scanner_ips"
+  description: "Scanners"
+  owners: ["SOC"]
+  tags: ["network"]
+  references: ["https://example.com"]
+values:
+  - "10.10.0.50"
+""",
+        encoding="utf-8",
+    )
+
+    mock_client = MagicMock(spec=SecOpsClient)
+    mock_client.request.side_effect = [
+        {
+            "success": False,
+            "compilationDiagnostics": [
+                {
+                    "message": "Data Table Name: known_scanner_ips not found",
+                    "startLine": 1,
+                    "startColumn": 1,
+                    "severity": "ERROR",
+                }
+            ],
+        },
+        {"success": True},
+    ]
+
+    compiler = SecOpsCompilerAdapter(client=mock_client)
+    rule = RuleEnvelope(
+        metadata=RuleMetadata(
+            id="11111111-2222-3333-4444-555555555555",
+            name="scanner_check",
+            description="Detects non-scanner traffic",
+            owners=("SOC",),
+            mitre={"discovery": ("T1046",)},
+        ),
+        logic="events:\n  not $e.principal.ip in %known_scanner_ips.value\ncondition:\n  $e",
+        deployment=BaseDeploymentConfig(enabled=True, alerting=True, run_frequency="live"),
+        runbook=Runbook(context="c", triage="t", response="r"),
+        tests=(),
+    )
+    result = compiler.verify_rule(rule)
+    assert result.success is True
+    synth_raw = str(result.raw_response.get("synthesized_rule_text", ""))
+    assert "%known_scanner_ips.value" in synth_raw
+    assert "graft_verify_placeholder" not in synth_raw

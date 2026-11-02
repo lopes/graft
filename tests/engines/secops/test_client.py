@@ -388,3 +388,19 @@ def test_secops_api_error_formatting_variants() -> None:
         str(err_full)
         == "SecOps API Error 400 (INVALID_ARGUMENT) on POST findingsRefinements: Invalid query"
     )
+
+
+def test_client_rejects_cleartext_http_urls(
+    secops_config: SecOpsConfig, auth_resolver: SecOpsAuthResolver
+) -> None:
+    client = SecOpsClient(config=secops_config, auth_resolver=auth_resolver)
+    with pytest.raises(ValueError, match="HTTPS"):
+        client._resolve_url("http://insecure.example.com/v1/rules")
+    with pytest.raises(ValueError, match="HTTPS"):
+        client.request("GET", "http://insecure.example.com/v1/rules")
+
+    # Dynamic path segments with spaces are safely percent-encoded while standard paths are intact
+    quoted = client._resolve_url("dataTables/my table/dataTableRows")
+    assert "dataTables/my%20table/dataTableRows" in quoted
+    standard = client._resolve_url("rules/ru_12345")
+    assert standard.endswith("/rules/ru_12345")
