@@ -50,7 +50,7 @@ Fill out the scaffolded rule with realistic detection logic, operational control
 ### Rule Template
 ```yaml
 metadata:
-  id: "b1d72370-5fa3-4cb8-a579-22a468d6f101"
+  id: "d5e2a481-7f32-4019-86c2-19e34b719002"
   name: "gcp_service_account_key_created"
   description: "Long-lived user-managed GCP service account keys created."
   owners:
@@ -143,11 +143,14 @@ Verify that your YARA-L logic compiles cleanly against the real Google SecOps en
 
 ### Commands
 ```bash
-# Dry-run syntax compilation against staging SecOps tenant
+# Dry-run syntax compilation for a specific rule against staging SecOps tenant
 graft secops verify rulesets/secops/custom/gcp_service_account_key_created.yaml
 
-# Dry-run syntax across all custom rules in the engine
+# Dry-run syntax for custom rules modified in your current branch (Scoped Mode: default)
 graft secops verify
+
+# Dry-run syntax across all custom rules in the engine (Full Catalog Mode)
+graft secops verify --all
 ```
 
 ### How It Works
@@ -173,7 +176,7 @@ graft secops test --require-staging
 ```
 
 ### How Quarantine Isolation Works
-1. Graft uploads a temporary rule with a random UUID to staging (`graft_test_<name>_<hash>`) with alerting strictly disabled.
+1. Graft uploads a temporary rule (`graft_test_<rule_name>_<uuid8>`) to staging with alerting strictly disabled (`alerting = False`).
 2. It injects the synthetic UDM event payloads defined in your `tests:` block.
 3. It polls execution to assert that the match count equals your `expect:` value.
 4. It **guarantees immediate cleanup and deletion** of the temporary quarantine rule, ensuring zero test alert pollution.
@@ -242,9 +245,9 @@ Rules placed in any underscore-prefixed folder (e.g. `_archived/`, `_deprecated/
 ### Objective
 Export objective detection catalogs across formats (`table`, `csv`, `json`, `markdown`), inspect MITRE ATT&CK coverage and 3-state gaps (`graft mitre`), and generate MITRE ATT&CK Enterprise Navigator layers (`graft export navigator` / `graft export matrix`) for coverage tracking and multi-engine gap analysis.
 
-### Catalog Commands
+### Catalog & Dataset Export Commands
 ```bash
-# Display on-screen detection catalog table (default format)
+# Display on-screen detection catalog table (default format; metadata alias supported)
 graft export catalog
 
 # Filter catalog to a specific engine
@@ -258,6 +261,11 @@ graft export catalog --format markdown --out docs/RULE_CATALOG.md
 
 # Export structured JSON for external data lakes or dashboards
 graft export catalog --format json --out exports/rules.json
+
+# Export active reusable datasets (after UTC ttl:YYYY-MM-DD filtering)
+graft export datasets
+graft export datasets --format csv --datasets-dir datasets --out exports/datasets.csv
+graft export datasets --format json --datasets-dir datasets --out exports/datasets.json
 ```
 
 ### MITRE Intelligence & Navigator Commands

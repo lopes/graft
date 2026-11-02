@@ -46,17 +46,22 @@ Engines are discovered dynamically at runtime by [`EngineRegistry`](../../src/gr
 Based on the capabilities declared in `engine.yaml`, [`EngineCommandController`](../../src/graft/cli/engine_controller.py) automatically provisions subcommands:
 
 ```bash
+# Inspect registered engines, capability flags, environments, and schemas offline
+graft engines
+graft --json engines
+
+# Execute capabilities-driven engine subcommands
 graft <engine> [subcommands...]
 ```
 
 For example, an engine declaring all five capabilities (such as `secops`) mounts:
 - `graft <engine> new <name>`: Bootstrap a new custom rule envelope (or `--managed <id>` for a registered managed rule).
-- `graft <engine> verify [paths...]`: Lint locally and dry-run query syntax via the engine's compiler API.
+- `graft <engine> render [paths...] [--all]`: Synthesize engine-native query text (including injected metadata headers) completely offline.
+- `graft <engine> verify [paths...] [--all]`: Lint locally and dry-run query syntax via the engine's compiler API.
 - `graft <engine> test [paths...]`: Execute synthetic replay tests in isolated staging quarantine (pre-syncing referenced local datasets).
-- `graft <engine> diff`: Compute delta between Git and target tenant (supports `--target datasets|custom|managed|all` and `--all` for full catalog drift).
-- `graft <engine> apply`: Apply desired Git state to target tenant in order (`datasets` $\rightarrow$ `custom` $\rightarrow$ `managed`).
-- `graft <engine> pull`: Pull detection rules, managed state, or compatible datasets (`--target datasets`) from target tenant to local repository.
-- `graft <engine> datasets {diff,apply,pull}`: Granular commands for reusable string datasets (`datasets/<name>.yaml`).
+- `graft <engine> diff [--target custom|datasets|managed|all] [--all]`: Compute delta between Git and target tenant (scoped to branch changes by default, or `--all` for full catalog drift).
+- `graft <engine> apply [--target custom|datasets|managed|all] [--all]`: Apply desired Git state to target tenant in strict dependency order (`datasets` $\rightarrow$ `custom` $\rightarrow$ `managed`).
+- `graft <engine> pull [--target all|custom|managed|datasets] [--out-datasets-dir DIR] [--force]`: Pull detection rules, managed state, or compatible datasets (`--target datasets`) from target tenant to local repository.
 - `graft <engine> managed {diff,apply,pull}`: Granular commands for vendor-managed content and exclusions.
 
 ---

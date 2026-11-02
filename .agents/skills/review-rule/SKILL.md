@@ -56,7 +56,7 @@ Evaluate each rule across all blocks and classify every check as `PASS`, `WARN`,
   - Flag any filler prepositions (`_to_`, `_of_`, `_or_`, `_in_`, `_with_`, `_for_`, `_at_`, `_by_`, `_via_`, `_from_`) or speculative words (`possible`, `suspicious`, `potential`, `activity`, `detected`, `attempt`, `success`, `alert`).
 - **Description:**
   - Is `metadata.description` $\le 128$ characters, non-conversational, and accurately aligned with what `logic` actually detects?
-  - Flag leftover `graft new rule` stubs (`"Detection rule for ..."`).
+  - Flag leftover `graft new rule` stubs (`"Detection rule for ..."` for custom rules and `"Registered managed rule for ..."` for registered managed rules).
 - **Owners:**
   - Is `metadata.owners` populated with a real owner or team (flagging generic placeholders if left unreviewed)?
 - **MITRE ATT&CK Mapping (Relational Foreign Key):**
@@ -88,7 +88,7 @@ Evaluate each rule across all blocks and classify every check as `PASS`, `WARN`,
   - Verify `managed.id` exists in `rulesets/<engine>/managed/index.yaml` and that `metadata.name` / `runbook` accurately describe that specific vendor ruleset.
 
 ### Block 4: `runbook`
-- **Stub & Boilerplate Detection:** Flag (`FAIL`) if `context`, `triage`, or `response` still contain the default `graft new rule` placeholder text (`"Context and background regarding this detection."`, `"1. Verify principal user and host."`).
+- **Stub & Boilerplate Detection:** Flag (`FAIL`) if `context`, `triage`, or `response` still contain the default `graft new rule` placeholder text (`"Context and background regarding this detection."`, `"Context and background regarding this vendor-managed detection."`, `"1. Verify principal user and host."`).
 - **Operational Specificity:**
   - Does `runbook.context` explain the threat model, relevant `Gxxxx` threat groups, and realistic false-positive scenarios (`mutable_elements`)?
   - Does `runbook.triage` reference the actual entities, fields, or outcome variables produced by `logic` and align with the technique's `ANxxxx` analytic?

@@ -153,10 +153,9 @@ class EngineAdapter(Protocol):
 
     def validate_rule_dataset_references(
         self,
-        rule_path: Path,
-        logic: str,
-        valid_dataset_names: set[str],
-    ) -> list[str]: ...
+        rule: RuleEnvelope,
+        local_dataset_names: set[str],
+    ) -> None: ...
 ```
 
 The composite adapter acts as a capabilities factory and lifecycle hook provider:
@@ -168,7 +167,7 @@ The composite adapter acts as a capabilities factory and lifecycle hook provider
 - **`load_managed_manifest(path)` / `dump_managed_manifest(state, path)`:** Parses and serializes `rulesets/<engine>/managed/index.yaml` when `managed_rules: true` (defaults to `None`).
 - **`has_managed_rule_id(managed_id, state)`:** Verifies whether a registered managed rule's `managed.id` exists in the parsed `ManagedState` from `rulesets/<engine>/managed/index.yaml`. Used by `graft lint` to enforce referential integrity between `rulesets/<engine>/managed/<rule_name>.yaml` and `index.yaml`.
 - **`get_default_rule_logic(rule_name)`:** Returns the default query logic snippet injected when scaffolding a new custom rule via `graft <engine> new <name>` or `graft new rule <name> --engine <engine>`.
-- **`validate_rule_dataset_references(rule_path, logic, valid_dataset_names)`:** Validates engine-specific dataset reference syntax inside `rule.logic` against `datasets/*.yaml` during `graft lint` (defaults to `[]`).
+- **`validate_rule_dataset_references(rule, local_dataset_names)`:** Validates engine-specific dataset reference syntax inside `rule.logic` against active local dataset names (`local_dataset_names`) during `graft lint`, raising `RuleLoadError` if a local dataset reference violates engine column/operator rules (defaults to returning `None`).
 
 ---
 
@@ -386,8 +385,7 @@ flowchart TD
     end
 
     subgraph DatasetsBranch["datasets: true"]
-        D_CMD["Provision 'graft &lt;engine&gt; datasets'<br/>(diff, apply, pull)"]
-        D_TARGET["Include 'datasets' in --target options"]
+        D_TARGET["Enable '--target datasets' on<br/>diff, apply &amp; pull (--out-datasets-dir)"]
     end
 
     subgraph ManagedBranch["managed_rules: true"]
@@ -404,9 +402,9 @@ flowchart TD
 
 ### CLI Dynamic Adaptation Rules:
 1. If `custom_rules: true`: Core registers `new`, `render`, `diff`, `apply`, and `pull`.
-2. If `datasets: true`: Core registers the `datasets` subcommand (`datasets diff`, `datasets apply`, `datasets pull`) and adds `datasets` to `--target` on `diff`, `apply`, and `pull`.
+2. If `datasets: true`: Core adds `datasets` to `--target` on `diff`, `apply`, and `pull` (`graft <engine> diff --target datasets`, `graft <engine> apply --target datasets`, and `graft <engine> pull --target datasets [--out-datasets-dir DIR]`).
 3. If `managed_rules: true`: Core registers the `managed` subcommand (`managed diff`, `managed apply`, `managed pull`) and adds `managed` to `--target` on `diff`, `apply`, and `pull`.
-4. If both `datasets: false` and `managed_rules: false`: The `datasets` and `managed` subcommands are omitted from CLI help text, and `--target` on `diff/apply/pull` is locked strictly to `["custom"]`.
+4. If both `datasets: false` and `managed_rules: false`: The `managed` subcommand is omitted from CLI help text, and `--target` on `diff/apply/pull` is locked strictly to `["custom"]`.
 5. If `syntax_verification: true`: Core registers the `verify` command.
 6. If `replay_testing: true`: Core registers the `test` command.
 

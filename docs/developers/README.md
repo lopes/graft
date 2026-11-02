@@ -21,9 +21,9 @@ flowchart TD
     end
 
     subgraph DrivingCore["Driving Core (src/graft/core/)"]
-        PORTS["Core Ports (typing.Protocol)<br/>• EngineAdapter<br/>• RuleCompilerPort<br/>• RuleDeployerPort<br/>• ManagedEnginePort<br/>• ReplayHarnessPort"]
-        MODELS["Domain Models (dataclasses)<br/>• RuleEnvelope<br/>• ManagedState<br/>• CompilationResult<br/>• ReconciliationDiff"]
-        SERVICES["Core Services<br/>• SchemaValidator &amp; MitreValidator<br/>• MitreIntelligence (Coverage, 3-State Gaps, Inspect)<br/>• Dataset &amp; GitOps Reconcilers<br/>• GitBlameExtractor<br/>• Navigator &amp; Catalog Exporters"]
+        PORTS["Core Ports (typing.Protocol)<br/>• EngineAdapter<br/>• DatasetPort<br/>• RuleCompilerPort<br/>• RuleDeployerPort<br/>• ManagedEnginePort<br/>• ReplayHarnessPort"]
+        MODELS["Domain Models (dataclasses)<br/>• RuleEnvelope<br/>• DatasetEnvelope<br/>• ManagedState<br/>• CompilationResult"]
+        SERVICES["Core Services<br/>• SchemaValidator &amp; MitreValidator<br/>• MitreIntelligence (Coverage, 3-State Gaps, Inspect)<br/>• Dataset, CustomRule &amp; GitOps Reconcilers<br/>• GitBlameExtractor<br/>• Navigator, Dataset &amp; Catalog Exporters"]
         REGISTRY["EngineRegistry<br/>(Dynamic Manifest Discovery)"]
     end
 
@@ -64,21 +64,24 @@ uv sync
 uv run pytest
 ```
 
-### 3. Verification Quality Gates
-Before submitting any pull request or committing code, all quality gates must return 0 errors:
+### 3. The 5 Verification Gates
+Before submitting any pull request or committing code, all five verification gates must return 0 errors:
 
 ```bash
-# 1. Formatting check
-uv run ruff format --check .
-
-# 2. Strict linter rules (E, F, B, I, UP, S, RUF, SIM, T20)
+# Gate 1: Strict linter rules (E, F, B, I, UP, S, RUF, SIM, T20)
 uv run ruff check .
 
-# 3. Strict static type checking (zero Any leakage)
+# Gate 2: Formatting check
+uv run ruff format --check .
+
+# Gate 3: Strict static type checking (zero Any leakage)
 uv run mypy --strict src tests
 
-# 4. Fast unit and engine test suite (<1s execution)
-uv run pytest
+# Gate 4: Fast mock-isolated unit and engine test suite (<1s execution)
+uv run pytest tests/unit tests/engines
+
+# Gate 5: Offline dataset, rule, and manifest schema + MITRE validation
+uv run graft lint
 ```
 
 ---

@@ -19,7 +19,7 @@ To keep daily operations (`graft lint`, `graft mitre coverage`, `graft export`) 
 >   ```bash
 >   uv run graft mitre update --check
 >   ```
->   *(Also runs non-blockingly in `.githooks/pre-commit` and CI so maintainers are notified when MITRE publishes a new version).*
+>   *(Runs as an advisory, non-blocking check in CI so maintainers are notified when MITRE publishes a new version, while local `.githooks/pre-commit` stays 100% offline).*
 > - **Upgrade to the latest upstream Enterprise ATT&CK release (or a specific version):**
 >   ```bash
 >   uv run graft mitre update
@@ -72,7 +72,7 @@ Even with a perfect CMDB, the MITRE ATT&CK matrix—and any ATT&CK Navigator hea
 - **How to Audit Depth:** Always treat `covered` in Graft as **"at least one active rule maps to this technique ID"**—an index pointer to begin auditing procedural and multi-perimeter depth via `graft mitre inspect <Txxxx.xxx> --analytics` and `/analyze-coverage`.
 
 ### 1. Coverage Summary & Enrichments (`graft mitre coverage`)
-Inspect covered techniques across all engines (or filtered by `--engine`, `--platform`, `--group`, or `--data-component`). Pass `--enrich` to surface associated Threat Groups (`Gxxxx`), Detection Strategies (`DETxxxx`), Data Components (`DCxxxx`), and Mitigations (`Mxxxx`):
+Inspect active (`enabled` and `silent`; `disabled` rules are excluded from active coverage counts across `mitre coverage`, `mitre gaps`, and `export navigator`) covered techniques across all engines (or filtered by `--engine`, `--platform`, `--group`, or `--data-component`). Pass `--enrich` to surface associated Threat Groups (`Gxxxx`), Detection Strategies (`DETxxxx`), Data Components (`DCxxxx`), and Mitigations (`Mxxxx`):
 
 ```bash
 # Default coverage table
@@ -219,15 +219,17 @@ Graft separates operational accountability (`metadata.owners` in the rule YAML) 
 
 ---
 
-## 5. Rule Catalog Generation (`graft export catalog`)
+## 5. Rule Catalog & Dataset Exports (`graft export catalog` & `graft export datasets`)
 
-Export comprehensive detection catalogs enriched with deployment status, MITRE ATT&CK associations, accountable rule owners, and Git lifecycle metrics across multiple formats (`table`, `markdown`, `csv`, `json`). Pass `--enrich` to append MITRE `platforms`, `detection_strategies`, `data_components`, `groups`, and `mitigations` to each rule entry.
+Export comprehensive detection catalogs (`graft export catalog`, with `graft export metadata` supported as an alias, alongside `matrix` / `mitre` aliases for `graft export navigator`) enriched with deployment status, MITRE ATT&CK associations, accountable rule owners, and Git lifecycle metrics across multiple formats (`table`, `markdown`, `csv`, `json`). Pass `--enrich` to append MITRE `platforms`, `data_components`, `mitigations`, and `group_count` to each rule entry.
 
 ### Terminal Table (`--format=table`, Default)
 Fast, on-screen inspection without piping to files:
 
 ```bash
 uv run graft export catalog
+# or using the metadata alias:
+uv run graft export metadata
 # or with MITRE STIX enrichments:
 uv run graft export catalog --enrich
 ```
@@ -253,8 +255,8 @@ Generate spreadsheet-ready exports for Polars, Google Sheets, security audits, a
 uv run graft export catalog --format=csv --out exports/detection_catalog.csv
 ```
 
-By default, CSV exports contain 15 normalized fields:
-`id, name, engine, rule_type, status, description, mitre_attack, tags, author, owners, owner_count, created_at, last_modified_at, review_count, contributor_count` (plus `mitre_platforms, mitre_strategies, mitre_data_components, mitre_groups, mitre_mitigations` when `--enrich` is passed).
+By default, CSV and JSON catalog exports contain 15 normalized fields:
+`id, name, engine, rule_type, status, description, mitre_attack, tags, author, owners, owner_count, created_at, last_modified_at, review_count, contributor_count` (plus `platforms, data_components, mitigations, group_count` when `--enrich` is passed).
 
 ### JSON Catalog (`--format=json`)
 Structured JSON for feeding security data lakes, BigQuery, or internal developer portals:
@@ -262,4 +264,16 @@ Structured JSON for feeding security data lakes, BigQuery, or internal developer
 ```bash
 uv run graft export catalog --format=json
 uv run graft export catalog --format=json --enrich
+```
+
+### Reusable Dataset Exports (`graft export datasets`)
+Inspect active reusable string datasets (after UTC `ttl:YYYY-MM-DD` expiration filtering, excluding `datasets/_archived/`) across `table`, `csv`, or `json` formats:
+
+```bash
+# Default terminal table summary of active datasets and value counts
+uv run graft export datasets
+
+# Export active dataset metadata and values as CSV or JSON
+uv run graft export datasets --format csv --datasets-dir datasets --out exports/datasets.csv
+uv run graft export datasets --format json --datasets-dir datasets --out exports/datasets.json
 ```
