@@ -180,6 +180,10 @@ def render_catalog_table(entries: Sequence[CatalogEntry], enrich: bool = False) 
     return "\n".join(lines)
 
 
+def _escape_md_cell(val: str) -> str:
+    return val.replace("\r\n", "\n").replace("\r", "\n").replace("\n", " ").replace("|", r"\|")
+
+
 def export_catalog_markdown(entries: Sequence[CatalogEntry], enrich: bool = False) -> str:
     headers = [
         "Rule Name",
@@ -230,7 +234,7 @@ def export_catalog_markdown(entries: Sequence[CatalogEntry], enrich: bool = Fals
                     str(enr["group_count"]),
                 ]
             )
-        lines.append(f"| {' | '.join(row)} |")
+        lines.append(f"| {' | '.join(_escape_md_cell(c) for c in row)} |")
 
     return "\n".join(lines)
 

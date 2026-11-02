@@ -6,6 +6,8 @@
 
 ## Type of Change
 - [ ] Detection Rule (`rulesets/`)
+- [ ] Dataset (`datasets/`)
+- [ ] Agent Skill (`.agents/skills/`)
 - [ ] Core Engine / Schemas (`src/graft/core/`)
 - [ ] Engine Adapter (`src/graft/engines/`)
 - [ ] CLI Subsystem (`src/graft/cli/`)

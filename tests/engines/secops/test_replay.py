@@ -123,3 +123,30 @@ def test_secops_replay_is_available() -> None:
 
     adapter_none = SecOpsReplayAdapter(client=MagicMock(), config=None)
     assert adapter_none.is_available() is False
+
+
+def test_secops_replay_single_event_pads_end_time_by_one_second() -> None:
+    mock_client = MagicMock(spec=SecOpsClient)
+    mock_client.request.side_effect = [
+        {"success": True},  # udmIngest
+        {"name": "rules/quarantined-rule-time"},  # create_rule
+        {},  # set_rule_state
+        {"detections": [{"id": "alert-1"}]},  # run
+        {},  # delete_rule
+    ]
+
+    adapter = SecOpsReplayAdapter(client=mock_client)
+    envelope = _build_test_envelope("test_rule", expect=1)
+    result = adapter.run_test_vector(envelope, envelope.tests[0])
+    assert result.passed is True
+
+    run_call = next(
+        c
+        for c in mock_client.request.call_args_list
+        if c[0][1] == "rules/quarantined-rule-time:run"
+    )
+    time_range = run_call[1]["body"]["timeRange"]
+    assert time_range == {
+        "startTime": "2026-09-17T12:00:00Z",
+        "endTime": "2026-09-17T12:00:01Z",
+    }

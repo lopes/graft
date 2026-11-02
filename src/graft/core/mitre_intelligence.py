@@ -365,6 +365,8 @@ def build_mitre_coverage_report(
                 if allowed_techs is not None and tid not in allowed_techs:
                     continue
                 matched_rule = True
+                if status == "disabled":
+                    continue
                 col = tech_collectors.setdefault(
                     tid,
                     {
@@ -384,8 +386,9 @@ def build_mitre_coverage_report(
 
         if matched_rule or not has_tech_filter:
             filtered_rules.append((rule_obj, engine_name, path_val, status))
-            for rt in rule_obj.metadata.tags:
-                active_tags.add(rt)
+            if status != "disabled":
+                for rt in rule_obj.metadata.tags:
+                    active_tags.add(rt)
 
     coverage_items: list[EnrichedTechniqueCoverage] = []
     for tid in sorted(tech_collectors.keys()):
@@ -560,6 +563,10 @@ def export_mitre_coverage_csv(report: MitreCoverageReport, enrich: bool = False)
     return buf.getvalue().rstrip("\n")
 
 
+def _escape_md_cell(val: str) -> str:
+    return val.replace("\r\n", "\n").replace("\r", "\n").replace("\n", " ").replace("|", r"\|")
+
+
 def export_mitre_coverage_markdown(report: MitreCoverageReport, enrich: bool = False) -> str:
     headers = ["Technique ID", "Technique Name", "Tactics", "Platforms", "Rules", "Rule Names"]
     if enrich:
@@ -587,7 +594,7 @@ def export_mitre_coverage_markdown(report: MitreCoverageReport, enrich: bool = F
                     ", ".join(t.mitigations) or "-",
                 ]
             )
-        lines.append(f"| {' | '.join(row)} |")
+        lines.append(f"| {' | '.join(_escape_md_cell(c) for c in row)} |")
     return "\n".join(lines)
 
 
@@ -602,6 +609,8 @@ def calculate_mitre_gaps(
     infer_scope: bool = False,
     top: int | None = None,
 ) -> MitreGapReport:
+    if top is not None and top < 0:
+        raise ValueError("top must be >= 0")
     data = db if db is not None else load_mitre_database()
     techniques_db: Mapping[str, Any] = data.get("techniques", {})
     groups_db: Mapping[str, Any] = data.get("groups", {})
@@ -874,7 +883,7 @@ def export_gaps_markdown(report: MitreGapReport) -> str:
             ", ".join(g.detection_strategies) or "-",
             ", ".join(g.data_components) or "-",
         ]
-        lines.append(f"| {' | '.join(row)} |")
+        lines.append(f"| {' | '.join(_escape_md_cell(c) for c in row)} |")
     return "\n".join(lines)
 
 

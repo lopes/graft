@@ -1,8 +1,9 @@
-from typing import Protocol
+from typing import Protocol, runtime_checkable
 
 from graft.core.models.rule import RuleEnvelope
 
 
+@runtime_checkable
 class RuleDeployerPort(Protocol):
     def list_rules(self) -> tuple[RuleEnvelope, ...]: ...
 

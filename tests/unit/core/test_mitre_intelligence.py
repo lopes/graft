@@ -270,3 +270,27 @@ def test_inspect_mitre_entities_compact_and_expanded() -> None:
 
     with pytest.raises(ValueError, match="Unknown MITRE entity"):
         inspect_mitre_entities(["NONEXISTENT_ID_999"])
+
+
+def test_disabled_rules_excluded_from_coverage_and_negative_top_rejected() -> None:
+    r_active = _make_rule("active_rule", {"persistence": ("T1098.001",)}, tags=("cloud",))
+    r_disabled = RuleEnvelope(
+        metadata=RuleMetadata(
+            id="00000000-0000-0000-0000-000000000002",
+            name="disabled_rule",
+            description="Disabled rule",
+            mitre={"initial-access": ("T1078.004",)},
+            tags=("cloud",),
+        ),
+        logic="events: $e condition: $e",
+        deployment=BaseDeploymentConfig(enabled=False, alerting=False, run_frequency="live"),
+        runbook=Runbook(context="ctx", triage="tr", response="res"),
+        tests=(),
+    )
+    cov = build_mitre_coverage_report([r_active, r_disabled])
+    assert cov.total_rules == 2
+    assert cov.covered_techniques == 1
+    assert [t.technique_id for t in cov.techniques] == ["T1098.001"]
+
+    with pytest.raises(ValueError, match="top must be >= 0"):
+        calculate_mitre_gaps([r_active], top=-1)

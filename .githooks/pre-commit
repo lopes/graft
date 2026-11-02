@@ -46,14 +46,10 @@ uv run graft lint || {
     exit 1
 }
 
-# 5b. Non-blocking MITRE ATT&CK upstream release check
-echo "--> Checking upstream MITRE ATT&CK taxonomy release (graft mitre update --check)..."
-uv run graft mitre update --check || true
-
-# 6. Fast Unit Test Suite (<1s)
-echo "--> Executing mock-isolated unit tests (pytest tests/unit)..."
-uv run pytest tests/unit -q || {
-    echo "[ERROR] Unit test suite failed."
+# 6. Fast Unit & Engine Contract Test Suite (<1s)
+echo "--> Executing mock-isolated unit and engine tests (pytest tests/unit tests/engines)..."
+uv run pytest tests/unit tests/engines -q || {
+    echo "[ERROR] Unit and engine test suite failed."
     exit 1
 }
 

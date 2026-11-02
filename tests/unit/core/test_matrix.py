@@ -156,7 +156,9 @@ def test_export_navigator_layer_managed_rule_type_and_explicit_status() -> None:
     assert status_meta["value"] == "silent"
 
     fallback_report = calculate_mitre_coverage([managed_rule])
-    assert fallback_report.tactic_coverages[0].statuses == ["disabled"]
+    assert fallback_report.total_rules == 1
+    assert fallback_report.covered_techniques == 0
+    assert fallback_report.techniques == []
 
 
 def test_matrix_filtering_enrich_and_include_gaps() -> None:
@@ -165,6 +167,7 @@ def test_matrix_filtering_enrich_and_include_gaps() -> None:
     rule_phish = make_dummy_rule("rule_phish", {"initial-access": ("T1566.002",)})
 
     # Filter by platform IaaS (T1098.001 and T1078.004 are IaaS; T1566.002 is not IaaS)
+    # Disabled rules preserve total_rules count (2 IaaS rules) but do not count as active coverage
     report_iaas = calculate_mitre_coverage(
         [
             (rule_cloud, "siem_alpha", None, "enabled"),
@@ -173,7 +176,8 @@ def test_matrix_filtering_enrich_and_include_gaps() -> None:
         ],
         platform="IaaS",
     )
-    assert [t.technique_id for t in report_iaas.techniques] == ["T1078.004", "T1098.001"]
+    assert report_iaas.total_rules == 2
+    assert [t.technique_id for t in report_iaas.techniques] == ["T1098.001"]
 
     # Export navigator layer with platform, enrich, and include_gaps
     layer = export_navigator_layer(

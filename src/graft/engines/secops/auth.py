@@ -1,6 +1,8 @@
 import os
 import subprocess
 
+_GCLOUD_TIMEOUT_SECONDS = 15.0
+
 
 class SecOpsAuthError(RuntimeError):
     pass
@@ -14,6 +16,10 @@ class SecOpsAuthResolver:
     ) -> None:
         self._token = token
         self._service_account_email = service_account_email
+        self._cached_gcloud_token: str | None = None
+
+    def invalidate(self) -> None:
+        self._cached_gcloud_token = None
 
     def get_token(self) -> str:
         if self._token:
@@ -27,6 +33,9 @@ class SecOpsAuthResolver:
         if env_token:
             return env_token.strip()
 
+        if self._cached_gcloud_token:
+            return self._cached_gcloud_token
+
         cmd = ["gcloud", "auth", "print-access-token"]
         if self._service_account_email:
             cmd.append(f"--impersonate-service-account={self._service_account_email}")
@@ -37,10 +46,16 @@ class SecOpsAuthResolver:
                 capture_output=True,
                 text=True,
                 check=False,
+                timeout=_GCLOUD_TIMEOUT_SECONDS,
             )
         except FileNotFoundError as err:
             raise SecOpsAuthError(
                 "gcloud CLI not found. Install Google Cloud SDK or set GRAFT_SECOPS_TOKEN."
+            ) from err
+        except subprocess.TimeoutExpired as err:
+            raise SecOpsAuthError(
+                f"gcloud CLI timed out after {_GCLOUD_TIMEOUT_SECONDS:.0f}s "
+                "while acquiring access token."
             ) from err
 
         if result.returncode != 0:
@@ -52,6 +67,7 @@ class SecOpsAuthResolver:
         if not token:
             raise SecOpsAuthError("gcloud returned an empty access token.")
 
+        self._cached_gcloud_token = token
         return token
 
     def get_authorization_header(self) -> dict[str, str]:

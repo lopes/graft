@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from typing import Protocol
+from typing import Protocol, runtime_checkable
 
 from graft.core.models.rule import RuleEnvelope, TestVector
 
@@ -12,6 +12,7 @@ class ReplayResult:
     matched_events_count: int = 0
 
 
+@runtime_checkable
 class ReplayHarnessPort(Protocol):
     def run_test_vector(self, rule: RuleEnvelope, vector: TestVector) -> ReplayResult: ...
 

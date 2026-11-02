@@ -41,13 +41,13 @@ flowchart TD
     subgraph PROD["2. Mainline Deployment & Daily TTL Sync (.github/workflows/deploy-production.yml)"]
         direction TB
         MERGE["Merge to main OR Daily Schedule (cron '0 0 * * *')"]
-        WIF_PROD["WIF Token Exchange"]
         LINT_SANITY["graft lint Sanity Check"]
+        WIF_PROD["WIF Token Exchange"]
         APPLY_ALL["graft secops apply --env production --all<br/>(Datasets + Custom Rules + Managed Convergence)"]
         EXPORTS["Generate MITRE Navigator Layer & Rule Catalogs"]
         ARTIFACTS["Publish Governance Release Artifacts"]
         
-        MERGE --> WIF_PROD --> LINT_SANITY --> APPLY_ALL --> EXPORTS --> ARTIFACTS
+        MERGE --> LINT_SANITY --> WIF_PROD --> APPLY_ALL --> EXPORTS --> ARTIFACTS
     end
 
     subgraph CRON["3. Optional Read-Only Drift Audit"]
@@ -76,8 +76,9 @@ Runs on standard `ubuntu-latest` without requiring cloud credentials:
 - **Gate 1 (Formatting):** `uv run ruff format --check .` enforces uniform style.
 - **Gate 2 (Linting):** `uv run ruff check .` verifies code health and catches unused imports or forbidden constructs.
 - **Gate 3 (Static Typing):** `uv run mypy --strict src tests` guarantees 100% type safety with zero `Any` leakage.
-- **Gate 4 (Unit & Engine Tests):** `uv run pytest` executes all isolated unit tests in sub-seconds.
+- **Gate 4 (Unit & Engine Tests):** `uv run pytest tests/unit tests/engines` executes all isolated unit and engine contract tests in sub-seconds.
 - **Gate 5 (Rules, Datasets & Schemas):** `uv run graft lint` validates datasets (`datasets/*.yaml`, including `ttl:YYYY-MM-DD` inline comment directives), custom rules (`%<name>.value` cross-references), and managed manifests against Draft 2020-12 schemas and MITRE ATT&CK technique IDs.
+- **Advisory Upstream MITRE Release Check (Non-Blocking):** `uv run graft mitre update --check || true` checks the upstream MITRE ATT&CK Enterprise index and surfaces an informational notice when a newer ATT&CK release is available without failing offline builds.
 
 ### 2. Cloud Gates (`secops-cloud-gates`)
 Requires WIF credentials and runs only on trusted internal branches:

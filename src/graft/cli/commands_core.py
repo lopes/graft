@@ -74,26 +74,53 @@ def _iter_yaml_files(directory: Path) -> list[Path]:
     return files
 
 
-def _is_dataset_path(file_path: Path, datasets_dir: str) -> bool:
-    if "datasets" in file_path.parts:
-        return True
+def _relative_parts(file_path: Path, root_dir: Path | None = None) -> tuple[str, ...]:
+    if root_dir is not None:
+        try:
+            return file_path.resolve().relative_to(root_dir.resolve()).parts
+        except ValueError:
+            pass
+    try:
+        return file_path.resolve().relative_to(Path.cwd().resolve()).parts
+    except ValueError:
+        pass
+    parts = file_path.parts
+    for folder in ("rulesets", "rules", "datasets"):
+        if folder in parts:
+            idx = len(parts) - 1 - parts[::-1].index(folder)
+            return parts[idx:]
+    return (file_path.parent.name, file_path.name)
+
+
+def _is_dataset_path(file_path: Path, datasets_dir: str, rules_dir: str = "rulesets") -> bool:
     try:
         file_path.resolve().relative_to(Path(datasets_dir).resolve())
         return True
     except ValueError:
+        pass
+    try:
+        file_path.resolve().relative_to(Path(rules_dir).resolve())
         return False
+    except ValueError:
+        pass
+    rel_parts = _relative_parts(file_path)
+    return "datasets" in rel_parts[:-1]
 
 
-def _infer_engine_from_path(file_path: Path) -> str:
+def _infer_engine_from_path(file_path: Path, rules_dir: str | None = None) -> str:
+    if rules_dir is not None:
+        try:
+            rel = file_path.resolve().relative_to(Path(rules_dir).resolve()).parts
+            if len(rel) >= 2:
+                return rel[0]
+        except ValueError:
+            pass
     parts = file_path.parts
-    if "rulesets" in parts:
-        idx = parts.index("rulesets")
-        if idx + 1 < len(parts):
-            return parts[idx + 1]
-    elif "rules" in parts:
-        idx = parts.index("rules")
-        if idx + 1 < len(parts):
-            return parts[idx + 1]
+    for folder in ("rulesets", "rules"):
+        if folder in parts:
+            idx = len(parts) - 1 - parts[::-1].index(folder)
+            if idx + 1 < len(parts):
+                return parts[idx + 1]
     engines = EngineRegistry().list_engines()
     if engines:
         return engines[0].name
@@ -147,6 +174,15 @@ def execute_lint(
         if root_rules.is_dir():
             target_files.extend(_iter_yaml_files(root_rules))
 
+    deduped_targets: list[Path] = []
+    seen_resolved: set[Path] = set()
+    for tf in target_files:
+        resolved_tf = tf.resolve()
+        if resolved_tf not in seen_resolved:
+            seen_resolved.add(resolved_tf)
+            deduped_targets.append(tf)
+    target_files = deduped_targets
+
     results: list[dict[str, Any]] = []
     has_errors = False
     uniqueness_validator = RuleUniquenessValidator()
@@ -180,9 +216,10 @@ def execute_lint(
                 continue
 
     for file_path in target_files:
-        is_dataset = _is_dataset_path(file_path, resolved_datasets_dir)
+        is_dataset = _is_dataset_path(file_path, resolved_datasets_dir, rules_dir=rules_dir)
         is_manifest = not is_dataset and file_path.name in _MANIFEST_FILENAMES
-        is_managed_rule = not is_dataset and not is_manifest and "managed" in file_path.parts
+        rel_rule_parts = _relative_parts(file_path, root_dir=Path(rules_dir))
+        is_managed_rule = not is_dataset and not is_manifest and "managed" in rel_rule_parts[:-1]
         file_type = (
             "dataset"
             if is_dataset

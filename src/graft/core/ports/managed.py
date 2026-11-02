@@ -1,8 +1,9 @@
-from typing import Protocol
+from typing import Protocol, runtime_checkable
 
 from graft.core.models.managed import ManagedExclusion, ManagedState
 
 
+@runtime_checkable
 class ManagedEnginePort(Protocol):
     def fetch_managed_state(self) -> ManagedState: ...
 

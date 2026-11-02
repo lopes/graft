@@ -14,7 +14,10 @@ _UUID_REGEX = re.compile(
     r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
 )
 _RULE_HEADER_REGEX = re.compile(r"^\s*rule\s+([a-zA-Z0-9_]+)\s*\{", re.MULTILINE)
-_SECTION_HEADER_REGEX = re.compile(r"^\s*(events|match|condition):", re.MULTILINE)
+_SECTION_HEADER_REGEX = re.compile(
+    r"^\s*(events|match|outcome|condition|options):",
+    re.MULTILINE,
+)
 _MISSING_DATATABLE_DIAG_RE = re.compile(
     r"(?:data\s+table\s+name:\s*|for\s+data\s+table\s+|data\s+table\s*\(\s*|data\s+table\s+%)"
     r"(?P<name>[a-zA-Z0-9_]+)",
@@ -23,6 +26,20 @@ _MISSING_DATATABLE_DIAG_RE = re.compile(
 _LOCAL_DATASET_REF_RE = re.compile(r"%(?P<name>[a-zA-Z0-9_]+)\.value\b")
 _META_TACTIC_TOKEN_RE = re.compile(r"\b(TA\d{4})\b", re.IGNORECASE)
 _META_TECHNIQUE_TOKEN_RE = re.compile(r"\b(T\d{4}(?:\.\d{3})?)\b", re.IGNORECASE)
+
+
+def _escape_yaral_string(raw: str) -> str:
+    sanitized = raw.replace("\r\n", " ").replace("\r", " ").replace("\n", " ")
+    return sanitized.replace("\\", "\\\\").replace('"', '\\"')
+
+
+def _unescape_yaral_meta_value(raw: str) -> str:
+    val = raw.strip()
+    if len(val) >= 2 and val[0] == '"' and val[-1] == '"':
+        return re.sub(r'\\([\\"])', r"\1", val[1:-1])
+    if len(val) >= 2 and val[0] == "'" and val[-1] == "'":
+        return re.sub(r"\\([\\'])", r"\1", val[1:-1])
+    return val
 
 
 def _has_local_dataset(name: str) -> bool:
@@ -62,8 +79,8 @@ def _indent_logic(logic: str, indent: str = "  ") -> str:
 
 
 def synthesize_yaral_rule(rule: RuleEnvelope) -> tuple[str, int]:
-    meta_id = rule.metadata.id
-    meta_desc = rule.metadata.description.replace('"', '\\"')
+    meta_id = _escape_yaral_string(rule.metadata.id)
+    meta_desc = _escape_yaral_string(rule.metadata.description)
     validator = get_default_mitre_validator()
     tactic_ids = validator.resolve_tactic_ids(rule.metadata.mitre)
     technique_ids = validator.resolve_technique_ids(rule.metadata.mitre)
@@ -127,7 +144,7 @@ def deconstruct_yaral_rule(
             kv = re.match(r"^([a-zA-Z0-9_]+)\s*=\s*(.*)$", stripped)
             if kv:
                 k = kv.group(1).lower()
-                val = kv.group(2).strip().strip('"').strip("'")
+                val = _unescape_yaral_meta_value(kv.group(2))
                 meta_dict[k] = val
     else:
         first_sec = _SECTION_HEADER_REGEX.search(rule_text, pos=rule_match.end())
@@ -185,7 +202,7 @@ def extract_meta_id(rule_text: str) -> str | None:
             continue
         kv = re.match(r"^([a-zA-Z0-9_]+)\s*=\s*(.*)$", stripped)
         if kv and kv.group(1).lower() == "id":
-            val = kv.group(2).strip().strip('"').strip("'")
+            val = _unescape_yaral_meta_value(kv.group(2))
             if val:
                 return val
     return None
@@ -271,7 +288,7 @@ class SecOpsCompilerAdapter(RuleCompilerPort):
             ":verifyRuleText",
             body={"ruleText": sub_text},
         )
-        return self._parse_response(sub_response, header_offset=sub_offset, rule_text=sub_text)
+        return self._parse_response(sub_response, header_offset=sub_offset, rule_text=rule_text)
 
     def _parse_response(
         self,

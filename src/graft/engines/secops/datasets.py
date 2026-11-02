@@ -64,9 +64,9 @@ class SecOpsDatasetAdapter(DatasetPort):
                                 values.append(val_str)
             next_tok = resp.get("nextPageToken")
             if isinstance(next_tok, str) and next_tok.strip():
-                page_token = next_tok.strip()
-                if len(values) > _MAX_DATASET_ROWS:
+                if len(values) >= _MAX_DATASET_ROWS:
                     break
+                page_token = next_tok.strip()
             else:
                 break
         return tuple(values)
@@ -218,11 +218,21 @@ class SecOpsDatasetAdapter(DatasetPort):
                 break
 
         for row_id in row_ids:
-            self._client.request(
-                "DELETE",
-                f"dataTables/{table_name}/dataTableRows/{row_id}",
-                api_version="v1",
-            )
+            try:
+                self._client.request(
+                    "DELETE",
+                    f"dataTables/{table_name}/dataTableRows/{row_id}",
+                    api_version="v1",
+                )
+            except SecOpsApiError as exc:
+                if exc.status_code == 404:
+                    logger.debug(
+                        "Row '%s' in Data Table '%s' already deleted (404)",
+                        row_id,
+                        table_name,
+                    )
+                    continue
+                raise
 
     def create_dataset(self, dataset: DatasetEnvelope) -> str:
         name = dataset.metadata.name

@@ -43,7 +43,7 @@ Detection-as-Code relies on translating between YAML files on disk, frozen Pytho
 
 ### 3. Never-Crash & Strict `--json` Error Gate (`test_adversarial_inputs.py`)
 Because both human engineers and AI agents drive Graft via the CLI, hostile or malformed inputs (truncated YAML, invalid UTF-8 bytes, wrong types, or missing file paths) must never produce raw Python tracebacks (`KeyError`, `AttributeError`, `UnicodeDecodeError`).
-- [`test_adversarial_inputs.py`](../../tests/unit/core/test_adversarial_inputs.py) feeds corrupt payloads into Core/Engine loaders and CLI commands, verifying that parsers always raise typed domain exceptions (`RuleLoadError`, `DatasetLoadError`, `ManagedManifestLoadError`, `EngineError`, `ScaffoldError`) and that passing `--json` always outputs valid JSON (`{"success": false, "error": "..."}`) on `stdout`.
+- [`test_adversarial_inputs.py`](../../tests/unit/core/test_adversarial_inputs.py) feeds corrupt payloads into Core/Engine loaders and CLI commands, verifying that parsers always raise typed domain exceptions—`RuleLoadError`/`DatasetLoadError` (`loader.py`), `EngineError` (`engine_registry.py`), `ScaffoldError` (`scaffold.py`), and engine manifest load errors (such as `ManagedManifestLoadError`)—instead of raw stdlib exceptions, and that passing `--json` always outputs valid JSON (`{"success": false, "error": "..."}`) on `stdout`.
 
 ---
 
@@ -90,28 +90,31 @@ flowchart LR
 
 ### Graceful Degradation for Replay Tests
 If a detection rule defines a `tests:` block, but staging credentials (`GRAFT_SECOPS_STAGING_*`) are absent from the environment:
-- Emit a structured warning: `[WARNING] Replay test skipped: staging credentials not configured`.
+- Emit a structured warning: `[WARNING] Skipping replay tests: Staging tenant not configured (<reason>).`
 - Exit with code `0`. Never break local developer workflows.
 - Enforce failure (exit code `1`) only when `--require-staging` is explicitly supplied in CI.
 
 ---
 
-## 4. Static Quality Gates & Verification Commands
+## 4. The 5 Verification Gates & Static Quality Commands
 
-Before declaring any phase or pull request complete, the following four commands must return **0 errors**:
+Before declaring any phase or pull request complete, all five verification gates must return **0 errors**:
 
 ```bash
-# Gate 1: Enforce consistent code formatting
-uv run ruff format --check .
-
-# Gate 2: Strict static linter (E, F, B, I, UP, S, RUF, SIM, T20)
+# Gate 1: Strict static linter (E, F, B, I, UP, S, RUF, SIM, T20)
 uv run ruff check .
+
+# Gate 2: Enforce consistent code formatting
+uv run ruff format --check .
 
 # Gate 3: Strict static type checking (zero untyped definitions, zero Any)
 uv run mypy --strict src tests
 
-# Gate 4: Fast unit and engine test suite
-uv run pytest
+# Gate 4: Fast mock-isolated unit and engine contract test suite
+uv run pytest tests/unit tests/engines
+
+# Gate 5: Offline dataset, custom rule, and managed manifest schema + MITRE validation
+uv run graft lint
 ```
 
 > [!CAUTION]

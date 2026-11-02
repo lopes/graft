@@ -250,10 +250,17 @@ All variables and secrets strictly use the unified `GRAFT_SECOPS_` namespace:
 | `GRAFT_SECOPS_PROD_PROJECT` | Local / Prod | GCP Project ID hosting the Production SecOps tenant |
 | `GRAFT_SECOPS_PROD_LOCATION` | Local / Prod | Multi-region location (`us`, `europe-west3`, etc.) |
 | `GRAFT_SECOPS_PROD_INSTANCE_ID` | Local / Prod | Production Customer ID UUID |
-| `GRAFT_SECOPS_PROD_SA_EMAIL` | Local / Prod | Automation service account email (required when using Option 1 `gcloud` impersonation) |
-| `GRAFT_SECOPS_TOKEN` | Local / Any | Direct GCP OAuth2 Bearer token override (Option 2). Bypasses `gcloud` entirely |
-| `GRAFT_GCP_TOKEN` | Local / Any | Alias fallback for `GRAFT_SECOPS_TOKEN` |
-| `GRAFT_GITHUB_TOKEN` | Local / CI | Optional GitHub personal access token for release metadata or PR automation |
+| `GRAFT_SECOPS_PROD_SA_EMAIL` | Local / Prod | Production automation service account email (for `gcloud` impersonation) |
+| `GRAFT_SECOPS_STAGING_PROJECT` | Local / Staging | GCP Project ID hosting the Staging SecOps tenant (for `verify` & `test`) |
+| `GRAFT_SECOPS_STAGING_LOCATION` | Local / Staging | Staging multi-region location (`us`, `europe-west3`, etc.) |
+| `GRAFT_SECOPS_STAGING_INSTANCE_ID` | Local / Staging | Staging Customer ID UUID |
+| `GRAFT_SECOPS_STAGING_SA_EMAIL` | Local / Staging | Staging automation service account email |
+| `GRAFT_SECOPS_PROJECT` | Single-Tenant / Lab | Fallback GCP Project ID when `PROD_*` / `STAGING_*` are omitted |
+| `GRAFT_SECOPS_LOCATION` | Single-Tenant / Lab | Fallback multi-region location when `PROD_*` / `STAGING_*` are omitted |
+| `GRAFT_SECOPS_INSTANCE_ID` | Single-Tenant / Lab | Fallback Customer ID UUID when `PROD_*` / `STAGING_*` are omitted |
+| `GRAFT_SECOPS_SA_EMAIL` | Single-Tenant / Lab | Fallback automation service account email |
+| `GRAFT_SECOPS_TOKEN` | Local / Any | Direct GCP OAuth2 Bearer token override (Option 2). Takes precedence over `gcloud` |
+| `GRAFT_GCP_TOKEN` / `GRAFT_TOKEN` | Local / Any | Secondary and generic bearer token fallbacks when `GRAFT_SECOPS_TOKEN` is unset |
 
 > [!NOTE]
 > **Single-Tenant Mode:** When operating with a single SecOps instance shared between testing and production, you only need to register the 5 Production items (`GRAFT_SECOPS_PROD_*` and `GRAFT_SECOPS_WIF_PROVIDER`). Graft automatically falls back to the production instance coordinates for PR validation and replay tests when staging variables are not defined.
@@ -334,10 +341,11 @@ export GRAFT_SECOPS_TOKEN="<access_token>"
 - **Precedence Note:** When `GRAFT_SECOPS_TOKEN` is non-empty in `.env` or your shell environment, it takes precedence over `gcloud`. If you later install `gcloud` locally and switch to Option 1, comment out or remove `GRAFT_SECOPS_TOKEN` from `.env` so Graft refreshes tokens automatically.
 - **When to Use:** Ideal for rapid verification, temporary operator sessions, or lightweight environments where installing the full Google Cloud SDK is impractical.
 
-### 3. Token Grammar Reference
-To avoid credential ambiguity across multiple platforms and engines, Graft enforces consistent token naming conventions:
-- **`GRAFT_GITHUB_TOKEN`:** Personal access token for GitHub operations (fetching repository metadata, release tracking, or PR automation).
-- **`GRAFT_SECOPS_TOKEN`** (or **`GRAFT_GCP_TOKEN`**): Dedicated GCP OAuth2 bearer token for Google SecOps REST APIs.
+### 3. Token Resolution Order
+When resolving a bearer token in `SecOpsAuthResolver`, Graft evaluates explicit environment token overrides in strict order before invoking `gcloud auth print-access-token`:
+- **1. `GRAFT_SECOPS_TOKEN`:** Engine-specific GCP OAuth2 bearer token override (highest precedence).
+- **2. `GRAFT_GCP_TOKEN`:** Cloud-scoped GCP OAuth2 bearer token fallback.
+- **3. `GRAFT_TOKEN`:** Generic platform bearer token fallback.
 
 ---
 
@@ -394,6 +402,7 @@ categories:
 exclusions:
   - id: "exclude-backup-automation"
     description: "Exclude authorized overnight backup automation from Suspicious Execution"
+    rule_id: null
     ruleset_id: "1c4ab1f6-d801-d6a9-1177-3ec3dd5bcbe9"
     expression: 'principal.hostname = "backup-server.corp.internal"'
 ```
@@ -487,6 +496,7 @@ Add the exclusion entry to the `exclusions:` list at the bottom of the file:
 exclusions:
   - id: "exclude-maintenance-runner-suspicious-exec"
     description: "Exclude maintenance runner from Suspicious Execution"
+    rule_id: null
     ruleset_id: "1c4ab1f6-d801-d6a9-1177-3ec3dd5bcbe9"
     expression: 'principal.user.userid = "svc-maintenance-runner"'
 ```
@@ -504,8 +514,8 @@ uv run graft secops diff --target=managed
 
 Expected output:
 ```text
-+ Exclusions to create (1):
-  [+] exclude-maintenance-runner-suspicious-exec -> 1c4ab1f6-d801-d6a9-1177-3ec3dd5bcbe9
+=== Google SecOps Managed Content Diff ===
+[+] Exclusion to create: exclude-maintenance-runner-suspicious-exec
 ```
 
 #### Step 5: Merge via PR & Deploy
@@ -529,12 +539,12 @@ When an exclusion is no longer needed:
 
 In Google SecOps, detection rules are versioned resources. Recreating a rule by deleting and re-creating it (`POST rules`) generates a new server-assigned rule ID, resets detection history, breaks SOAR playbooks tied to the original rule identifier, and creates gaps in monitoring coverage.
 
-Graft implements an in-place **Custom Rule Reconciliation Engine** ([`CustomRuleReconciler`](../../../core/reconciler.py#L309)) and adapter ([`SecOpsDeployerAdapter`](../deployer.py#L7)) that updates rule text and deployment states in-place, preserving rule continuity, audit history, and detection timelines.
+Graft implements an in-place **Custom Rule Reconciliation Engine** ([`CustomRuleReconciler`](../../../core/reconciler.py) via `RuleDeployerPort`, distinct from [`GitOpsReconciler`](../../../core/reconciler.py) which reconciles vendor-managed content and exclusions via `ManagedEnginePort`) and adapter ([`SecOpsDeployerAdapter`](../deployer.py)) that updates rule text and deployment states in-place, preserving rule continuity, audit history, and detection timelines.
 
 ```mermaid
 sequenceDiagram
     autonumber
-    participant Core as GitOpsReconciler
+    participant Core as CustomRuleReconciler
     participant Adapter as SecOpsDeployerAdapter
     participant API as Chronicle RuleService
 
@@ -571,7 +581,7 @@ The custom rule reconciliation pipeline executes five discrete stages:
 - **Deployment Binding:** Aggregates live deployment states via `GET /v1/projects/.../rules/-/deployments` to establish the exact `(enabled: bool, alerting: bool)` status for every rule without issuing N sequential requests.
 
 #### 2. Three-Tier Content Normalization & Matching
-To prevent spurious diffs caused by whitespace differences, platform line endings, or synthesized metadata headers, [`secops_rule_content_matches`](../adapter.py#L33) evaluates equivalence across three tiers:
+To prevent spurious diffs caused by whitespace differences, platform line endings, or synthesized metadata headers, [`secops_rule_content_matches`](../adapter.py) evaluates equivalence across three tiers:
 
 - **Tier 1 (Raw Logic Equivalence):** Compares the normalized rule logic text directly (`\r\n` converted to `\n` and stripped).
 - **Tier 2 (Synthesized YARA-L Equivalence):** Compares the remote rule against the locally synthesized YARA-L rule (incorporating standard metadata fields: `meta: id = ...`, `description = ...`).
@@ -603,11 +613,10 @@ When an operator, security analyst, or external integration modifies a detection
 
 1. **Drift Detection:** Running `graft secops diff --all` (or scheduled drift monitoring) scans the full catalog, detects the discrepancy, and exits with code `2`:
    ```text
-   === Google SecOps Custom Rules Diff ===
-   ~ Custom rules to update (1):
-     [~] workspace_nrd_email_opened (id=b1d72370-5fa3-4cb8-a579-22a468d6f101)
+   === Custom Rules Diff ===
+   [~] Custom rule to update: workspace_nrd_email_opened (ID: ru_12345678-abcd-ef01-2345-6789abcdef01)
    ```
-   *(Note: Running `graft secops diff` without `--all` operates in Mode B, scoping reconciliation only to locally modified detection files).*
+   *(Note: Running `graft secops diff` without `--all` operates in Scoped Mode, scoping reconciliation only to locally modified detection files).*
 
 2. **Authoritative Healing:** Running `graft secops apply --all` overwrites the out-of-band edit, reconciling the tenant back to the exact version declared in Git:
    ```text

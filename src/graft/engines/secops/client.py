@@ -62,7 +62,9 @@ class SecOpsClient:
             if api_version
             else self._config.base_url
         )
-        if path.startswith("http://") or path.startswith("https://"):
+        if path.startswith("http://"):
+            raise ValueError(f"Insecure cleartext HTTP URL rejected (HTTPS required): {path}")
+        if path.startswith("https://"):
             url = path
         elif path.startswith(":"):
             url = f"{base_url}/{self._config.instance_path}{path}"
@@ -72,6 +74,14 @@ class SecOpsClient:
             url = f"{base_url}/{path}"
         else:
             url = f"{base_url}/{self._config.instance_path}/{path}"
+
+        parsed = urllib.parse.urlsplit(url)
+        if parsed.scheme != "https":
+            raise ValueError(f"Invalid URL scheme (HTTPS required): {url}")
+        quoted_path = urllib.parse.quote(urllib.parse.unquote(parsed.path), safe="/:@-")
+        url = urllib.parse.urlunsplit(
+            (parsed.scheme, parsed.netloc, quoted_path, parsed.query, parsed.fragment)
+        )
 
         if params:
             query = urllib.parse.urlencode(dict(params))
@@ -90,8 +100,8 @@ class SecOpsClient:
     ) -> dict[str, object]:
         http_method = method.upper()
         url = self._resolve_url(path, params, api_version=api_version)
-        if not (url.startswith("https://") or url.startswith("http://")):
-            raise ValueError(f"Invalid URL scheme: {url}")
+        if not url.startswith("https://"):
+            raise ValueError(f"Invalid URL scheme (HTTPS required): {url}")
 
         headers = {
             "Accept": "application/json",

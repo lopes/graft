@@ -95,6 +95,7 @@ description: {class_prefix} Detection Engine Adapter
 adapter_class: graft.engines.{name}.adapter:{class_prefix}Adapter
 
 capabilities:
+  datasets: false
   custom_rules: true
   syntax_verification: true
   managed_rules: false
@@ -146,7 +147,7 @@ class {class_prefix}Adapter(EngineAdapter):
         return None
 
     def has_managed_rule_id(self, managed_id: str, state: ManagedState) -> bool:
-        return any(rs.id == managed_id for cat in state.categories for rs in cat.rulesets)
+        return any(rs.id == managed_id for rs in state.rulesets)
 
     def resolve_deployment_status(
         self,
@@ -156,14 +157,13 @@ class {class_prefix}Adapter(EngineAdapter):
         if rule.is_managed and rule.managed is not None:
             if managed_state is None:
                 return "disabled"
-            for cat in managed_state.categories:
-                for rs in cat.rulesets:
-                    if rs.id == rule.managed.id:
-                        if any(d.enabled and d.alerting for d in rs.deployments):
-                            return "enabled"
-                        if any(d.enabled for d in rs.deployments):
-                            return "silent"
-                        return "disabled"
+            for rs in managed_state.rulesets:
+                if rs.id == rule.managed.id:
+                    if any(d.enabled and d.alerting for d in rs.deployments):
+                        return "enabled"
+                    if any(d.enabled for d in rs.deployments):
+                        return "silent"
+                    return "disabled"
             return "disabled"
         if not rule.deployment.enabled:
             return "disabled"
@@ -379,8 +379,8 @@ class {class_prefix}DeployerAdapter(RuleDeployerPort):
     managed_schema_file.write_text(managed_schema_content, encoding="utf-8")
     created_files["managed_schema"] = managed_schema_file
 
-    # 5. README documentation
-    readme_file = engine_dir / "README.md"
+    # 5. Co-located README documentation in src/graft/engines/{name}/docs/README.md
+    readme_file = docs_dir / "README.md"
     readme_file.write_text(
         f"""# {class_prefix} Engine Adapter
 
@@ -489,6 +489,8 @@ def scaffold_rule(
     dest = (
         Path(out_path) if out_path else (root / "rulesets" / engine / subdir / f"{rule_name}.yaml")
     )
+    if dest.suffix.lower() not in (".yaml", ".yml"):
+        raise ScaffoldError(f"Output path '{dest}' must have a .yaml or .yml extension")
     if dest.stem == "index":
         raise ScaffoldError(
             "Invalid rule filename 'index'. 'index' is reserved for managed/index.yaml"
@@ -504,7 +506,6 @@ def scaffold_rule(
             raise ScaffoldError(
                 "Scaffolding a managed rule requires a non-empty managed rule ID (--managed <id>)"
             )
-        dest.parent.mkdir(parents=True, exist_ok=True)
         rule_uuid = str(uuid.uuid4())
         doc: dict[str, object] = {
             "metadata": {
@@ -529,7 +530,6 @@ def scaffold_rule(
             "tests": [],
         }
     else:
-        dest.parent.mkdir(parents=True, exist_ok=True)
         rule_uuid = str(uuid.uuid4())
         default_logic = _resolve_default_rule_logic(engine, rule_name, root)
 
@@ -602,6 +602,7 @@ def scaffold_rule(
         pass
 
     dumped = yaml.safe_dump(doc, sort_keys=False, indent=2)
+    dest.parent.mkdir(parents=True, exist_ok=True)
     dest.write_text(dumped, encoding="utf-8")
     return dest
 
@@ -614,6 +615,8 @@ def scaffold_dataset(
     _validate_dataset_identifier(dataset_name, "dataset")
     root = Path(project_root) if project_root else Path.cwd()
     dest = Path(out_path) if out_path else (root / "datasets" / f"{dataset_name}.yaml")
+    if dest.suffix.lower() not in (".yaml", ".yml"):
+        raise ScaffoldError(f"Output path '{dest}' must have a .yaml or .yml extension")
     _validate_dataset_identifier(dest.stem, "dataset filename")
     if dest.stem != dataset_name:
         raise ScaffoldError(
@@ -623,7 +626,6 @@ def scaffold_dataset(
         raise ScaffoldError(f"Dataset file already exists at {dest}")
 
     default_owner = _resolve_default_owner(cwd=root)
-    dest.parent.mkdir(parents=True, exist_ok=True)
 
     human_desc = f"Reusable dataset for {dataset_name.replace('_', ' ')}"
     doc: dict[str, object] = {
@@ -655,5 +657,6 @@ def scaffold_dataset(
         pass
 
     dumped = yaml.safe_dump(doc, sort_keys=False, indent=2)
+    dest.parent.mkdir(parents=True, exist_ok=True)
     dest.write_text(dumped, encoding="utf-8")
     return dest

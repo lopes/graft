@@ -47,7 +47,7 @@ sequenceDiagram
 To prevent synthetic testing from contaminating production alert queues or skewing SOC metrics, replay adapters enforce three layers of protection:
 
 1. **Explicit Quarantine Configuration:**
-   - Temporary rule name: `graft_test_<test_id>_<uuid>`.
+   - Temporary rule name: `graft_test_<rule_name>_<uuid8>`.
    - `alerting = False`: Rule matches never trigger notification pipelines, webhooks, or SOC incident creation.
    - `enabled = True`: Rule is active only for the duration of the isolated evaluation window and deleted immediately afterward.
 2. **Scoped Time-Window Evaluation:**
@@ -70,8 +70,8 @@ Staging and Production point to two physically separate SIEM instances:
 
 Because synthetic replay testing injects test events and creates temporary rules, replay adapters enforce a strict production tenant guard. If staging coordinates are omitted or resolve to the same tenant instance as Production (for example, the same `(project_id, location, instance_id)` in `SecOpsReplayAdapter`), Graft refuses to inject synthetic events into Production:
 
-- Without `--require-staging` (default): Emits `[WARNING]` and exits `0` (graceful degradation).
-- With `--require-staging`: Emits `[ERROR] Replay tests require a dedicated staging tenant and cannot run against production coordinates` and exits `1`.
+- Without `--require-staging` (default): Emits `[WARNING] Skipping replay tests: Replay tests require a dedicated staging tenant and cannot run against production coordinates.` and exits `0` (graceful degradation).
+- With `--require-staging`: Emits `Error: --require-staging was specified but only production tenant is configured.` and exits `1`.
 
 ---
 
@@ -99,9 +99,9 @@ Developers without cloud credentials or working offline must not be blocked from
 
 | Scenario | CLI Invocation | Exit Code | Output Behavior |
 | :--- | :--- | :---: | :--- |
-| **No tests defined** | `graft <engine> test` | `0` | Skipped silently. |
-| **Tests defined, no staging creds** | `graft <engine> test` | `0` | `[WARNING] Skipping replay tests: Staging tenant is not configured.` |
-| **Strict CI Gate** | `graft <engine> test --require-staging` | `1` | `[ERROR] Staging credentials missing under --require-staging.` |
-| **All assertions match** | `graft <engine> test` | `0` | `[PASS] rule_name :: test_id: Passed` |
-| **Detection count mismatch** | `graft <engine> test` | `1` | `[FAIL] rule_name :: test_id: Expected 1, got 0` |
+| **No tests defined** | `graft <engine> test` | `0` | `No replay test vectors found in target rules.` |
+| **Tests defined, no staging creds** | `graft <engine> test` | `0` | `[WARNING] Skipping replay tests: Staging tenant not configured (<reason>).` |
+| **Strict CI Gate** | `graft <engine> test --require-staging` | `1` | `Error: --require-staging was specified but <reason>` |
+| **All assertions match** | `graft <engine> test` | `0` | `[PASS] <rule_name> :: <test_id>` + `Replay test results: <passed> passed, 0 failed.` |
+| **Detection count mismatch** | `graft <engine> test` | `1` | `[FAIL] <rule_name> :: <test_id>` + `Replay test results: <passed> passed, <failed> failed.` |
 

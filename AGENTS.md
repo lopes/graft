@@ -36,7 +36,7 @@ Graft is an open-source, extensible Detection-as-Code (DaC) platform written in 
 
 ### 1. Never Crash on Hostile Input (Outranks Feature Work)
 Malformed YAML, invalid UTF-8 bytes, missing file paths, or unexpected API payloads must produce actionable errors—never unhandled `KeyError`, `IndexError`, `AttributeError`, `TypeError`, or `UnicodeDecodeError`.
-- **Typed Domain Exceptions:** Parsers in [`loader.py`](src/graft/core/loader.py), engine manifest loaders, and [`engine_registry.py`](src/graft/core/engine_registry.py) must raise `RuleLoadError`, `DatasetLoadError`, `ManagedManifestLoadError`, `EngineError`, or `ScaffoldError`.
+- **Typed Domain Exceptions:** Parsers in [`loader.py`](src/graft/core/loader.py) (`RuleLoadError`, `DatasetLoadError`), [`engine_registry.py`](src/graft/core/engine_registry.py) (`EngineError`), [`scaffold.py`](src/graft/cli/scaffold.py) (`ScaffoldError`), and engine manifest loaders (such as `ManagedManifestLoadError`) must raise typed domain exceptions instead of raw stdlib exceptions.
 - **Strict `--json` Error Contract:** When `--json` is passed on the CLI, every failure exit path must emit valid JSON on `stdout` (`{"success": false, "error": "..."}`) before exiting non-zero.
 - **Prove It:** Every parser or CLI failure fix ships with a regression test in [`tests/unit/core/test_adversarial_inputs.py`](tests/unit/core/test_adversarial_inputs.py).
 
@@ -50,7 +50,7 @@ Trigger, inspect, and test every transformation from the CLI without writing thr
 - `uv run graft --json engines` — Introspect registered engines, capability flags, environments, and schema paths.
 - `uv run graft --json lint [paths...]` — Validate datasets, custom rules, managed manifests, `%<name>.value` references, and 1-to-1 ID uniqueness offline.
 - `uv run graft --json mitre coverage | gaps | inspect | update` — Analyze MITRE ATT&CK coverage, 3-state gap roll-ups (`covered`/`partial`/`uncovered`), targeted STIX enrichments (`DETxxxx`, `ANxxxx`, `DCxxxx`, `Gxxxx`, `Mxxxx`), and taxonomy updates offline.
-- `uv run graft --json export datasets | catalog | navigator` — Inspect active datasets (after UTC `ttl:YYYY-MM-DD` filtering), Git-attributed catalogs, and ATT&CK Navigator layers (`matrix` / `mitre` aliases supported).
+- `uv run graft --json export datasets | catalog | navigator` — Inspect active datasets (after UTC `ttl:YYYY-MM-DD` filtering), Git-attributed catalogs (`metadata` alias supported), and ATT&CK Navigator layers (`matrix` / `mitre` aliases supported).
 - `uv run graft --json <engine> render [paths...] [--all]` — Synthesize engine-native queries (e.g., full rule with injected metadata) completely offline.
 - `uv run graft --json <engine> verify | test | diff | apply | pull` — Execute remote compilation, staging replay, and GitOps reconciliation.
 

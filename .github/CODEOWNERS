@@ -4,8 +4,12 @@
 # Core architecture and schemas
 /src/graft/core/ @lopes
 
-# Detection Rules
+# Detection Rules & Reusable Datasets
 /rulesets/ @lopes
+/datasets/ @lopes
+
+# Agent Skills
+/.agents/ @lopes
 
 # Engine Adapters
 /src/graft/engines/ @lopes

@@ -77,9 +77,9 @@ flowchart TD
 1. **GitHub Secrets Masking:** Pull requests originating from forks do not have access to repository secrets.
 2. **Workflow Guard:** The cloud verification job explicitly declares:
    ```yaml
-   if: github.event.pull_request.head.repo.full_name == github.repository
+   if: github.event.pull_request.head.repo.full_name == github.repository && github.actor != 'dependabot[bot]'
    ```
-   External PRs automatically skip cloud interactions and execute only offline quality gates (`ruff`, `mypy`, `pytest`, `graft lint`).
+   External PRs and automated dependency bump PRs automatically skip cloud interactions and execute only offline quality gates (`ruff`, `mypy`, `pytest`, `graft lint`).
 3. **Read-Only PR Gates:** Even on internal branches, PR gates perform only read-only syntax dry runs (`graft <engine> verify`), scoped diff plans (`graft <engine> diff`), or quarantined staging replay tests (`graft <engine> test`). Live production rule changes are applied exclusively upon merge to `main`.
 
 ---
@@ -137,7 +137,7 @@ Every OIDC token exchange, service account impersonation event, and SIEM API mut
 
 ### Graft Platform Logging
 Graft provides structured console and diagnostic logging:
-- Configured via `GRAFT_LOG_LEVEL=DEBUG|INFO|WARNING|ERROR` (or `--verbose` for `DEBUG`).
+- Controlled via CLI verbosity flags: `-v` / `--verbose` (`DEBUG`), default (`INFO`), and `-q` / `--quiet` (`WARNING`).
 - Emits UTC ISO-8601 timestamps (`YYYY-MM-DDTHH:MM:SSZ`) for direct correlation with SIEM and CI audit trails.
 - CLI commands support `--json` output for automated piping into security telemetry pipelines.
 - Replay test runs enforce a strict production tenant guard, refusing to inject synthetic events when staging coordinates are missing or match production.

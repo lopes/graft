@@ -56,7 +56,7 @@ Reusable string datasets are authored in 2-block YAML files under `datasets/<nam
 
 ## 3. Custom Rule Reconciliation Lifecycle
 
-Custom detection rules are authored in 5-block envelope YAML files under `rulesets/<engine>/custom/`. During reconciliation via `GitOpsReconciler` and `RuleDeployerPort`:
+Custom detection rules are authored in 5-block envelope YAML files under `rulesets/<engine>/custom/`. During reconciliation via `CustomRuleReconciler` and `RuleDeployerPort` (distinct from `GitOpsReconciler`, which reconciles vendor-managed content and exclusions via `ManagedEnginePort`):
 
 1. **Identity Matching:** Local rules are mapped to tenant rules by `metadata.name`.
 2. **Creations:** Rules declared in Git but absent from the tenant are compiled into the engine's native format (preserving Graft's `metadata.id`) and created via `RuleDeployerPort.create_rule()`, followed by applying deployment toggles (`enabled`, `alerting`).
@@ -93,6 +93,7 @@ categories:
 exclusions:
   - id: "ex-backup-service-account"
     description: "Prevents alerts from authorized overnight backup automation"
+    rule_id: null
     ruleset_id: "ur_cloud_iam_privilege_escalation"
     expression: 'principal.user.userid = "backup-operator@corp-prod.iam.gserviceaccount.com"'
 ```
@@ -144,24 +145,17 @@ graft secops diff --target managed --env production
 #### Example Drift Output:
 ```text
 === Datasets Diff ===
-+ Datasets to create (1):
-  [+] known_scanner_ips (3 rows)
-~ Datasets to update (1):
-  [~] security_assessment_ips (2 rows)
+[+] Dataset to create: known_scanner_ips (3 values)
+[~] Dataset to update: security_assessment_ips (2 values)
 
-=== Google SecOps Custom Rules Diff ===
-+ Custom rules to create (1):
-  [+] multiple_hosts_scanned (id=c4e89a12-5d31-4f88-9a20-71b4e2f90311)
-~ Custom rules to update (1):
-  [~] workspace_nrd_email_opened (id=b1d72370-5fa3-4cb8-a579-22a468d6f101)
-? Untracked custom rules in tenant (1):
-  [?] legacy_console_rule (id=89a74bc1-1111-2222-3333-444455556666)
+=== Custom Rules Diff ===
+[+] Custom rule to create: multiple_hosts_scanned
+[~] Custom rule to update: workspace_nrd_email_opened (ID: ru_12345678-abcd-ef01-2345-6789abcdef01)
+[?] Untracked custom rule on tenant: legacy_console_rule (ID: ru_89a74bc1-1111-2222-3333-444455556666)
 
 === Google SecOps Managed Content Diff ===
-~ Deployments to update (1):
-  [~] Cloud IAM Privilege Escalation [ur_cloud_iam_privilege_escalation] (PRECISE): alerting False -> True
-+ Exclusions to create (1):
-  [+] ex-backup-service-account -> ur_cloud_iam_privilege_escalation
+[~] Deployment: ur_cloud_iam_privilege_escalation (PRECISE) | enabled: True -> True, alerting: False -> True
+[+] Exclusion to create: ex-backup-service-account
 ```
 
 ### 2. Unified State Synchronization (`graft secops apply`)
@@ -188,15 +182,15 @@ graft secops apply --target managed --env production
 #### Zero-Cost No-Op Guarantee
 Graft computes an in-memory diff before issuing mutations. If an existing dataset's values and description or an existing rule's logic and deployment toggles already match Git, Graft skips API write requests, preventing unnecessary API churn in Chronicle.
 
-### 3. Dedicated Datasets & Managed Commands (`graft secops datasets` / `graft secops managed`)
+### 3. Targeted Dataset & Managed Operations (`--target datasets` & `graft secops managed`)
 
-Granular operations for reusable datasets or vendor-curated rule sets and exclusions:
+Granular operations for reusable datasets (`--target datasets`) or vendor-curated rule sets and exclusions (`graft secops managed`):
 
 ```bash
 # Compare, apply, or pull reusable datasets (Data Tables)
-graft secops datasets diff --env production
-graft secops datasets apply --env production
-graft secops datasets pull --env production --out datasets
+graft secops diff --target datasets --env production
+graft secops apply --target datasets --env production
+graft secops pull --target datasets --env production --out-datasets-dir datasets
 
 # Compare local managed/index.yaml against tenant Curated Rule Sets
 graft secops managed diff --env production
@@ -222,7 +216,8 @@ graft secops pull --target custom --env production --out-dir rulesets/secops/cus
 # Opt-in: Pull compatible 1-column STRING Data Tables (originalColumn == "value") into datasets/
 graft secops pull --target datasets --env production --out-datasets-dir datasets
 
-# Overwrite existing files (default prompts for confirmation)
+# Overwrite existing files (by default, existing files are skipped non-interactively:
+# "Skipped N existing files. Use --force to overwrite")
 graft secops pull --target custom --env production --force
 ```
 

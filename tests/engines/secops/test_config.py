@@ -151,3 +151,36 @@ def test_secops_config_from_env_missing_raises(monkeypatch: pytest.MonkeyPatch) 
 
     with pytest.raises(KeyError, match="Missing required SecOps environment variables"):
         SecOpsConfig.from_env("staging")
+
+
+def test_secops_config_partial_staging_vars_do_not_mix_with_prod_fallback(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    for key in (
+        "GRAFT_SECOPS_STAGING_PROJECT",
+        "GRAFT_SECOPS_STAGING_LOCATION",
+        "GRAFT_SECOPS_STAGING_INSTANCE_ID",
+        "GRAFT_STAGING_PROJECT",
+        "GRAFT_STAGING_LOCATION",
+        "GRAFT_STAGING_INSTANCE_ID",
+        "GRAFT_SECOPS_PROJECT",
+        "GRAFT_SECOPS_LOCATION",
+        "GRAFT_SECOPS_INSTANCE_ID",
+        "GRAFT_PROJECT",
+        "GRAFT_LOCATION",
+        "GRAFT_INSTANCE_ID",
+    ):
+        monkeypatch.delenv(key, raising=False)
+
+    # Partial staging var (location only, no staging project) + complete prod vars
+    monkeypatch.setenv("GRAFT_SECOPS_STAGING_LOCATION", "europe-west3")
+    monkeypatch.setenv("GRAFT_SECOPS_PROD_PROJECT", "prod-proj")
+    monkeypatch.setenv("GRAFT_SECOPS_PROD_LOCATION", "us")
+    monkeypatch.setenv("GRAFT_SECOPS_PROD_INSTANCE_ID", "prod-instance")
+
+    staging_cfg = SecOpsConfig.from_env("staging")
+    prod_cfg = SecOpsConfig.from_env("prod")
+    assert staging_cfg.project == "prod-proj"
+    assert staging_cfg.location == "us"
+    assert staging_cfg.instance_id == "prod-instance"
+    assert staging_cfg.is_same_instance(prod_cfg)

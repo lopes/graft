@@ -10,7 +10,7 @@ def _load_single_env_file(target: Path, loaded: dict[str, str]) -> None:
 
     try:
         content = target.read_text(encoding="utf-8")
-    except OSError:
+    except (UnicodeDecodeError, OSError):
         return
 
     for raw_line in content.splitlines():
@@ -28,8 +28,9 @@ def _load_single_env_file(target: Path, loaded: dict[str, str]) -> None:
         key = key.strip()
         val = val.strip()
 
-        if (val.startswith('"') and val.endswith('"')) or (
-            val.startswith("'") and val.endswith("'")
+        if len(val) >= 2 and (
+            (val.startswith('"') and val.endswith('"'))
+            or (val.startswith("'") and val.endswith("'"))
         ):
             val = val[1:-1]
 

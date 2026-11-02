@@ -130,3 +130,32 @@ def test_load_managed_manifest_from_yaml_handles_invalid_utf8_bytes_gracefully(
 
     with pytest.raises(ManagedManifestLoadError, match="UTF-8"):
         load_managed_manifest_from_yaml(bad_file)
+
+
+def test_load_managed_manifest_missing_file_raises_domain_error(tmp_path: Path) -> None:
+    missing = tmp_path / "does_not_exist.yaml"
+    with pytest.raises(ManagedManifestLoadError, match="Manifest file not found"):
+        load_managed_manifest_from_yaml(missing)
+
+
+def test_dump_managed_manifest_normalizes_uppercase_category_id(tmp_path: Path) -> None:
+    state = ManagedState(
+        rulesets=(
+            ManagedRuleSet(
+                id="rs-upper",
+                name="Upper Cat Ruleset",
+                category="Cloud Security",
+                deployments=(
+                    ManagedDeployment(type="PRECISE", enabled=True, alerting=True),
+                    ManagedDeployment(type="BROAD", enabled=False, alerting=False),
+                ),
+                category_id="CAT-UPPER-UUID",
+            ),
+        ),
+        exclusions=(),
+    )
+    out_file = tmp_path / "index.yaml"
+    dumped = dump_managed_manifest_to_yaml(state, path=out_file)
+    assert "id: cat-upper-uuid" in dumped
+    reloaded = load_managed_manifest_from_yaml(out_file)
+    assert reloaded.rulesets[0].category_id == "cat-upper-uuid"

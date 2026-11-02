@@ -1,6 +1,7 @@
 import logging
 import re
 import uuid
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 from graft.core.loader import load_dataset_from_yaml
@@ -9,6 +10,7 @@ from graft.core.models.rule import (
     BaseDeploymentConfig,
     RuleEnvelope,
     RuleMetadata,
+    TestEvent,
     TestVector,
 )
 from graft.core.ports.replay import ReplayHarnessPort, ReplayResult
@@ -20,6 +22,29 @@ from graft.engines.secops.deployer import SecOpsDeployerAdapter
 
 logger = logging.getLogger("graft.secops.replay")
 _DATASET_REF_RE = re.compile(r"%(?P<name>[a-zA-Z0-9_]+)\.value\b")
+
+
+def _resolve_replay_time_window(events: tuple[TestEvent, ...]) -> tuple[str, str]:
+    if not events:
+        return "2026-09-17T00:00:00Z", "2026-09-17T23:59:59Z"
+
+    try:
+        parsed_pairs = [
+            (
+                datetime.fromisoformat(e.timestamp.replace("Z", "+00:00")).astimezone(UTC),
+                e.timestamp,
+            )
+            for e in events
+        ]
+        min_dt, start_str = min(parsed_pairs, key=lambda pair: pair[0])
+        max_dt, end_str = max(parsed_pairs, key=lambda pair: pair[0])
+        if min_dt == max_dt:
+            padded_end = (max_dt + timedelta(seconds=1)).isoformat().replace("+00:00", "Z")
+            return start_str, padded_end
+        return start_str, end_str
+    except ValueError:
+        raw_timestamps = [e.timestamp for e in events]
+        return min(raw_timestamps), max(raw_timestamps)
 
 
 class SecOpsReplayAdapter(ReplayHarnessPort):
@@ -108,8 +133,7 @@ class SecOpsReplayAdapter(ReplayHarnessPort):
             rule_id = self._deployer.create_rule(quarantined_rule)
 
             # 3. Determine time range for evaluation
-            start_time = vector.events[0].timestamp if vector.events else "2026-09-17T00:00:00Z"
-            end_time = vector.events[-1].timestamp if vector.events else "2026-09-17T23:59:59Z"
+            start_time, end_time = _resolve_replay_time_window(vector.events)
 
             # 4. Run rule evaluation
             eval_resp = self._client.request(

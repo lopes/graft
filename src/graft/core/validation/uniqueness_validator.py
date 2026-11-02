@@ -18,10 +18,10 @@ class RuleUniquenessViolation:
 
 class RuleUniquenessValidator:
     def __init__(self) -> None:
-        self._seen_ids: dict[str, tuple[str, str]] = {}
-        self._seen_names: dict[tuple[str, str], str] = {}
-        self._seen_file_stems: dict[tuple[str, str], str] = {}
-        self._seen_managed_ids: dict[tuple[str, str], str] = {}
+        self._seen_ids: dict[str, tuple[str, str, str]] = {}
+        self._seen_names: dict[tuple[str, str], tuple[str, str]] = {}
+        self._seen_file_stems: dict[tuple[str, str], tuple[str, str]] = {}
+        self._seen_managed_ids: dict[tuple[str, str], tuple[str, str]] = {}
 
     def add_and_validate(
         self,
@@ -31,60 +31,66 @@ class RuleUniquenessValidator:
     ) -> list[RuleUniquenessViolation]:
         violations: list[RuleUniquenessViolation] = []
         path_obj = Path(path)
+        resolved_path_str = str(path_obj.resolve())
         path_str = str(path)
         file_stem = path_obj.stem
         rule_id = rule.metadata.id
+        norm_rule_id = rule_id.strip().lower()
         rule_name = rule.metadata.name
 
-        if rule_id in self._seen_ids:
-            conflicting_engine, conflicting_path = self._seen_ids[rule_id]
-            violations.append(
-                RuleUniquenessViolation(
-                    rule_id=rule_id,
-                    rule_name=rule_name,
-                    engine=engine,
-                    path=path_str,
-                    conflicting_path=conflicting_path,
-                    conflicting_engine=conflicting_engine,
-                    violation_type="id",
-                    message=(
-                        f"Duplicate rule metadata.id '{rule_id}' in '{path_str}' "
-                        f"(engine: '{engine}') conflicts with '{conflicting_path}' "
-                        f"(engine: '{conflicting_engine}'). "
-                        "Rule IDs must be globally unique across all engines."
-                    ),
+        if norm_rule_id in self._seen_ids:
+            conflicting_engine, conflicting_path, conflicting_resolved = self._seen_ids[
+                norm_rule_id
+            ]
+            if conflicting_resolved != resolved_path_str:
+                violations.append(
+                    RuleUniquenessViolation(
+                        rule_id=rule_id,
+                        rule_name=rule_name,
+                        engine=engine,
+                        path=path_str,
+                        conflicting_path=conflicting_path,
+                        conflicting_engine=conflicting_engine,
+                        violation_type="id",
+                        message=(
+                            f"Duplicate rule metadata.id '{rule_id}' in '{path_str}' "
+                            f"(engine: '{engine}') conflicts with '{conflicting_path}' "
+                            f"(engine: '{conflicting_engine}'). "
+                            "Rule IDs must be globally unique across all engines."
+                        ),
+                    )
                 )
-            )
         else:
-            self._seen_ids[rule_id] = (engine, path_str)
+            self._seen_ids[norm_rule_id] = (engine, path_str, resolved_path_str)
 
         engine_name_key = (engine, rule_name)
         if engine_name_key in self._seen_names:
-            conflicting_path = self._seen_names[engine_name_key]
-            violations.append(
-                RuleUniquenessViolation(
-                    rule_id=rule_id,
-                    rule_name=rule_name,
-                    engine=engine,
-                    path=path_str,
-                    conflicting_path=conflicting_path,
-                    conflicting_engine=engine,
-                    violation_type="name",
-                    message=(
-                        f"Duplicate rule metadata.name '{rule_name}' in engine '{engine}' "
-                        f"in '{path_str}' conflicts with '{conflicting_path}'. "
-                        f"Rule names must be unique within their engine."
-                    ),
+            conflicting_path, conflicting_resolved = self._seen_names[engine_name_key]
+            if conflicting_resolved != resolved_path_str:
+                violations.append(
+                    RuleUniquenessViolation(
+                        rule_id=rule_id,
+                        rule_name=rule_name,
+                        engine=engine,
+                        path=path_str,
+                        conflicting_path=conflicting_path,
+                        conflicting_engine=engine,
+                        violation_type="name",
+                        message=(
+                            f"Duplicate rule metadata.name '{rule_name}' in engine '{engine}' "
+                            f"in '{path_str}' conflicts with '{conflicting_path}'. "
+                            f"Rule names must be unique within their engine."
+                        ),
+                    )
                 )
-            )
         else:
-            self._seen_names[engine_name_key] = path_str
+            self._seen_names[engine_name_key] = (path_str, resolved_path_str)
 
         if file_stem:
             engine_stem_key = (engine, file_stem)
             if engine_stem_key in self._seen_file_stems:
-                conflicting_path = self._seen_file_stems[engine_stem_key]
-                if conflicting_path != path_str:
+                conflicting_path, conflicting_resolved = self._seen_file_stems[engine_stem_key]
+                if conflicting_resolved != resolved_path_str:
                     violations.append(
                         RuleUniquenessViolation(
                             rule_id=rule_id,
@@ -102,30 +108,31 @@ class RuleUniquenessValidator:
                         )
                     )
             else:
-                self._seen_file_stems[engine_stem_key] = path_str
+                self._seen_file_stems[engine_stem_key] = (path_str, resolved_path_str)
 
         if rule.managed is not None:
             managed_key = (engine, rule.managed.id)
             if managed_key in self._seen_managed_ids:
-                conflicting_path = self._seen_managed_ids[managed_key]
-                violations.append(
-                    RuleUniquenessViolation(
-                        rule_id=rule_id,
-                        rule_name=rule_name,
-                        engine=engine,
-                        path=path_str,
-                        conflicting_path=conflicting_path,
-                        conflicting_engine=engine,
-                        violation_type="managed_id",
-                        message=(
-                            f"Duplicate managed.id '{rule.managed.id}' in engine '{engine}' "
-                            f"in '{path_str}' conflicts with '{conflicting_path}'. "
-                            "Managed rule IDs must be mapped 1-to-1 within their engine."
-                        ),
+                conflicting_path, conflicting_resolved = self._seen_managed_ids[managed_key]
+                if conflicting_resolved != resolved_path_str:
+                    violations.append(
+                        RuleUniquenessViolation(
+                            rule_id=rule_id,
+                            rule_name=rule_name,
+                            engine=engine,
+                            path=path_str,
+                            conflicting_path=conflicting_path,
+                            conflicting_engine=engine,
+                            violation_type="managed_id",
+                            message=(
+                                f"Duplicate managed.id '{rule.managed.id}' in engine '{engine}' "
+                                f"in '{path_str}' conflicts with '{conflicting_path}'. "
+                                "Managed rule IDs must be mapped 1-to-1 within their engine."
+                            ),
+                        )
                     )
-                )
             else:
-                self._seen_managed_ids[managed_key] = path_str
+                self._seen_managed_ids[managed_key] = (path_str, resolved_path_str)
 
         return violations
 

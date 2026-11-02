@@ -148,7 +148,7 @@ flowchart TD
 - **Rationale:** The `metadata.name` serves as the native SIEM identifier (such as the YARA-L rule identifier `rule <name> { ... }` in Chronicle or the detection title in other platforms), while engine-scoped filename stem uniqueness prevents ambiguous file collisions across `custom/`, `managed/`, or nested subdirectories. Rules across different engines **can** share the same `name` and filename (e.g. `rulesets/secops/custom/gcp_service_account_key_created.yaml` and a corresponding `rulesets/crowdstrike/custom/gcp_service_account_key_created.yaml`).
 
 #### 3. Engine Scope: `managed.id` (Registered Managed Rules)
-- **Constraint:** When registering a vendor-managed rule in `rulesets/<engine>/managed/<rule_name>.yaml`, `managed.id` must match a valid rule/ruleset `id` in `rulesets/<engine>/managed/index.yaml` and be strictly unique (1-to-1) within that engine.
+- **Constraint:** When registering a vendor-managed rule in `rulesets/<engine>/managed/<rule_name>.yaml`, `managed.id` must be a non-empty string (`minLength: 1`, `maxLength: 256`), match a valid rule/ruleset `id` in `rulesets/<engine>/managed/index.yaml`, and be strictly unique (1-to-1) within that engine.
 - **Rationale:** Prevents duplicate or conflicting MITRE ATT&CK mappings and runbooks for the same underlying vendor detection.
 
 #### 4. Automated Verification
@@ -363,13 +363,15 @@ graft --json lint
 ```text
 [PASS] datasets/known_scanner_ips.yaml
 [PASS] datasets/security_assessment_ips.yaml
+[PASS] rulesets/secops/custom/gcp_service_account_key_created.yaml
+[PASS] rulesets/secops/custom/gcp_storage_bucket_public_access_granted.yaml
 [PASS] rulesets/secops/custom/multiple_hosts_scanned.yaml
 [PASS] rulesets/secops/custom/multiple_ports_scanned.yaml
 [PASS] rulesets/secops/custom/workspace_nrd_email_opened.yaml
-[PASS] rulesets/secops/custom/gcp_service_account_key_created.yaml
 [PASS] rulesets/secops/managed/gcti_breach_network_indicator_matched.yaml
 [PASS] rulesets/secops/managed/index.yaml
-Checked 9 files across 1 engines. All files passed validation.
+
+Lint complete: 9 passed, 0 failed out of 9 files.
 ```
 
 When schema constraints or invalid MITRE tactics/techniques are detected:
@@ -377,7 +379,8 @@ When schema constraints or invalid MITRE tactics/techniques are detected:
 [FAIL] rulesets/secops/custom/broken_rule.yaml:
   - Schema Error: 'run_frequency' is a required property in 'deployment'
   - MITRE Error: Unknown technique 'T9999.001' under tactic 'initial-access'
-Linting failed with 2 error(s).
+
+Lint complete: 8 passed, 1 failed out of 9 files.
 ```
 
 ### Optional: Git Pre-Commit Hook
@@ -388,7 +391,7 @@ To catch schema violations, invalid YAML, unknown MITRE ATT&CK techniques, and c
 git config core.hooksPath .githooks
 ```
 
-Whenever you run `git commit`, the hook executes `ruff format --check`, `ruff check`, `graft lint`, and `pytest tests/unit` in sub-second time. To disable it at any time:
+Whenever you run `git commit`, the hook executes `uv lock --check`, `ruff format --check`, `ruff check`, `mypy --strict`, `graft lint`, and `pytest tests/unit tests/engines` completely offline in sub-second time. To disable it at any time:
 
 ```bash
 git config --unset core.hooksPath
@@ -410,11 +413,12 @@ Registered managed rules follow [`base_managed.schema.json`](../../src/graft/cor
 flowchart TD
     ROOT["Registered Managed Rule (rulesets/&lt;engine&gt;/managed/&lt;rule&gt;.yaml)"]
     ROOT --> B1["<b>1. metadata</b><br/>UUID, Name, Description, Owners, MITRE, Tags, References"]
-    ROOT --> B2["<b>2. managed</b><br/><code>id</code>: Exact vendor rule/ruleset ID from <code>managed/index.yaml</code>"]
+    ROOT --> B2["<b>2. managed</b><br/><code>id</code> (1..256 chars): Exact vendor rule/ruleset ID from <code>managed/index.yaml</code>"]
     ROOT --> B3["<b>3. runbook</b><br/>Context, Triage Checklist, Incident Response Steps"]
     ROOT --> B4["<b>4. tests</b><br/>Optional Synthetic Test Vectors (<code>[]</code> permitted)"]
 ```
 
+- **`managed.id` Constraint:** Must be a non-empty string (`minLength: 1`, `maxLength: 256`) matching an entry in `rulesets/<engine>/managed/index.yaml`.
 - **Why `logic` and `deployment` Are Omitted:** Vendor detection logic is proprietary and black-boxed by the SIEM, and operational activation (`enabled`, `alerting`) is already controlled in `rulesets/<engine>/managed/index.yaml`. Omitting `deployment` from the registered rule file guarantees that `index.yaml` remains the single Source of Truth for deployment status (`enabled | silent | disabled`).
 - **Why `tests: []` Is Permitted:** Because analysts cannot inspect or dry-run proprietary vendor query logic locally, `tests` may be an empty list (`[]`) or contain synthetic telemetry vectors for live staging verification.
 
@@ -596,8 +600,8 @@ mv rulesets/secops/custom/workspace_nrd_email_opened.yaml rulesets/secops/_archi
 ```
 
 Graft's loader and linter ignore **any directory or file starting with an underscore (`_`)** within `rulesets/<engine>/` and `datasets/` during:
-- Rule and active dataset discovery (`load_rules_for_engine`, `load_datasets`).
+- Rule and active dataset loading (`load_rule_from_yaml`, `load_dataset_from_yaml`).
 - Schema, MITRE taxonomy, and dataset cross-reference linting (`graft lint`).
-- Threat coverage matrix generation (`graft export matrix`) and catalog exports (`graft export catalog`).
+- Threat coverage matrix generation (`graft export navigator` / `graft export matrix`), dataset exports (`graft export datasets`), and catalog exports (`graft export catalog`).
 - Custom rule GitOps reconciliation (`graft <engine> diff / apply` for `rulesets/<engine>/_archived/`).
 

@@ -701,3 +701,80 @@ def test_managed_apply_failure_logs_error_and_abort_summary(
         "1 failed [ex-fail], 1 pending ['ex-next']" in msg
         for msg in error_msgs
     )
+
+
+def test_gitops_reconciler_no_double_match_exclusion_and_removed_deployments(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    curr_excl = ManagedExclusion(
+        id="fr_remote_1",
+        rule_id=None,
+        ruleset_id="rs-1",
+        expression='$e.principal.user.userid != "svc1"',
+        description="Shared description",
+    )
+    des_excl_1 = ManagedExclusion(
+        id="local_1",
+        rule_id=None,
+        ruleset_id="rs-1",
+        expression='$e.principal.user.userid != "svc1_new"',
+        description="Shared description",
+    )
+    des_excl_2 = ManagedExclusion(
+        id="local_2",
+        rule_id=None,
+        ruleset_id="rs-1",
+        expression='$e.principal.user.userid != "svc2"',
+        description="Shared description",
+    )
+    current_rs = ManagedRuleSet(
+        id="rs-1",
+        name="RuleSet 1",
+        category="CLOUD",
+        deployments=(
+            ManagedDeployment(type="PRECISE", enabled=True, alerting=True),
+            ManagedDeployment(type="BROAD", enabled=True, alerting=False),
+        ),
+    )
+    desired_rs = ManagedRuleSet(
+        id="rs-1",
+        name="RuleSet 1",
+        category="CLOUD",
+        deployments=(ManagedDeployment(type="PRECISE", enabled=True, alerting=True),),
+    )
+    current = ManagedState(rulesets=(current_rs,), exclusions=(curr_excl,))
+    desired = ManagedState(rulesets=(desired_rs,), exclusions=(des_excl_1, des_excl_2))
+
+    reconciler = GitOpsReconciler()
+    diff = reconciler.diff(current=current, desired=desired)
+    assert len(diff.exclusions_to_update) == 1
+    assert diff.exclusions_to_update[0].id == "fr_remote_1"
+    assert len(diff.exclusions_to_create) == 1
+    assert diff.exclusions_to_create[0].id == "local_2"
+    assert len(diff.deployment_diffs) == 1
+    assert diff.deployment_diffs[0].deployment_type == "BROAD"
+    assert diff.deployment_diffs[0].desired_enabled is False
+    assert diff.deployment_diffs[0].desired_alerting is False
+
+    engine = RecordingMockManagedEngine(initial_state=current)
+    with caplog.at_level(logging.INFO, logger="graft.reconciler"):
+        reconciler.apply(desired=desired, port=engine)
+    assert any("3 actions executed." in r.message for r in caplog.records)
+
+
+def test_custom_rule_reconciler_detects_run_frequency_drift() -> None:
+    curr = RuleEnvelope(
+        metadata=RuleMetadata(id="uuid-freq", name="freq_rule", description="desc"),
+        logic="events: $e condition: $e",
+        deployment=BaseDeploymentConfig(enabled=True, alerting=True, run_frequency="daily"),
+        runbook=Runbook(),
+    )
+    des = RuleEnvelope(
+        metadata=RuleMetadata(id="uuid-freq", name="freq_rule", description="desc"),
+        logic="events: $e condition: $e",
+        deployment=BaseDeploymentConfig(enabled=True, alerting=True, run_frequency="live"),
+        runbook=Runbook(),
+    )
+    diff = CustomRuleReconciler().diff(current=(curr,), desired=(des,))
+    assert diff.has_changes is True
+    assert len(diff.rules_to_update) == 1

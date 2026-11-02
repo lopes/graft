@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 import re
+from collections.abc import Mapping
 from pathlib import Path
 from typing import Literal
 
@@ -32,6 +33,34 @@ from graft.engines.secops.replay import SecOpsReplayAdapter
 logger = logging.getLogger("graft.secops.adapter")
 
 _DATASET_REF_RE = re.compile(r"%(?P<name>[a-zA-Z0-9_]+)(?:\.(?P<col>[a-zA-Z0-9_]+))?")
+_YARAL_TOKEN_OR_COMMENT_RE = re.compile(
+    r'(?P<dquote>"(?:\\.|[^"\\])*")'
+    r"|(?P<squote>'(?:\\.|[^'\\])*')"
+    r"|(?P<bquote>`[^`]*`)"
+    r"|(?P<block_comment>/\*[\s\S]*?\*/)"
+    r"|(?P<line_comment>//[^\r\n]*)"
+    r"|(?P<regex>/(?![/*])(?:\\.|[^/\r\n\\])+/)",
+)
+
+
+def _strip_yaral_comments(text: str) -> str:
+    def _replace(match: re.Match[str]) -> str:
+        if match.group("block_comment") or match.group("line_comment"):
+            return " "
+        return match.group(0)
+
+    return _YARAL_TOKEN_OR_COMMENT_RE.sub(_replace, text)
+
+
+def _normalize_mitre_map(mitre: Mapping[str, tuple[str, ...]]) -> dict[str, tuple[str, ...]]:
+    normalized: dict[str, tuple[str, ...]] = {}
+    for k, v in sorted(mitre.items()):
+        if k == "none":
+            continue
+        techs = tuple(sorted({t for t in v if t and t != "T0000"}))
+        if techs:
+            normalized[k] = techs
+    return normalized
 
 
 def secops_rule_content_matches(desired: RuleEnvelope, remote: RuleEnvelope) -> bool:
@@ -50,17 +79,16 @@ def secops_rule_content_matches(desired: RuleEnvelope, remote: RuleEnvelope) -> 
             fallback_id=remote.metadata.id,
             fallback_name=remote.metadata.name,
         )
-        desired_mitre = {
-            k: tuple(t for t in v if t != "T0000")
-            for k, v in desired.metadata.mitre.items()
-            if k != "none"
-        }
-        desired_mitre = {k: v for k, v in desired_mitre.items() if v}
+        desired_meta, desired_logic = deconstruct_yaral_rule(
+            synth_desired,
+            fallback_id=desired.metadata.id,
+            fallback_name=desired.metadata.name,
+        )
         return bool(
-            remote_meta.id == desired.metadata.id
-            and remote_meta.description == desired.metadata.description
-            and remote_meta.mitre == desired_mitre
-            and remote_logic.strip() == desired.logic.strip()
+            remote_meta.id == desired_meta.id
+            and remote_meta.description == desired_meta.description
+            and _normalize_mitre_map(remote_meta.mitre) == _normalize_mitre_map(desired_meta.mitre)
+            and remote_logic.strip() == desired_logic.strip()
         )
     except Exception:
         return False
@@ -174,9 +202,7 @@ condition:
     ) -> None:
         if not rule.logic or not local_dataset_names:
             return
-        uncommented_lines = [re.sub(r"//.*$", "", line) for line in rule.logic.splitlines()]
-        uncommented_logic = "\n".join(uncommented_lines)
-        uncommented_logic = re.sub(r"/\*.*?\*/", "", uncommented_logic, flags=re.DOTALL)
+        uncommented_logic = _strip_yaral_comments(rule.logic)
 
         for match in _DATASET_REF_RE.finditer(uncommented_logic):
             ds_name = match.group("name")
@@ -211,7 +237,7 @@ condition:
         deployment = BaseDeploymentConfig(
             enabled=remote_rule.deployment.enabled,
             alerting=remote_rule.deployment.alerting,
-            run_frequency="live",
+            run_frequency=remote_rule.deployment.run_frequency or "live",
         )
         runbook = Runbook(
             context=f"Imported from Google SecOps tenant for detection {metadata.name}.",

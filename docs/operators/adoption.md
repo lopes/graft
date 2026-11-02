@@ -107,7 +107,7 @@ When pulling custom rules via `RuleDeployerPort.list_rules()` and `EngineAdapter
    - Extracts embedded `id`, `description`, and valid MITRE ATT&CK `tactic` / `technique` T-codes (when present) while stripping engine-specific wrapper boilerplate so only clean query logic remains in the `logic` block.
    - Automatically upgrades legacy **`revoked-by` MITRE techniques** to their active replacement technique IDs and tactics (for example, automatically translating legacy `T1086` PowerShell tokens from older SIEM rules to `T1059.001` under `execution` via `MitreValidator.reconstruct_mitre_mapping()`).
    - Leaves `owners: []`, `tags: []`, and `references: []` empty (and `mitre: {}` when no valid MITRE techniques exist in `meta:`)—Graft never guesses operational ownership from legacy inline author strings.
-   - **Example (Google SecOps):** [`deconstruct_yaral_rule`](../../src/graft/engines/secops/compiler.py#L85) strips the outer `rule <name> { meta: ... }` wrapper, normalizes `ru_<uuid>` server IDs, reconstructs `metadata.mitre` from valid `TAxxxx` / `Txxxx` tokens in `meta:`, and preserves clean YARA-L sections (`events:`, `match:`, `outcome:`, `condition:`).
+   - **Example (Google SecOps):** [`deconstruct_yaral_rule`](../../src/graft/engines/secops/compiler.py) strips the outer `rule <name> { meta: ... }` wrapper, normalizes `ru_<uuid>` server IDs, reconstructs `metadata.mitre` from valid `TAxxxx` / `Txxxx` tokens in `meta:`, and preserves clean YARA-L sections (`events:`, `match:`, `outcome:`, `condition:`).
 3. Graft populates default placeholder runbook sections (`context`, `triage`, `response`). Because Graft schemas strictly require non-empty `owners`, `mitre`, `tags`, and `references`, `graft lint` will intentionally flag freshly pulled rules until operators complete Epoch 2 enrichment.
 4. Each rule is saved to `rulesets/<engine>/custom/<rule_name>.yaml`. Existing files are protected against accidental overwrites unless `--force` is supplied.
 
@@ -115,7 +115,7 @@ When pulling custom rules via `RuleDeployerPort.list_rules()` and `EngineAdapter
 
 Because SIEM tenants frequently host large, multi-column CMDB exports or automated threat intelligence feeds that are not managed by Graft, `graft <engine> pull` (`--target all`) intentionally excludes datasets by default.
 
-When an operator explicitly runs `graft <engine> pull --target datasets` (or `graft <engine> datasets pull`):
+When an operator explicitly runs `graft <engine> pull --target datasets [--out-datasets-dir DIR]`:
 1. Graft calls `DatasetPort.list_datasets()`, which inspects remote tables and filters strictly for compatible Graft-shaped tables (in Google SecOps: 1-column `STRING` Data Tables whose column is named `value`, with a valid snake_case identifier and `1..1,000` non-empty rows). Incompatible multi-column or oversized tables are skipped with an informational log.
 2. Each compatible dataset is written to `datasets/<name>.yaml` with `owners: []`, `tags: []`, and `references: []` ready for Epoch 2 enrichment.
 
@@ -228,15 +228,15 @@ sequenceDiagram
 
     Note over CI,SIEM: Authoritative Production Apply
     PR->>CI: Trigger deploy-production.yml
-    CI->>SIEM: graft <engine> apply
-    SIEM-->>CI: Custom rules updated in-place (new revision)
+    CI->>SIEM: graft <engine> apply --env production --all
+    SIEM-->>CI: Datasets & custom rules updated in-place
     SIEM-->>CI: Managed deployments & exclusions synchronized
 
     Note over Analyst,SIEM: Out-of-Band Console Drift Occurs
     Analyst->>SIEM: Console user disables rule directly in UI
-    CI->>SIEM: Periodic drift scan (graft <engine> diff --all)
+    CI->>SIEM: Periodic drift scan (graft <engine> diff --env production --all)
     SIEM-->>CI: Drift detected (exit code 2)
-    CI->>SIEM: Authoritative reconciliation (graft <engine> apply --all)
+    CI->>SIEM: Authoritative reconciliation (graft <engine> apply --env production --all)
     SIEM-->>CI: Rule re-enabled in-place to match Git
     CI->>CI: Structured audit log emitted
 ```

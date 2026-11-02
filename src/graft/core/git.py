@@ -16,11 +16,12 @@ def get_changed_files(base_ref: str | None = None, cwd: Path | None = None) -> s
     def _run_git(args: list[str]) -> tuple[int, list[str]]:
         try:
             proc = subprocess.run(  # noqa: S603
-                [git_bin, *args],
+                [git_bin, "-c", "core.quotepath=false", *args],
                 cwd=effective_cwd,
                 capture_output=True,
                 text=True,
                 check=False,
+                timeout=10,
             )
             lines = [line.strip() for line in proc.stdout.splitlines() if line.strip()]
             return proc.returncode, lines

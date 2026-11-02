@@ -221,7 +221,11 @@ class SentinelCompilerAdapter(RuleCompilerPort):
                 return CompilationResult(
                     success=False,
                     diagnostics=(
-                        CompilationDiagnostic(line=1, message="KQL query appears incomplete"),
+                        CompilationDiagnostic(
+                            line=1,
+                            column=1,
+                            message="KQL query appears incomplete",
+                        ),
                     ),
                 )
             return CompilationResult(success=True)
@@ -249,13 +253,23 @@ class SentinelCompilerAdapter(RuleCompilerPort):
                 return CompilationResult(
                     success=False,
                     diagnostics=(
-                        CompilationDiagnostic(line=1, message=data.get("error", "Syntax error")),
+                        CompilationDiagnostic(
+                            line=1,
+                            column=1,
+                            message=data.get("error", "Syntax error"),
+                        ),
                     ),
                 )
         except urllib.error.HTTPError as exc:
             return CompilationResult(
                 success=False,
-                diagnostics=(CompilationDiagnostic(line=1, message=f"API error: {exc}"),),
+                diagnostics=(
+                    CompilationDiagnostic(
+                        line=1,
+                        column=1,
+                        message=f"API error: {exc}",
+                    ),
+                ),
             )
 
     def verify_rule(self, rule: RuleEnvelope) -> CompilationResult:
@@ -385,11 +399,11 @@ If your target engine provides vendor-managed detections (e.g., Google SecOps Cu
 > 3. **No Overlapping Registrations (1-to-1 Enforcement):** Core's `RuleUniquenessValidator` automatically enforces that no two files under `rulesets/<engine>/managed/*.yaml` can link to the same `managed.id`.
 > 4. **Deployment Status Resolution (`resolve_deployment_status`):** Because registered managed rule files (`managed/<rule_name>.yaml`) omit the `deployment:` block, your `resolve_deployment_status(self, rule: RuleEnvelope, managed_state: ManagedState | None = None) -> str` implementation must resolve `"enabled"`, `"silent"`, or `"disabled"` by looking up `rule.managed.id` inside `managed_state` (`index.yaml`).
 
-Example implementation on `EngineAdapter` (modeled after [`SecOpsAdapter`](../../src/graft/engines/secops/adapter.py)):
+`EngineAdapter` in [`src/graft/core/ports/engine.py`](../../src/graft/core/ports/engine.py) already provides default implementations of `has_managed_rule_id` and `resolve_deployment_status` that iterate `state.rulesets` directly (since `ManagedState.rulesets` is a flat `tuple[ManagedRuleSet, ...]`), which adapters can inherit directly or customize when needed:
 
 ```python
 def has_managed_rule_id(self, managed_id: str, state: ManagedState) -> bool:
-    return any(rs.id == managed_id for cat in state.categories for rs in cat.rulesets)
+    return any(rs.id == managed_id for rs in state.rulesets)
 
 
 def resolve_deployment_status(
@@ -400,14 +414,13 @@ def resolve_deployment_status(
     if rule.is_managed and rule.managed is not None:
         if managed_state is None:
             return "disabled"
-        for cat in managed_state.categories:
-            for rs in cat.rulesets:
-                if rs.id == rule.managed.id:
-                    if any(d.enabled and d.alerting for d in rs.deployments):
-                        return "enabled"
-                    if any(d.enabled for d in rs.deployments):
-                        return "silent"
-                    return "disabled"
+        for rs in managed_state.rulesets:
+            if rs.id == rule.managed.id:
+                if any(d.enabled and d.alerting for d in rs.deployments):
+                    return "enabled"
+                if any(d.enabled and not d.alerting for d in rs.deployments):
+                    return "silent"
+                return "disabled"
         return "disabled"
     if not rule.deployment.enabled:
         return "disabled"

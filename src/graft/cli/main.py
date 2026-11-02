@@ -5,6 +5,7 @@ import sys
 import time
 from collections.abc import Sequence
 from pathlib import Path
+from typing import NoReturn
 
 from graft import __version__
 from graft.cli.commands_core import (
@@ -23,8 +24,16 @@ from graft.core.env import load_env_file
 logger = logging.getLogger("graft.cli")
 
 
+class _GraftArgumentParser(argparse.ArgumentParser):
+    _last_error_message: str | None = None
+
+    def error(self, message: str) -> NoReturn:
+        self._last_error_message = message
+        super().error(message)
+
+
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(
+    parser = _GraftArgumentParser(
         prog="graft",
         description="Graft: Extensible Detection-as-Code Platform",
     )
@@ -35,7 +44,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--json", action="store_true", help="Format output as JSON on stdout")
 
-    subparsers = parser.add_subparsers(dest="command")
+    subparsers = parser.add_subparsers(dest="command", parser_class=argparse.ArgumentParser)
 
     # 1. lint
     lint_p = subparsers.add_parser(
@@ -297,13 +306,24 @@ def build_parser() -> argparse.ArgumentParser:
 def main(argv: Sequence[str] | None = None) -> int:
     load_env_file()
     args_list = sys.argv[1:] if argv is None else list(argv)
+    wants_json = "--json" in args_list
     parser = build_parser()
 
     if not args_list:
         parser.print_help()
         return 0
 
-    args = parser.parse_args(args_list)
+    try:
+        args = parser.parse_args(args_list)
+    except SystemExit as exc:
+        code = exc.code if isinstance(exc.code, int) else 1
+        if wants_json and code != 0:
+            err_msg = getattr(parser, "_last_error_message", None) or (
+                f"Invalid command-line arguments (exit code {code})"
+            )
+            sys.stdout.write(json.dumps({"success": False, "error": err_msg}) + "\n")
+            return code
+        raise
 
     # Configure logging
     log_level = logging.WARNING if args.quiet else (logging.DEBUG if args.verbose else logging.INFO)

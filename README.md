@@ -92,8 +92,8 @@ Modern SIEMs run a combination of contextual lookup tables, bespoke custom rules
 ```bash
 $ graft secops diff --env production
 === Datasets Diff ===
-[+] Dataset to create: known_scanner_ips (3 rows)
-[~] Dataset to update: security_assessment_ips (2 rows)
+[+] Dataset to create: known_scanner_ips (3 values)
+[~] Dataset to update: security_assessment_ips (2 values)
 
 === Custom Rules Diff ===
 [+] Custom rule to create: multiple_hosts_scanned
@@ -231,8 +231,16 @@ Graft also includes repository-native AI agent skills under [`.agents/skills/`](
 - `/review-rule [path_or_dir]`: Runs `graft lint` and performs a read-only 5-block engineering audit (including `%<dataset>.value` cross-checks and MITRE analytic alignment).
 - `/analyze-coverage [scope_or_question]`: Chains `graft --json mitre coverage`, `gaps`, and `inspect` to audit procedural depth (TT vs. TTP), surface cross-perimeter blind spots, and produce prioritized detection blueprints.
 
-#### 3. Pre-Merge Verification & Staging Replay Testing
+#### 3. Engine Introspection, Offline Rendering, Pre-Merge Verification & Replay Testing
 ```bash
+# List registered detection engines, capability flags, environments, and schemas
+graft engines
+graft --json engines
+
+# Synthesize engine-native query text (e.g. full YARA-L rule with meta:) completely offline
+graft secops render rulesets/secops/custom/workspace_nrd_email_opened.yaml
+graft secops render --all
+
 # Dry-run YARA-L syntax against Google SecOps verifyRuleText (non-destructive)
 graft secops verify rulesets/secops/custom/workspace_nrd_email_opened.yaml
 
@@ -281,10 +289,14 @@ graft secops pull --target datasets --env production
 graft secops managed pull --env production
 ```
 
-#### 6. MITRE Intelligence, Threat Matrix & Visibility Catalogs
+#### 6. MITRE Intelligence, Threat Matrix, Dataset & Catalog Exports
 ```bash
-# Render on-screen detection catalog table (default format)
+# Render on-screen detection catalog table (default format; metadata alias supported)
 graft export catalog
+
+# Export active reusable datasets (after UTC ttl:YYYY-MM-DD filtering) as table, CSV, or JSON
+graft export datasets
+graft export datasets --format csv --datasets-dir datasets
 
 # Inspect MITRE ATT&CK coverage, 3-state gaps, and targeted analytics/threat groups
 graft mitre coverage --enrich

@@ -20,9 +20,7 @@ body:
       label: Target Engine
       options:
         - Google SecOps (Chronicle)
-        - CrowdStrike Falcon
-        - Microsoft Sentinel
-        - Splunk Enterprise Security
+        - Other / Custom Engine
     validations:
       required: true
   - type: textarea

@@ -13,11 +13,13 @@ from graft.core.engine_registry import EngineRegistry
 from graft.core.git import get_changed_files
 from graft.core.loader import (
     DatasetLoadError,
+    RuleLoadError,
     dump_dataset_to_yaml,
     dump_rule_to_yaml,
     load_dataset_from_yaml,
     load_rule_from_yaml,
     validate_dataset_identifier,
+    validate_rule_identifier,
 )
 from graft.core.models.dataset import (
     DEPRECATED_DATASET_DESCRIPTION,
@@ -44,20 +46,50 @@ _NO_CHANGES_MSG = "No detection rules or managed manifests modified in current c
 _MANIFEST_FILENAMES = ("index.yaml", "index.yml")
 
 
+def _relative_rule_parts(file_path: Path, root_dir: Path | None = None) -> tuple[str, ...]:
+    if root_dir is not None:
+        try:
+            return file_path.resolve().relative_to(root_dir.resolve()).parts
+        except ValueError:
+            pass
+    try:
+        return file_path.resolve().relative_to(Path.cwd().resolve()).parts
+    except ValueError:
+        pass
+    parts = file_path.parts
+    for folder in ("rulesets", "rules"):
+        if folder in parts:
+            idx = len(parts) - 1 - parts[::-1].index(folder)
+            if idx + 1 < len(parts):
+                return parts[idx + 1 :]
+    return (file_path.parent.name, file_path.name)
+
+
+def _is_eligible_custom_rule_file(file_path: Path, root_dir: Path | None = None) -> bool:
+    if not file_path.is_file() or file_path.suffix not in (".yaml", ".yml"):
+        return False
+    if file_path.name in _MANIFEST_FILENAMES:
+        return False
+    rel_parts = _relative_rule_parts(file_path, root_dir=root_dir)
+    if any(part.startswith("_") for part in rel_parts):
+        return False
+    return "managed" not in rel_parts[:-1]
+
+
 def _iter_custom_yaml_files(directory: Path) -> list[Path]:
     files = sorted(
         f
         for f in directory.rglob("*.yaml")
-        if not any(part.startswith("_") for part in f.parts)
-        and "managed" not in f.parts
+        if not any(part.startswith("_") for part in f.relative_to(directory).parts)
+        and "managed" not in f.relative_to(directory).parts[:-1]
         and f.name not in _MANIFEST_FILENAMES
     )
     files.extend(
         sorted(
             f
             for f in directory.rglob("*.yml")
-            if not any(part.startswith("_") for part in f.parts)
-            and "managed" not in f.parts
+            if not any(part.startswith("_") for part in f.relative_to(directory).parts)
+            and "managed" not in f.relative_to(directory).parts[:-1]
             and f.name not in _MANIFEST_FILENAMES
         )
     )
@@ -223,12 +255,7 @@ class EngineCommandController:
                 p = Path(p_str)
                 if p.is_dir():
                     render_paths.extend(_iter_custom_yaml_files(p))
-                elif (
-                    p.is_file()
-                    and p.name not in _MANIFEST_FILENAMES
-                    and "managed" not in p.parts
-                    and not any(part.startswith("_") for part in p.parts)
-                ):
+                elif _is_eligible_custom_rule_file(p):
                     render_paths.append(p)
         elif all_rules:
             default_dir = Path(f"rulesets/{self.manifest.name}/custom")
@@ -238,16 +265,13 @@ class EngineCommandController:
             changed = get_changed_files()
             custom_dir = Path(f"rulesets/{self.manifest.name}/custom").resolve()
             for p in changed:
-                if (
-                    p.is_file()
-                    and p.suffix in (".yaml", ".yml")
-                    and not any(part.startswith("_") for part in p.parts)
-                ):
-                    try:
-                        if p.resolve().is_relative_to(custom_dir):
-                            render_paths.append(p)
-                    except ValueError:
-                        pass
+                try:
+                    if p.resolve().is_relative_to(custom_dir) and _is_eligible_custom_rule_file(
+                        p, root_dir=custom_dir
+                    ):
+                        render_paths.append(p)
+                except ValueError:
+                    pass
             render_paths.sort()
 
         if not render_paths:
@@ -312,12 +336,7 @@ class EngineCommandController:
                 p = Path(p_str)
                 if p.is_dir():
                     verify_paths.extend(_iter_custom_yaml_files(p))
-                elif (
-                    p.is_file()
-                    and p.name not in _MANIFEST_FILENAMES
-                    and "managed" not in p.parts
-                    and not any(part.startswith("_") for part in p.parts)
-                ):
+                elif _is_eligible_custom_rule_file(p):
                     verify_paths.append(p)
         elif all_rules:
             default_dir = Path(f"rulesets/{self.manifest.name}/custom")
@@ -327,16 +346,13 @@ class EngineCommandController:
             changed = get_changed_files()
             custom_dir = Path(f"rulesets/{self.manifest.name}/custom").resolve()
             for p in changed:
-                if (
-                    p.is_file()
-                    and p.suffix in (".yaml", ".yml")
-                    and not any(part.startswith("_") for part in p.parts)
-                ):
-                    try:
-                        if p.resolve().is_relative_to(custom_dir):
-                            verify_paths.append(p)
-                    except ValueError:
-                        pass
+                try:
+                    if p.resolve().is_relative_to(custom_dir) and _is_eligible_custom_rule_file(
+                        p, root_dir=custom_dir
+                    ):
+                        verify_paths.append(p)
+                except ValueError:
+                    pass
             verify_paths.sort()
 
         if not verify_paths:
@@ -423,12 +439,7 @@ class EngineCommandController:
                 p = Path(p_str)
                 if p.is_dir():
                     target_paths.extend(_iter_custom_yaml_files(p))
-                elif (
-                    p.is_file()
-                    and p.name not in _MANIFEST_FILENAMES
-                    and "managed" not in p.parts
-                    and not any(part.startswith("_") for part in p.parts)
-                ):
+                elif _is_eligible_custom_rule_file(p):
                     target_paths.append(p)
         else:
             default_dir = Path(f"rulesets/{self.manifest.name}/custom")
@@ -440,8 +451,7 @@ class EngineCommandController:
             target_paths = [
                 tp
                 for tp in target_paths
-                if (tp.resolve() in changed or tp in changed)
-                and not any(part.startswith("_") for part in tp.parts)
+                if (tp.resolve() in changed or tp in changed) and _is_eligible_custom_rule_file(tp)
             ]
 
         rules_with_tests: list[RuleEnvelope] = []
@@ -605,6 +615,7 @@ class EngineCommandController:
                     sys.stdout.write(
                         json.dumps(
                             {
+                                "success": True,
                                 "has_changes": False,
                                 "scoped": True,
                                 "message": _NO_CHANGES_MSG,
@@ -624,7 +635,7 @@ class EngineCommandController:
             custom_rules = self._load_custom_rules() if run_custom else ()
 
         has_drift = False
-        payload: dict[str, Any] = {}
+        payload: dict[str, Any] = {"success": True}
 
         # 1. Datasets diff
         if run_datasets and datasets:
@@ -738,6 +749,7 @@ class EngineCommandController:
                     sys.stdout.write(
                         json.dumps(
                             {
+                                "success": True,
                                 "applied": False,
                                 "scoped": True,
                                 "message": _NO_CHANGES_MSG,
@@ -756,7 +768,7 @@ class EngineCommandController:
             datasets = self._load_datasets() if run_datasets else ()
             custom_rules = self._load_custom_rules() if run_custom else ()
 
-        payload: dict[str, Any] = {}
+        payload: dict[str, Any] = {"success": True}
 
         # 1. Datasets apply (always before custom rules and managed content)
         if run_datasets and datasets:
@@ -927,14 +939,21 @@ class EngineCommandController:
         dataset_port = adapter.get_dataset()
 
         if (
-            target == "datasets"
+            target in ("all", "datasets")
             and self.manifest.capabilities.datasets
             and dataset_port is not None
         ):
-            out_datasets_dir.mkdir(parents=True, exist_ok=True)
             remote_datasets = dataset_port.list_datasets(names=None)
+            resolved_ds_root = out_datasets_dir.resolve()
+            if remote_datasets:
+                out_datasets_dir.mkdir(parents=True, exist_ok=True)
             for ds in remote_datasets:
+                validate_dataset_identifier(ds.metadata.name, kind="remote dataset name")
                 dest_file = out_datasets_dir / f"{ds.metadata.name}.yaml"
+                if not dest_file.resolve().is_relative_to(resolved_ds_root):
+                    raise DatasetLoadError(
+                        f"Unsafe dataset path '{dest_file}' escapes '{out_datasets_dir}'"
+                    )
                 if dest_file.exists() and not force:
                     skipped_datasets_count += 1
                     continue
@@ -953,11 +972,15 @@ class EngineCommandController:
 
         if target in ("all", "custom") and deployer is not None:
             out_dir.mkdir(parents=True, exist_ok=True)
+            resolved_out_dir = out_dir.resolve()
             remote_rules = deployer.list_rules()
             deconstruct = getattr(adapter, "deconstruct_rule", None)
             for r in remote_rules:
                 rule = deconstruct(r) if callable(deconstruct) else r
+                validate_rule_identifier(rule.metadata.name, kind="remote rule name")
                 dest_file = out_dir / f"{rule.metadata.name}.yaml"
+                if not dest_file.resolve().is_relative_to(resolved_out_dir):
+                    raise RuleLoadError(f"Unsafe rule path '{dest_file}' escapes '{out_dir}'")
                 if dest_file.exists() and not force:
                     skipped_count += 1
                     continue
@@ -965,8 +988,12 @@ class EngineCommandController:
                 imported_files.append(rule.metadata.name)
 
         if json_output:
-            payload: dict[str, Any] = {}
-            if target == "datasets":
+            payload: dict[str, Any] = {"success": True}
+            if (
+                target in ("all", "datasets")
+                and self.manifest.capabilities.datasets
+                and dataset_port is not None
+            ):
                 payload["datasets"] = {
                     "pulled": True,
                     "count": len(imported_datasets),
@@ -987,7 +1014,11 @@ class EngineCommandController:
                 }
             sys.stdout.write(json.dumps(payload, indent=2) + "\n")
         else:
-            if target == "datasets":
+            if (
+                target in ("all", "datasets")
+                and self.manifest.capabilities.datasets
+                and dataset_port is not None
+            ):
                 skip_ds_msg = (
                     f" (Skipped {skipped_datasets_count} existing files. Use --force to overwrite)"
                     if skipped_datasets_count > 0
@@ -1114,9 +1145,13 @@ def register_engine_commands(
         )
 
         # pull
-        pull_targets: list[str] = ["all", "custom", "managed"] if caps.managed_rules else ["custom"]
+        pull_targets: list[str] = ["custom"]
+        if caps.managed_rules:
+            pull_targets.append("managed")
         if caps.datasets:
             pull_targets.append("datasets")
+        if len(pull_targets) > 1:
+            pull_targets.insert(0, "all")
         pull_p = cmd_subparsers.add_parser("pull", help="Pull rules and state from remote tenant")
         pull_p.add_argument("--env", choices=envs, default=envs[-1] if envs else "production")
         pull_p.add_argument("--target", choices=pull_targets, default=pull_targets[0])

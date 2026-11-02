@@ -682,3 +682,54 @@ def test_update_exclusion_logs_warning_when_deployment_step_fails(
         "but configuring deployment failed" in msg
         for msg in warnings
     )
+
+
+def test_exclusion_update_mask_omits_application_when_empty(
+    mock_client: MockSecOpsClient, adapter: SecOpsManagedAdapter
+) -> None:
+    mock_client.set_response(
+        "POST",
+        "findingsRefinements",
+        {
+            "name": f"{INSTANCE_BASE}/findingsRefinements/fr_global",
+            "displayName": "Global exclusion",
+            "query": '$e.principal.ip != "10.0.0.1"',
+        },
+    )
+    global_excl = ManagedExclusion(
+        id="ex-global",
+        rule_id=None,
+        ruleset_id=None,
+        expression='$e.principal.ip != "10.0.0.1"',
+        description="Global exclusion",
+    )
+    adapter.create_exclusion(global_excl)
+    create_dep_call = mock_client.calls[-1]
+    assert create_dep_call["params"] == {"updateMask": "enabled,archived"}
+    assert "detectionExclusionApplication" not in (create_dep_call["body"] or {})
+
+    mock_client.calls.clear()
+    adapter.update_exclusion(global_excl)
+    update_dep_call = mock_client.calls[-1]
+    assert update_dep_call["params"] == {"updateMask": "enabled,archived"}
+    assert "detectionExclusionApplication" not in (update_dep_call["body"] or {})
+
+
+def test_secops_engine_emits_no_info_or_error_logs() -> None:
+    import ast
+    from pathlib import Path
+
+    secops_dir = Path("src/graft/engines/secops")
+    offenders: list[str] = []
+    for py_file in sorted(secops_dir.glob("*.py")):
+        tree = ast.parse(py_file.read_text(encoding="utf-8"), filename=str(py_file))
+        for node in ast.walk(tree):
+            if (
+                isinstance(node, ast.Call)
+                and isinstance(node.func, ast.Attribute)
+                and isinstance(node.func.value, ast.Name)
+                and node.func.value.id == "logger"
+                and node.func.attr in ("info", "error")
+            ):
+                offenders.append(f"{py_file}:{node.lineno}: logger.{node.func.attr}()")
+    assert offenders == [], f"Engine adapters must not call logger.info/logger.error: {offenders}"

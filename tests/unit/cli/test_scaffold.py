@@ -7,6 +7,7 @@ from graft.cli.scaffold import (
     DEFAULT_FALLBACK_OWNER,
     ScaffoldError,
     _resolve_default_owner,
+    scaffold_dataset,
     scaffold_engine,
     scaffold_rule,
 )
@@ -29,7 +30,8 @@ def test_scaffold_engine_creates_structure_and_files(tmp_path: Path) -> None:
     assert (engine_dir / "config.py").exists()
     assert (engine_dir / "compiler.py").exists()
     assert (engine_dir / "deployer.py").exists()
-    assert (engine_dir / "README.md").exists()
+    assert (engine_dir / "docs" / "README.md").is_file()
+    assert not (engine_dir / "README.md").exists()
     assert (engine_dir / "docs").is_dir()
     assert (engine_dir / ".env.example").is_file()
 
@@ -299,3 +301,40 @@ def test_scaffold_rule_populates_resolved_owner_for_custom_and_managed(
     )
     managed_env = load_rule_from_yaml(managed_path)
     assert managed_env.metadata.owners == ("Alice Security",)
+
+
+def test_scaffold_engine_adapter_uses_rulesets_and_datasets_capability(tmp_path: Path) -> None:
+    scaffold_engine("crowdstrike_next", project_root=tmp_path)
+    engine_dir = tmp_path / "src" / "graft" / "engines" / "crowdstrike_next"
+    manifest_text = (engine_dir / "engine.yaml").read_text(encoding="utf-8")
+    assert "datasets: false" in manifest_text
+
+    adapter_text = (engine_dir / "adapter.py").read_text(encoding="utf-8")
+    assert "state.categories" not in adapter_text
+    assert "state.rulesets" in adapter_text or "managed_state.rulesets" in adapter_text
+
+
+def test_scaffold_rule_and_dataset_no_orphan_dirs_and_yaml_extension_required(
+    tmp_path: Path,
+) -> None:
+    orphan_parent = tmp_path / "nonexistent_parent_dir" / "bad_rule.txt"
+    with pytest.raises(ScaffoldError, match=r"\.yaml|\.yml"):
+        scaffold_rule("sentinel", "valid_rule", project_root=tmp_path, out_path=orphan_parent)
+    assert not orphan_parent.parent.exists()
+
+    orphan_managed = tmp_path / "nonexistent_managed_dir" / "managed_rule.yaml"
+    with pytest.raises(ScaffoldError, match="requires a non-empty managed rule ID"):
+        scaffold_rule(
+            "sentinel",
+            "managed_rule",
+            project_root=tmp_path,
+            out_path=orphan_managed,
+            managed=True,
+            managed_id="   ",
+        )
+    assert not orphan_managed.parent.exists()
+
+    orphan_ds = tmp_path / "nonexistent_ds_dir" / "allowed_hosts.json"
+    with pytest.raises(ScaffoldError, match=r"\.yaml|\.yml"):
+        scaffold_dataset("allowed_hosts", project_root=tmp_path, out_path=orphan_ds)
+    assert not orphan_ds.parent.exists()
