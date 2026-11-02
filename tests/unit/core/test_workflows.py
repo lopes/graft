@@ -179,3 +179,28 @@ def test_workflows_do_not_reference_secrets_in_if_conditionals() -> None:
                     f"Workflow {wf.name} step {step_name} references secrets in 'if': {step_if}. "
                     "GitHub Actions disallows secrets in 'if:' expressions."
                 )
+
+
+def test_workflows_safe_env_interpolation_and_dual_tenant_auth() -> None:
+    pr_data: dict[str, Any] = yaml.safe_load(
+        Path(".github/workflows/pr-validation.yml").read_text(encoding="utf-8")
+    )
+    pr_paths = pr_data["on"]["pull_request"]["paths"]
+    for expected in ("docs/**", "AGENTS.md", ".agents/**", ".githooks/**", ".github/workflows/**"):
+        assert expected in pr_paths
+
+    for job in pr_data["jobs"].values():
+        for step in job.get("steps", []):
+            run_body = str(step.get("run", ""))
+            assert "${{" not in run_body, (
+                f"Step '{step.get('name')}' interpolates '${{{{ }}}}' directly in run script; "
+                "bind GitHub context via step env: instead"
+            )
+
+    deploy_data: dict[str, Any] = yaml.safe_load(
+        Path(".github/workflows/deploy-production.yml").read_text(encoding="utf-8")
+    )
+    deploy_job = deploy_data["jobs"]["deploy-production"]
+    assert "lopes/graft" not in str(deploy_job.get("if", "")), (
+        "deploy-production.yml must not hardcode a personal repository slug"
+    )

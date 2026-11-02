@@ -27,7 +27,7 @@ jobs:
   deploy-production:
     name: Deploy to SecOps & Publish Value Artifacts
     runs-on: ubuntu-latest
-    if: github.repository == 'lopes/graft'
+    if: vars.GRAFT_SECOPS_PROD_PROJECT != ''
     env:
       GRAFT_SECOPS_PROD_PROJECT: ${{ vars.GRAFT_SECOPS_PROD_PROJECT }}
       GRAFT_SECOPS_PROD_LOCATION: ${{ vars.GRAFT_SECOPS_PROD_LOCATION }}
