@@ -49,7 +49,7 @@ def extract_git_metadata(path: Path | str, cwd: Path | None = None) -> RuleGitMe
         target_arg = str(file_path)
 
     try:
-        proc = subprocess.run(  # noqa: S603
+        proc = subprocess.run(  # noqa: S603  # nosemgrep
             [
                 git_bin,
                 "-c",

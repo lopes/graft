@@ -22,7 +22,7 @@ class ScaffoldError(Exception):
 def _resolve_default_owner(cwd: Path | None = None) -> str:
     git_bin = shutil.which("git") or "git"
     try:
-        proc = subprocess.run(  # noqa: S603
+        proc = subprocess.run(  # noqa: S603  # nosemgrep
             [git_bin, "config", "user.name"],
             cwd=cwd,
             capture_output=True,

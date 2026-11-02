@@ -41,7 +41,7 @@ class SecOpsAuthResolver:
             cmd.append(f"--impersonate-service-account={self._service_account_email}")
 
         try:
-            result = subprocess.run(  # noqa: S603
+            result = subprocess.run(  # noqa: S603  # nosemgrep
                 cmd,
                 capture_output=True,
                 text=True,
