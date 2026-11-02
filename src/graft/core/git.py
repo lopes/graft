@@ -15,7 +15,7 @@ def get_changed_files(base_ref: str | None = None, cwd: Path | None = None) -> s
 
     def _run_git(args: list[str]) -> tuple[int, list[str]]:
         try:
-            proc = subprocess.run(  # noqa: S603
+            proc = subprocess.run(  # noqa: S603  # nosemgrep
                 [git_bin, "-c", "core.quotepath=false", *args],
                 cwd=effective_cwd,
                 capture_output=True,
