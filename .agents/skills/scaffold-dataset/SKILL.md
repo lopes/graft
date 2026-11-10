@@ -4,8 +4,7 @@ description: >
   Bootstrap a new Graft reusable string dataset via `graft new dataset` (or
   enrich an existing `datasets/<name>.yaml` file) and populate its `metadata`
   and `values` blocks from analyst context. Use when the user invokes
-  `/scaffold-dataset <context_or_path>`.
-disable-model-invocation: true
+  `/scaffold-dataset <context_or_path>` or asks to scaffold or enrich a Graft dataset.
 ---
 
 # Graft Dataset Scaffolder (`metadata` & `values`)

@@ -4,8 +4,7 @@ description: >
   Generate positive (`expect: 1`) and negative (`expect: 0`) synthetic event
   test vectors in a custom rule's `tests` block by analyzing its `logic` query,
   preserving all other envelope blocks untouched. Use when the user invokes
-  `/scaffold-tests <rule_path>`.
-disable-model-invocation: true
+  `/scaffold-tests <rule_path>` or asks to generate synthetic test vectors for a Graft rule.
 ---
 
 # Graft Synthetic Test Vector Scaffolder (`tests`)

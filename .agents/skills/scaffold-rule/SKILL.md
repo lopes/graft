@@ -4,8 +4,8 @@ description: >
   Bootstrap a new Graft detection rule via `graft new rule` (or enrich an
   existing rule YAML file) and populate its `metadata` and `runbook` blocks
   from analyst context while keeping `logic`, `deployment`, and `tests`
-  untouched. Use when the user invokes `/scaffold-rule <context_or_path>`.
-disable-model-invocation: true
+  untouched. Use when the user invokes `/scaffold-rule <context_or_path>` or asks
+  to scaffold or enrich a Graft detection rule.
 ---
 
 # Graft Rule Scaffolder (`metadata` & `runbook`)
