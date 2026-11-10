@@ -473,3 +473,164 @@ env_vars:
     md = export_catalog_markdown([entry])
     assert r"Alice \| Security Team" in md
     assert r"Owner \| One" in md
+
+
+def test_custom_rules_dir_engine_inference_and_reconciler_shared_description_and_block_ttl(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    from graft.core.models.managed import ManagedExclusion, ManagedState
+    from graft.core.reconciler import GitOpsReconciler
+
+    # 1. Custom --rules-dir not named rulesets/ or rules/ infers per-engine namespaces
+    alt_root = tmp_path / "custom_detections_root"
+    for idx, eng in enumerate(("siem_alpha", "crowdstrike"), start=1):
+        rpath = alt_root / eng / "custom" / "shared_rule.yaml"
+        rpath.parent.mkdir(parents=True)
+        uid = f"{idx}" * 8 + "-1111-1111-1111-111111111111"
+        rpath.write_text(
+            f"""metadata:
+  id: "{uid}"
+  name: "shared_rule"
+  description: "Rule in {eng}"
+  owners: ["SOC"]
+  mitre:
+    execution: ["T1059"]
+  tags: ["test"]
+  references: ["https://example.com"]
+logic: "condition: true"
+deployment:
+  enabled: true
+  alerting: true
+  run_frequency: "live"
+runbook:
+  context: "c"
+  triage: "t"
+  response: "r"
+tests: []
+""",
+            encoding="utf-8",
+        )
+    assert execute_lint(rules_dir=str(alt_root), json_output=True) == 0
+    capsys.readouterr()
+
+    # 2. EngineCommandController fails on missing path or corrupt rule in test/verify/render
+    manifest = EngineManifest(
+        name="siem_alpha",
+        display_name="SIEM Alpha",
+        description="Mock adapter",
+        adapter_class="mock:Adapter",
+        capabilities=EngineCapabilities(
+            datasets=True,
+            custom_rules=True,
+            managed_rules=True,
+            syntax_verification=True,
+            replay_testing=True,
+        ),
+        environments=("staging", "production"),
+    )
+    controller = EngineCommandController(manifest=manifest, registry=MagicMock(spec=EngineRegistry))
+    missing_file = tmp_path / "missing_rule.yaml"
+    for cmd_name in ("render", "verify", "test"):
+        rc_missing = controller.execute(
+            argparse.Namespace(engine_command=cmd_name, paths=[str(missing_file)]),
+            json_output=True,
+        )
+        assert rc_missing == 1
+        assert json.loads(capsys.readouterr().out)["success"] is False
+
+    corrupt_rule = alt_root / "siem_alpha" / "custom" / "corrupt_rule.yaml"
+    corrupt_rule.write_text("metadata: [unterminated", encoding="utf-8")
+    rc_corrupt = controller.execute(
+        argparse.Namespace(engine_command="test", paths=[str(corrupt_rule)]),
+        json_output=True,
+    )
+    assert rc_corrupt == 1
+    assert json.loads(capsys.readouterr().out)["success"] is False
+
+    # 3. GitOpsReconciler.apply updates distinct exclusions sharing desired_description
+    curr = ManagedState(
+        rulesets=(),
+        exclusions=(
+            ManagedExclusion(
+                id="fr_1",
+                rule_id=None,
+                ruleset_id="rs-1",
+                expression="expr_1",
+                description="Old desc",
+            ),
+            ManagedExclusion(
+                id="fr_2",
+                rule_id=None,
+                ruleset_id="rs-2",
+                expression="expr_2",
+                description="Shared desc",
+            ),
+        ),
+    )
+    des = ManagedState(
+        rulesets=(),
+        exclusions=(
+            ManagedExclusion(
+                id="fr_1",
+                rule_id=None,
+                ruleset_id="rs-1",
+                expression="expr_1_updated",
+                description="Shared desc",
+            ),
+            ManagedExclusion(
+                id="local_2",
+                rule_id=None,
+                ruleset_id="rs-2",
+                expression="expr_2_updated",
+                description="Shared desc",
+            ),
+        ),
+    )
+    port = MagicMock()
+    port.fetch_managed_state.return_value = curr
+    GitOpsReconciler().apply(desired=des, port=port)
+    updated_excls = [c.args[0] for c in port.update_exclusion.call_args_list]
+    assert updated_excls == [
+        ManagedExclusion(
+            id="fr_1",
+            rule_id=None,
+            ruleset_id="rs-1",
+            expression="expr_1_updated",
+            description="Shared desc",
+        ),
+        ManagedExclusion(
+            id="fr_2",
+            rule_id=None,
+            ruleset_id="rs-2",
+            expression="expr_2_updated",
+            description="Shared desc",
+        ),
+    ]
+
+    # 4. Block scalar TTL comment on header line expires properly
+    ds_block_yaml = """metadata:
+  name: "block_ttl_dataset"
+  description: "Block scalar ttl test"
+  owners: ["SOC"]
+  tags: ["test"]
+  references: ["https://example.com"]
+values:
+  - |- # ttl:2020-01-01
+    expired_block_val
+  - "active_val" # ttl:2099-01-01
+"""
+    ds_loaded = load_dataset_from_str(ds_block_yaml)
+    assert ds_loaded.values == ("active_val",)
+
+    # 5. Flow-style sequence with '#' inside subsequent item string value on the same line
+    ds_flow_yaml = """metadata:
+  name: "flow_hash_dataset"
+  description: "Flow sequence with hash in later item"
+  owners: ["SOC"]
+  tags: ["test"]
+  references: ["https://example.com"]
+values: ["192.0.2.1", "val # ttl:2020-01-01"]
+"""
+    ds_flow_loaded = load_dataset_from_str(ds_flow_yaml)
+    assert ds_flow_loaded.values == ("192.0.2.1", "val # ttl:2020-01-01")

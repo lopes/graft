@@ -44,12 +44,7 @@ _YARAL_TOKEN_OR_COMMENT_RE = re.compile(
 
 
 def _strip_yaral_comments(text: str) -> str:
-    def _replace(match: re.Match[str]) -> str:
-        if match.group("block_comment") or match.group("line_comment"):
-            return " "
-        return match.group(0)
-
-    return _YARAL_TOKEN_OR_COMMENT_RE.sub(_replace, text)
+    return _YARAL_TOKEN_OR_COMMENT_RE.sub(" ", text)
 
 
 def _normalize_mitre_map(mitre: Mapping[str, tuple[str, ...]]) -> dict[str, tuple[str, ...]]:
@@ -234,10 +229,12 @@ condition:
             fallback_id=remote_rule.metadata.id,
             fallback_name=remote_rule.metadata.name,
         )
+        raw_freq = remote_rule.deployment.run_frequency
+        run_freq = raw_freq if raw_freq and raw_freq != "unspecified" else "live"
         deployment = BaseDeploymentConfig(
             enabled=remote_rule.deployment.enabled,
             alerting=remote_rule.deployment.alerting,
-            run_frequency=remote_rule.deployment.run_frequency or "live",
+            run_frequency=run_freq,
         )
         runbook = Runbook(
             context=f"Imported from Google SecOps tenant for detection {metadata.name}.",

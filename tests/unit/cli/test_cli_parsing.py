@@ -167,3 +167,17 @@ def test_dynamic_engine_discovery() -> None:
     ):
         discover_and_register_engines(subparsers)
         mock_engine_mod.register_engine.assert_called_once_with(subparsers)
+
+
+def test_subparser_json_error_preserves_specific_argparse_message(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    import json
+
+    from graft.cli.main import main
+
+    rc = main(["--json", "export", "invalid_target"])
+    assert rc == 2
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["success"] is False
+    assert "invalid choice: 'invalid_target'" in payload["error"]

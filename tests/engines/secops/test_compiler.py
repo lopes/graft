@@ -468,3 +468,90 @@ values:
     synth_raw = str(result.raw_response.get("synthesized_rule_text", ""))
     assert "%known_scanner_ips.value" in synth_raw
     assert "graft_verify_placeholder" not in synth_raw
+
+
+def test_deconstruct_meta_with_inline_comments_and_not_in_dataset_substitution(
+    tmp_path: object,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from pathlib import Path
+
+    from graft.engines.secops.compiler import extract_meta_id
+
+    yaral_commented = """rule inline_comment_rule {
+  meta: // rule metadata section
+    id = "b1d72370-5fa3-4cb8-a579-22a468d6f101" // graft uuid
+    description = "Detects suspicious activity" // trailing note
+  events:
+    $e.metadata.event_type = "USER_LOGIN"
+  condition:
+    $e
+}"""
+    assert extract_meta_id(yaral_commented) == "b1d72370-5fa3-4cb8-a579-22a468d6f101"
+    meta, _ = deconstruct_yaral_rule(yaral_commented)
+    assert meta.id == "b1d72370-5fa3-4cb8-a579-22a468d6f101"
+    assert meta.description == "Detects suspicious activity"
+
+    yaral_blank_desc = """rule blank_desc_rule {
+  meta:
+    id = "b1d72370-5fa3-4cb8-a579-22a468d6f101"
+    description = "   "
+  events:
+    $e.metadata.event_type = "USER_LOGIN"
+  condition:
+    $e
+}"""
+    meta_blank, _ = deconstruct_yaral_rule(yaral_blank_desc)
+    assert meta_blank.description == "Imported detection rule for blank_desc_rule"
+
+    assert isinstance(tmp_path, Path)
+    monkeypatch.chdir(tmp_path)
+    ds_dir = tmp_path / "datasets"
+    ds_dir.mkdir(exist_ok=True)
+    (ds_dir / "known_scanner_ips.yaml").write_text(
+        """metadata:
+  name: "known_scanner_ips"
+  description: "Scanners"
+  owners: ["SOC"]
+  tags: ["network"]
+  references: ["https://example.com"]
+values:
+  - "10.10.0.50"
+""",
+        encoding="utf-8",
+    )
+
+    mock_client = MagicMock(spec=SecOpsClient)
+    mock_client.request.side_effect = [
+        {
+            "success": False,
+            "compilationDiagnostics": [
+                {
+                    "message": "Data Table Name: known_scanner_ips not found",
+                    "startLine": 1,
+                    "startColumn": 1,
+                    "severity": "ERROR",
+                }
+            ],
+        },
+        {"success": True},
+    ]
+    compiler = SecOpsCompilerAdapter(client=mock_client)
+    rule = RuleEnvelope(
+        metadata=RuleMetadata(
+            id="11111111-2222-3333-4444-555555555555",
+            name="not_in_scanner_check",
+            description="Detects non-scanner traffic",
+            owners=("SOC",),
+            mitre={"discovery": ("T1046",)},
+        ),
+        logic="events:\n  $e.principal.ip not in %known_scanner_ips.value\ncondition:\n  $e",
+        deployment=BaseDeploymentConfig(enabled=True, alerting=True, run_frequency="live"),
+        runbook=Runbook(context="c", triage="t", response="r"),
+        tests=(),
+    )
+    res = compiler.verify_rule(rule)
+    assert res.success is True
+    sent_sub_text = str(mock_client.request.call_args_list[1][1]["body"]["ruleText"])
+    assert '!= "graft_verify_placeholder"' in sent_sub_text
+    assert "not =" not in sent_sub_text

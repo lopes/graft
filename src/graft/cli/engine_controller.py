@@ -163,6 +163,7 @@ class EngineCommandController:
                         continue
                     if arch_path.stem in active_names:
                         continue
+                    active_names.add(arch_path.stem)
                     datasets.append(
                         DatasetEnvelope(
                             metadata=DatasetMetadata(
@@ -253,6 +254,13 @@ class EngineCommandController:
         if raw_paths:
             for p_str in raw_paths:
                 p = Path(p_str)
+                if not p.exists():
+                    err_msg = f"Path not found: {p}"
+                    if json_output:
+                        sys.stdout.write(json.dumps({"success": False, "error": err_msg}) + "\n")
+                    else:
+                        sys.stderr.write(f"Error: {err_msg}\n")
+                    return 1
                 if p.is_dir():
                     render_paths.extend(_iter_custom_yaml_files(p))
                 elif _is_eligible_custom_rule_file(p):
@@ -334,6 +342,13 @@ class EngineCommandController:
         if raw_paths:
             for p_str in raw_paths:
                 p = Path(p_str)
+                if not p.exists():
+                    err_msg = f"Path not found: {p}"
+                    if json_output:
+                        sys.stdout.write(json.dumps({"success": False, "error": err_msg}) + "\n")
+                    else:
+                        sys.stderr.write(f"Error: {err_msg}\n")
+                    return 1
                 if p.is_dir():
                     verify_paths.extend(_iter_custom_yaml_files(p))
                 elif _is_eligible_custom_rule_file(p):
@@ -437,6 +452,13 @@ class EngineCommandController:
         if raw_paths:
             for p_str in raw_paths:
                 p = Path(p_str)
+                if not p.exists():
+                    err_msg = f"Path not found: {p}"
+                    if json_output:
+                        sys.stdout.write(json.dumps({"success": False, "error": err_msg}) + "\n")
+                    else:
+                        sys.stderr.write(f"Error: {err_msg}\n")
+                    return 1
                 if p.is_dir():
                     target_paths.extend(_iter_custom_yaml_files(p))
                 elif _is_eligible_custom_rule_file(p):
@@ -461,7 +483,12 @@ class EngineCommandController:
                 if rule.tests and not rule.is_managed:
                     rules_with_tests.append(rule)
             except Exception as exc:
-                logger.debug("Failed loading %s during test discovery: %s", tp, exc)
+                err_msg = f"Failed loading rule '{tp}': {exc}"
+                if json_output:
+                    sys.stdout.write(json.dumps({"success": False, "error": err_msg}) + "\n")
+                else:
+                    sys.stderr.write(f"[FAIL] {tp}: {exc}\n")
+                return 1
 
         if not rules_with_tests:
             if json_output:

@@ -190,6 +190,25 @@ def test_fetch_managed_state_success(
     assert ex.expression == '$e.principal.user.userid != "svc_backup"'
     assert ex.description == "Exclude scheduled backup"
 
+    # Blank displayName falls back to schema-valid non-empty description
+    mock_client.set_response(
+        "GET",
+        "findingsRefinements",
+        {
+            "findingsRefinements": [
+                {
+                    "name": f"{INSTANCE_BASE}/findingsRefinements/ex-backup-service-account",
+                    "displayName": "   ",
+                    "query": '$e.principal.user.userid != "svc_backup"',
+                },
+            ]
+        },
+    )
+    state_blank_desc = adapter.fetch_managed_state()
+    assert (
+        state_blank_desc.exclusions[0].description == "Imported exclusion ex-backup-service-account"
+    )
+
 
 def test_set_ruleset_deployment(
     mock_client: MockSecOpsClient, adapter: SecOpsManagedAdapter

@@ -26,6 +26,9 @@ _MISSING_DATATABLE_DIAG_RE = re.compile(
 _LOCAL_DATASET_REF_RE = re.compile(r"%(?P<name>[a-zA-Z0-9_]+)\.value\b")
 _META_TACTIC_TOKEN_RE = re.compile(r"\b(TA\d{4})\b", re.IGNORECASE)
 _META_TECHNIQUE_TOKEN_RE = re.compile(r"\b(T\d{4}(?:\.\d{3})?)\b", re.IGNORECASE)
+_META_DQUOTE_RE = re.compile(r'^"((?:\\.|[^"\\])*)"(?:\s*(?://|#).*)?$')
+_META_SQUOTE_RE = re.compile(r"^'((?:\\.|[^'\\])*)'(?:\s*(?://|#).*)?$")
+_META_SECTION_RE = re.compile(r"^\s*meta:\s*(?:(?://|#)[^\r\n]*)?$", re.MULTILINE)
 
 
 def _escape_yaral_string(raw: str) -> str:
@@ -35,11 +38,13 @@ def _escape_yaral_string(raw: str) -> str:
 
 def _unescape_yaral_meta_value(raw: str) -> str:
     val = raw.strip()
-    if len(val) >= 2 and val[0] == '"' and val[-1] == '"':
-        return re.sub(r'\\([\\"])', r"\1", val[1:-1])
-    if len(val) >= 2 and val[0] == "'" and val[-1] == "'":
-        return re.sub(r"\\([\\'])", r"\1", val[1:-1])
-    return val
+    m_dq = _META_DQUOTE_RE.match(val)
+    if m_dq:
+        return re.sub(r'\\([\\"])', r"\1", m_dq.group(1))
+    m_sq = _META_SQUOTE_RE.match(val)
+    if m_sq:
+        return re.sub(r"\\([\\'])", r"\1", m_sq.group(1))
+    return re.sub(r"\s*(?://|#).*$", "", val).strip()
 
 
 def _has_local_dataset(name: str) -> bool:
@@ -121,7 +126,7 @@ def deconstruct_yaral_rule(
     rule_name = _sanitize_slug(rule_match.group(1))
     meta_dict: dict[str, str] = {}
 
-    meta_start = re.search(r"^\s*meta:\s*$", rule_text, re.MULTILINE)
+    meta_start = _META_SECTION_RE.search(rule_text)
     body_start_pos = 0
 
     if meta_start:
@@ -175,7 +180,7 @@ def deconstruct_yaral_rule(
     )
 
     meta_id = _extract_uuid(meta_dict.get("id", ""), fallback_id or rule_name)
-    desc = meta_dict.get("description", f"Imported detection rule for {rule_name}")
+    desc = meta_dict.get("description", "").strip() or f"Imported detection rule for {rule_name}"
     if len(desc) > 128:
         desc = desc[:125] + "..."
     metadata = RuleMetadata(
@@ -189,7 +194,7 @@ def deconstruct_yaral_rule(
 
 
 def extract_meta_id(rule_text: str) -> str | None:
-    meta_start = re.search(r"^\s*meta:\s*$", rule_text, re.MULTILINE)
+    meta_start = _META_SECTION_RE.search(rule_text)
     if not meta_start:
         return None
     start_idx = meta_start.end()
@@ -268,9 +273,16 @@ class SecOpsCompilerAdapter(RuleCompilerPort):
         substituted_logic = rule.logic
         for ds_name in sorted(missing_local_tables):
             substituted_logic = re.sub(
+                rf"\bnot\s+in\s+%{re.escape(ds_name)}\.value\b",
+                '!= "graft_verify_placeholder"',
+                substituted_logic,
+                flags=re.IGNORECASE,
+            )
+            substituted_logic = re.sub(
                 rf"\bin\s+%{re.escape(ds_name)}\.value\b",
                 '= "graft_verify_placeholder"',
                 substituted_logic,
+                flags=re.IGNORECASE,
             )
             substituted_logic = re.sub(
                 rf"%{re.escape(ds_name)}\.value\b",

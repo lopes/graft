@@ -261,3 +261,20 @@ capabilities:
     reg = EngineRegistry(engines_dir=tmp_path, strict=True)
     manifest = reg.get("mock_eng")
     assert manifest.capabilities.datasets is True
+
+
+def test_dataset_reconciler_diff_detects_remote_duplicate_rows() -> None:
+    reconciler = DatasetReconciler()
+    remote_with_duplicates = _make_dataset(
+        "known_scanner_ips",
+        ("192.0.2.10", "192.0.2.10"),
+        description="Scanner IP list.",
+    )
+    desired_deduped = _make_dataset(
+        "known_scanner_ips",
+        ("192.0.2.10",),
+        description="Scanner IP list.",
+    )
+    diff = reconciler.diff(current=(remote_with_duplicates,), desired=(desired_deduped,))
+    assert diff.has_changes is True
+    assert diff.datasets_to_update == (desired_deduped,)

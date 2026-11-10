@@ -404,3 +404,27 @@ def test_client_rejects_cleartext_http_urls(
     assert "dataTables/my%20table/dataTableRows" in quoted
     standard = client._resolve_url("rules/ru_12345")
     assert standard.endswith("/rules/ru_12345")
+
+
+def test_client_http_error_non_dict_json_payloads(
+    secops_config: SecOpsConfig,
+    auth_resolver: SecOpsAuthResolver,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    client = SecOpsClient(config=secops_config, auth_resolver=auth_resolver)
+
+    for raw_body in (b'["error"]', b"123", b'[{"error": {"message": "Array wrapped error"}}]'):
+
+        def mock_urlopen(req: urllib.request.Request, _b: bytes = raw_body, **kwargs: Any) -> Any:
+            raise urllib.error.HTTPError(
+                url=req.full_url,
+                code=400,
+                msg="Bad Request",
+                hdrs=None,  # type: ignore[arg-type]
+                fp=io.BytesIO(_b),
+            )
+
+        monkeypatch.setattr(urllib.request, "urlopen", mock_urlopen)
+        with pytest.raises(SecOpsApiError) as exc_info:
+            client.request("GET", "rules")
+        assert exc_info.value.status_code == 400
