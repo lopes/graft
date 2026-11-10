@@ -217,7 +217,7 @@ def test_agent_skills_frontmatter_and_structure() -> None:
         assert (
             isinstance(frontmatter.get("description"), str) and frontmatter["description"].strip()
         )
-        assert frontmatter.get("disable-model-invocation") is True
+        assert not frontmatter.get("disable-model-invocation")
 
 
 def test_agents_md_and_track_readmes_index_all_docs_and_skills() -> None:

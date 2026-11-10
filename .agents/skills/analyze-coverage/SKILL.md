@@ -4,13 +4,20 @@ description: >
   Analyze MITRE ATT&CK detection coverage, threat group exposure (Gxxxx),
   procedural depth (TT vs. TTP), cross-perimeter blind spots, and prioritized
   telemetry gaps using `graft --json mitre` commands without loading raw STIX
-  files into model context. Use when the user invokes `/analyze-coverage`.
-disable-model-invocation: true
+  files into model context. Use when the user invokes `/analyze-coverage` or asks
+  to analyze MITRE ATT&CK coverage and detection gaps.
 ---
 
 # Graft Coverage & Threat Intelligence Analyst (`analyze-coverage`)
 
 You are a Staff Detection Engineer and Cyber Threat Intelligence (CTI) Analyst operating inside the **Graft** Detection-as-Code platform. Your mission is to evaluate the repository's detection posture against the MITRE ATT&CK Enterprise taxonomy, audit whether "covered" techniques actually hold up at the **Procedure (P)** and multi-perimeter level, uncover prioritized gaps, and feed concrete insights back into hardening existing rules and scaffolding new ones.
+
+> [!TIP]
+> **Parallel Subagent Drill-Down (`invoke_subagent`):**
+> After running Steps 1 and 2 (`graft --json mitre coverage --enrich`, `export catalog`, and `mitre gaps`), offload Steps 3 and 4 to **2 parallel `self` subagents** via `invoke_subagent` in a single turn:
+> 1. **Subagent 1 (`Role: "Procedural Depth Auditor"`):** Runs `uv run graft --json mitre inspect <covered_Txxxx> --analytics` on covered techniques and compares them against existing rules to return Section 2 of the report.
+> 2. **Subagent 2 (`Role: "Priority Gap Blueprint Architect"`):** Runs `uv run graft --json mitre inspect <gap_Txxxx> --analytics` on the top uncovered/partial gaps to return Sections 3 and 4 (Ready-to-Scaffold Detection Blueprints).
+> This keeps verbose STIX `--analytics` JSON output out of the main conversation context.
 
 Ground your analysis in:
 - [Visibility, Threat Matrix & Catalog Tooling](../../../docs/analysts/visibility_and_matrix.md)

@@ -4,13 +4,18 @@ description: >
   Perform a read-only 5-block quality, security, and schema audit on one or more
   Graft detection rules (`metadata`, `logic`, `deployment`, `runbook`, `tests`),
   running `graft lint` and outputting a structured PASS / WARN / FAIL report
-  with concrete suggested fixes. Use when the user invokes `/review-rule`.
-disable-model-invocation: true
+  with concrete suggested fixes. Use when the user invokes `/review-rule` or asks
+  to review or audit Graft detection rules.
 ---
 
 # Graft Detection Rule Reviewer (`review-rule`)
 
 You are a Principal Threat Detection Engineer conducting a rigorous, high-signal peer review of one or more **Graft** detection rules. By default, this skill is **strictly read-only**: you run deterministic validation (`uv run graft lint`) and audit all envelope blocks against Graft's engineering standards, producing a structured report with concrete remediation snippets without mutating any files unless the analyst explicitly asks you to apply the fixes.
+
+> [!IMPORTANT]
+> **Subagent Delegation & Parallel Fan-Out (`invoke_subagent`):**
+> - **Clean-Context Anti-Contamination:** If the target rule was scaffolded or edited earlier in the current conversation, delegate Steps 1–3 to an isolated `self` subagent via `invoke_subagent` so the authoring context never grades its own work.
+> - **Multi-Rule Parallel Fan-Out:** When reviewing 2 or more rule files (or an entire `rulesets/<engine>/` directory), run `uv run graft lint <targets>` once, then batch the target rules across up to **4 parallel `self` subagents** in a single turn. Each subagent audits its assigned rule(s) against the Five-Block Review Checklist and returns the structured Markdown report for the main agent to present.
 
 Ground every review finding in:
 - [Rule Authoring Guide](../../../docs/analysts/rule_authoring.md)
