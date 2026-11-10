@@ -152,13 +152,22 @@ class SecOpsClient:
                 try:
                     payload_raw = err.read()
                     if payload_raw:
-                        error_json: dict[str, Any] = json.loads(payload_raw.decode("utf-8"))
-                        if "error" in error_json and isinstance(error_json["error"], dict):
+                        error_json: Any = json.loads(payload_raw.decode("utf-8"))
+                        if (
+                            isinstance(error_json, list)
+                            and error_json
+                            and isinstance(error_json[0], dict)
+                        ):
+                            error_json = error_json[0]
+                        if isinstance(error_json, dict) and isinstance(
+                            error_json.get("error"), dict
+                        ):
                             error_info = error_json["error"]
                             error_msg = error_info.get("message", error_msg)
-                            error_status = error_info.get("status", "")
-                            error_details = error_info.get("details", [])
-                except (json.JSONDecodeError, UnicodeDecodeError, ValueError):
+                            error_status = str(error_info.get("status", ""))
+                            raw_details = error_info.get("details", [])
+                            error_details = raw_details if isinstance(raw_details, list) else []
+                except (json.JSONDecodeError, UnicodeDecodeError, ValueError, TypeError, OSError):
                     pass
 
                 raise SecOpsApiError(

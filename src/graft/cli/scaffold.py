@@ -6,7 +6,7 @@ from pathlib import Path
 
 import yaml
 
-from graft.core.engine_registry import EngineError, EngineRegistry
+from graft.core.engine_registry import RESERVED_CORE_COMMANDS, EngineError, EngineRegistry
 from graft.core.validation.schema_validator import SchemaValidator
 
 IDENTIFIER_PATTERN = re.compile(r"^[a-z0-9]+(?:_[a-z0-9]+)*$")
@@ -37,6 +37,10 @@ def _resolve_default_owner(cwd: Path | None = None) -> str:
 
 
 def _validate_identifier(name: str, kind: str) -> None:
+    if kind == "engine" and name in RESERVED_CORE_COMMANDS:
+        raise ScaffoldError(
+            f"Invalid engine name '{name}'. '{name}' is a reserved core command keyword."
+        )
     if not (1 <= len(name) <= MAX_IDENTIFIER_LEN) or not IDENTIFIER_PATTERN.match(name):
         raise ScaffoldError(
             f"Invalid {kind} name '{name}'. Must be 1..{MAX_IDENTIFIER_LEN} chars matching "

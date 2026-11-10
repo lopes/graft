@@ -245,7 +245,9 @@ class SecOpsManagedAdapter(ManagedEnginePort):
         for raw_ex in raw_exclusions:
             name_res = str(raw_ex.get("name", ""))
             excl_id = name_res.split("/")[-1] if "/" in name_res else name_res
-            desc = str(raw_ex.get("displayName", ""))
+            desc = (
+                str(raw_ex.get("displayName", "")).strip() or f"Imported exclusion {excl_id}"[:256]
+            )
             query = str(raw_ex.get("query", ""))
 
             dep_data = deployments_by_refinement.get(excl_id)

@@ -49,7 +49,7 @@ class SecOpsDeployerAdapter(RuleDeployerPort):
             if not page_token:
                 break
 
-        deployments_map: dict[str, tuple[bool, bool]] = {}
+        deployments_map: dict[str, tuple[bool, bool, str]] = {}
         dep_page_token: str | None = None
         while True:
             dep_params: dict[str, str] = {"pageSize": "200"}
@@ -80,7 +80,14 @@ class SecOpsDeployerAdapter(RuleDeployerPort):
                     )
                     enabled = bool(dep.get("enabled", False))
                     alerting = bool(dep.get("alerting", False))
-                    deployments_map[dep_rule_id] = (enabled, alerting)
+                    raw_freq = str(dep.get("runFrequency", "")).strip().upper()
+                    if raw_freq in ("LIVE", "HOURLY", "DAILY"):
+                        run_freq = raw_freq.lower()
+                    elif raw_freq == "RUN_FREQUENCY_UNSPECIFIED":
+                        run_freq = "unspecified"
+                    else:
+                        run_freq = "live"
+                    deployments_map[dep_rule_id] = (enabled, alerting, run_freq)
             next_dep_token = dep_response.get("nextPageToken")
             dep_page_token = str(next_dep_token) if next_dep_token else None
             if not dep_page_token:
@@ -97,7 +104,9 @@ class SecOpsDeployerAdapter(RuleDeployerPort):
             display_name = str(raw.get("displayName", secops_id))
             text = str(raw.get("text", ""))
 
-            dep_enabled, dep_alerting = deployments_map.get(secops_id, (False, False))
+            dep_enabled, dep_alerting, dep_freq = deployments_map.get(
+                secops_id, (False, False, "live")
+            )
 
             meta_id = extract_meta_id(text)
             effective_id = meta_id or secops_id
@@ -114,7 +123,11 @@ class SecOpsDeployerAdapter(RuleDeployerPort):
                 owners=(),
                 mitre={},
             )
-            deployment = BaseDeploymentConfig(enabled=dep_enabled, alerting=dep_alerting)
+            deployment = BaseDeploymentConfig(
+                enabled=dep_enabled,
+                alerting=dep_alerting,
+                run_frequency=dep_freq,
+            )
             runbook = Runbook(context="", triage="", response="")
             envelopes.append(
                 RuleEnvelope(

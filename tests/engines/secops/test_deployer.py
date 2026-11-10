@@ -452,3 +452,57 @@ def test_create_rule_rolls_back_created_rule_when_set_rule_state_fails(
         deployer.create_rule(sample_rule)
 
     mock_client.request.assert_any_call("DELETE", "rules/ru_leaked_999")
+
+
+def test_list_rules_preserves_run_frequency_without_false_reconciler_drift(
+    mock_client: MagicMock,
+) -> None:
+    from graft.core.reconciler import CustomRuleReconciler
+    from graft.engines.secops.adapter import SecOpsAdapter
+    from graft.engines.secops.compiler import synthesize_yaral_rule
+
+    local_rule = RuleEnvelope(
+        metadata=RuleMetadata(
+            id="b1d72370-5fa3-4cb8-a579-22a468d6f101",
+            name="live_rule_sync",
+            description="Test live rule sync",
+            owners=("SOC",),
+            mitre={"execution": ("T1059.001",)},
+        ),
+        logic='events:\n  $e.metadata.event_type = "PROCESS_LAUNCH"\ncondition:\n  $e',
+        deployment=BaseDeploymentConfig(enabled=True, alerting=True, run_frequency="live"),
+        runbook=Runbook(context="c", triage="t", response="r"),
+        tests=(),
+    )
+    synth_text, _ = synthesize_yaral_rule(local_rule)
+    mock_client.request.side_effect = [
+        {
+            "rules": [
+                {
+                    "name": "projects/p/locations/l/instances/i/rules/ru_1",
+                    "displayName": "live_rule_sync",
+                    "text": synth_text,
+                }
+            ]
+        },
+        {
+            "ruleDeployments": [
+                {
+                    "name": "projects/p/locations/l/instances/i/rules/ru_1/deployment",
+                    "enabled": True,
+                    "alerting": True,
+                }
+            ]
+        },
+    ]
+    deployer = SecOpsDeployerAdapter(client=mock_client)
+    remote_rules = deployer.list_rules()
+    assert remote_rules[0].deployment.run_frequency == "live"
+
+    adapter = SecOpsAdapter(client=mock_client)
+    diff = CustomRuleReconciler().diff(
+        current=remote_rules,
+        desired=(local_rule,),
+        content_comparator=adapter.are_rules_equal,
+    )
+    assert diff.has_changes is False

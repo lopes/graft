@@ -209,7 +209,7 @@ def execute_lint(
             if other_path.name in _MANIFEST_FILENAMES or other_path.resolve() in target_set:
                 continue
             try:
-                engine = _infer_engine_from_path(other_path)
+                engine = _infer_engine_from_path(other_path, rules_dir=rules_dir)
                 other_rule = load_rule_from_yaml(other_path, validate_mitre=False)
                 uniqueness_validator.add_and_validate(other_rule, engine=engine, path=other_path)
             except (RuleLoadError, ValueError, OSError):
@@ -244,7 +244,7 @@ def execute_lint(
                     )
                 seen_datasets[dataset.metadata.name] = file_path
             else:
-                engine = _infer_engine_from_path(file_path)
+                engine = _infer_engine_from_path(file_path, rules_dir=rules_dir)
 
                 if is_manifest:
                     raw_text = file_path.read_text(encoding="utf-8")
@@ -439,7 +439,7 @@ def _load_all_rules(rules_dir: Path | str = "rulesets") -> list[tuple[RuleEnvelo
         if yaml_path.name in _MANIFEST_FILENAMES:
             continue
         try:
-            engine = _infer_engine_from_path(yaml_path)
+            engine = _infer_engine_from_path(yaml_path, rules_dir=str(rules_dir))
             rule = load_rule_from_yaml(yaml_path, validate_mitre=False)
             loaded.append((rule, engine, yaml_path))
         except (RuleLoadError, ValueError, OSError):

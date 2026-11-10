@@ -1,4 +1,3 @@
-import dataclasses
 import logging
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -265,22 +264,20 @@ class GitOpsReconciler:
 
         active_dep_diffs = [d for d in reconcile_diff.deployment_diffs if d.has_changes]
         active_excl_deletes = list(reconcile_diff.exclusions_to_delete)
-        active_excl_updates: list[tuple[ExclusionDiff, ManagedExclusion]] = []
-        for u_diff in reconcile_diff.exclusions_to_update:
-            if u_diff.has_changes:
-                des_match = next(
-                    (
-                        e
-                        for e in desired.exclusions
-                        if e.id == u_diff.id
-                        or (e.description and e.description == u_diff.desired_description)
-                    ),
-                    None,
-                )
-                if des_match is not None:
-                    active_excl_updates.append(
-                        (u_diff, dataclasses.replace(des_match, id=u_diff.id))
-                    )
+        active_excl_updates: list[tuple[ExclusionDiff, ManagedExclusion]] = [
+            (
+                u_diff,
+                ManagedExclusion(
+                    id=u_diff.id,
+                    rule_id=u_diff.desired_rule_id,
+                    ruleset_id=u_diff.desired_ruleset_id,
+                    expression=u_diff.desired_expression,
+                    description=u_diff.desired_description,
+                ),
+            )
+            for u_diff in reconcile_diff.exclusions_to_update
+            if u_diff.has_changes
+        ]
         active_excl_creates = list(reconcile_diff.exclusions_to_create)
 
         planned_labels: list[str] = [
@@ -414,7 +411,7 @@ class CustomRuleReconciler:
 
             if des_rule.metadata.id:
                 for idx, r in enumerate(current):
-                    if r.metadata.id == des_rule.metadata.id:
+                    if r.metadata.id == des_rule.metadata.id and idx not in matched_current_indices:
                         curr_idx = idx
                         curr_rule = r
                         break
@@ -588,7 +585,9 @@ class DatasetReconciler:
                 datasets_to_create.append(des_ds)
                 continue
 
-            values_equal = set(des_ds.values) == set(curr_ds.values)
+            values_equal = len(des_ds.values) == len(curr_ds.values) and set(des_ds.values) == set(
+                curr_ds.values
+            )
             description_equal = (
                 des_ds.metadata.description.strip() == curr_ds.metadata.description.strip()
             )

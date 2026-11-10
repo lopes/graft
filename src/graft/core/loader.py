@@ -199,6 +199,14 @@ def load_rule_from_yaml(
                     sub_parts = parts[idx + 1 :]
                 break
 
+        if sub_parts is None:
+            for folder in ("custom", "managed"):
+                if folder in parts[:-1]:
+                    idx = len(parts) - 2 - parts[:-1][::-1].index(folder)
+                    if idx >= 1:
+                        sub_parts = parts[idx - 1 :]
+                    break
+
         if sub_parts is not None and len(sub_parts) >= 2:
             engine = sub_parts[0]
             is_managed_dir = "managed" in sub_parts[:-1]
@@ -213,11 +221,7 @@ def load_rule_from_yaml(
             else:
                 schema_name = "base_custom"
         else:
-            try:
-                rel_parts = file_path.resolve().relative_to(Path.cwd().resolve()).parts
-                is_managed_dir = "managed" in rel_parts[:-1]
-            except ValueError:
-                is_managed_dir = file_path.parent.name == "managed"
+            is_managed_dir = "managed" in parts[:-1]
             schema_name = "base_managed" if is_managed_dir else "base_custom"
 
     return load_rule_from_str(content, schema_name=schema_name, validate_mitre=validate_mitre)
@@ -307,17 +311,28 @@ def _extract_active_dataset_values(
 
     active_values: list[str] = []
     seen_node_ids: set[int] = set()
-    for item_node in values_node.value:
+    items = values_node.value
+    for idx, item_node in enumerate(items):
         if not isinstance(item_node, yaml.ScalarNode) or id(item_node) in seen_node_ids:
             raise DatasetLoadError(
                 "Dataset 'values' must contain only plain scalar strings without aliases"
             )
         seen_node_ids.add(id(item_node))
         val_str = str(item_node.value)
-        end_line_idx = item_node.end_mark.line
-        line_no = end_line_idx + 1
-        if 0 <= end_line_idx < len(raw_lines):
-            trailing = raw_lines[end_line_idx][item_node.end_mark.column :]
+        if item_node.style in ("|", ">"):
+            comment_line_idx = item_node.start_mark.line
+            comment_col = item_node.start_mark.column
+        else:
+            comment_line_idx = item_node.end_mark.line
+            comment_col = item_node.end_mark.column
+        line_no = comment_line_idx + 1
+        if 0 <= comment_line_idx < len(raw_lines):
+            next_col: int | None = None
+            if idx + 1 < len(items):
+                next_node = items[idx + 1]
+                if next_node.start_mark.line == comment_line_idx:
+                    next_col = next_node.start_mark.column
+            trailing = raw_lines[comment_line_idx][comment_col:next_col]
             if "#" in trailing:
                 comment_text = trailing.split("#", 1)[1]
                 ttl_matches = DATASET_TTL_COMMENT_PATTERN.findall(comment_text)

@@ -28,12 +28,12 @@ class _GraftArgumentParser(argparse.ArgumentParser):
     _last_error_message: str | None = None
 
     def error(self, message: str) -> NoReturn:
-        self._last_error_message = message
+        _GraftArgumentParser._last_error_message = message
         super().error(message)
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = _GraftArgumentParser(
+    parser: argparse.ArgumentParser = _GraftArgumentParser(
         prog="graft",
         description="Graft: Extensible Detection-as-Code Platform",
     )
@@ -44,7 +44,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--json", action="store_true", help="Format output as JSON on stdout")
 
-    subparsers = parser.add_subparsers(dest="command", parser_class=argparse.ArgumentParser)
+    subparsers = parser.add_subparsers(dest="command")
 
     # 1. lint
     lint_p = subparsers.add_parser(
@@ -305,6 +305,7 @@ def build_parser() -> argparse.ArgumentParser:
 
 def main(argv: Sequence[str] | None = None) -> int:
     load_env_file()
+    _GraftArgumentParser._last_error_message = None
     args_list = sys.argv[1:] if argv is None else list(argv)
     wants_json = "--json" in args_list
     parser = build_parser()

@@ -182,6 +182,7 @@ def test_secops_adapter_validate_rule_dataset_references() -> None:
     adapter.validate_rule_dataset_references(
         _rule_with_logic(
             "events:\n  $e.principal.ip in %known_scanner_ips.value\n"
+            '  $e.target.process.command_line = "cmd /c echo %known_scanner_ips%"\n'
             "  // $e.principal.ip in cidr %known_scanner_ips\n"
             "  /* $e.principal.ip in %known_scanner_ips.ip */\n"
             "condition:\n  $e"

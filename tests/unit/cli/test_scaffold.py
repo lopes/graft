@@ -338,3 +338,18 @@ def test_scaffold_rule_and_dataset_no_orphan_dirs_and_yaml_extension_required(
     with pytest.raises(ScaffoldError, match=r"\.yaml|\.yml"):
         scaffold_dataset("allowed_hosts", project_root=tmp_path, out_path=orphan_ds)
     assert not orphan_ds.parent.exists()
+
+
+@pytest.mark.parametrize(
+    "reserved_name",
+    ["lint", "export", "mitre", "new", "engines", "help"],
+)
+def test_scaffold_engine_and_rule_reject_reserved_core_commands(
+    tmp_path: Path,
+    reserved_name: str,
+) -> None:
+    with pytest.raises(ScaffoldError, match="reserved core command keyword"):
+        scaffold_engine(reserved_name, project_root=tmp_path)
+
+    with pytest.raises(ScaffoldError, match="reserved core command keyword"):
+        scaffold_rule(reserved_name, "valid_rule", project_root=tmp_path)
