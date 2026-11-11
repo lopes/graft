@@ -121,8 +121,19 @@ def _infer_engine_from_path(file_path: Path, rules_dir: str | None = None) -> st
             idx = len(parts) - 1 - parts[::-1].index(folder)
             if idx + 1 < len(parts):
                 return parts[idx + 1]
-    engines = EngineRegistry().list_engines()
+    registry = EngineRegistry()
+    for folder in ("custom", "managed"):
+        if folder in parts[:-1]:
+            idx = len(parts) - 2 - parts[:-1][::-1].index(folder)
+            if idx >= 1 and registry.has(parts[idx - 1]):
+                return parts[idx - 1]
+    engines = registry.list_engines()
     if engines:
+        is_managed_path = "managed" in parts[:-1] or file_path.name in _MANIFEST_FILENAMES
+        if is_managed_path:
+            for eng in engines:
+                if eng.capabilities.managed_rules:
+                    return eng.name
         return engines[0].name
     return "custom"
 

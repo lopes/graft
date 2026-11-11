@@ -220,9 +220,8 @@ def test_schema_and_dataclass_completeness() -> None:
     dumped_custom = rule_to_dict(sample_custom)
     assert set(dumped_custom.keys()) == set(custom_schema["properties"].keys())
     assert set(dumped_custom["metadata"].keys()) == rule_meta_fields
-    assert set(dumped_custom["deployment"].keys()) == {
-        f.name for f in dataclasses.fields(BaseDeploymentConfig)
-    }
+    assert dumped_custom["deployment"] == sample_custom.deployment.to_dict()
+    assert BaseDeploymentConfig().to_dict() == {}
 
     sample_dataset = DatasetEnvelope(
         metadata=DatasetMetadata(

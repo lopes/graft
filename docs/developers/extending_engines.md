@@ -100,7 +100,7 @@ env_vars:
 
 ## 4. Step 3: Define Engine Custom Rule Schema (`schemas/custom.schema.json`)
 
-Custom detection envelopes use a 5-block structure: `metadata`, `logic`, `deployment`, `runbook`, `tests`. Each engine co-locates a Draft 2020-12 JSON schema (`schemas/custom.schema.json`) that extends `base_custom.schema.json` via `allOf`.
+Custom detection envelopes use a 5-block structure: `metadata`, `logic`, `deployment`, `runbook`, `tests`. In Core, `base_custom.schema.json` defines `deployment` as an empty `"type": "object"`, and `BaseDeploymentConfig()` is empty (`{}`) by default—never add engine-specific deployment fields to Core models or schemas. Each engine co-locates a Draft 2020-12 JSON schema (`schemas/custom.schema.json`) that extends `base_custom.schema.json` via `allOf` to define its own native `deployment` parameters (and returns its scaffold defaults from `EngineAdapter.get_default_deployment_config()`).
 
 Edit `src/graft/engines/sentinel/schemas/custom.schema.json`:
 

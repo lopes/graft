@@ -778,3 +778,25 @@ def test_custom_rule_reconciler_detects_run_frequency_drift() -> None:
     diff = CustomRuleReconciler().diff(current=(curr,), desired=(des,))
     assert diff.has_changes is True
     assert len(diff.rules_to_update) == 1
+
+
+def test_custom_rule_reconciler_detects_engine_specific_deployment_drift() -> None:
+    curr = RuleEnvelope(
+        metadata=RuleMetadata(id="uuid-eng", name="eng_rule", description="desc"),
+        logic="condition: true",
+        deployment=BaseDeploymentConfig.from_dict(
+            {"enabled": True, "match_object_type": "file", "daily_limit": 100}
+        ),
+        runbook=Runbook(),
+    )
+    des = RuleEnvelope(
+        metadata=RuleMetadata(id="uuid-eng", name="eng_rule", description="desc"),
+        logic="condition: true",
+        deployment=BaseDeploymentConfig.from_dict(
+            {"enabled": True, "match_object_type": "url", "daily_limit": 250}
+        ),
+        runbook=Runbook(),
+    )
+    diff = CustomRuleReconciler().diff(current=(curr,), desired=(des,))
+    assert diff.has_changes is True
+    assert len(diff.rules_to_update) == 1

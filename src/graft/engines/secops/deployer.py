@@ -156,11 +156,13 @@ class SecOpsDeployerAdapter(RuleDeployerPort):
         self._remote_ids_by_meta_id[rule.metadata.id] = secops_id
         self._remote_ids_by_meta_id[secops_id] = secops_id
 
+        dep_enabled = bool(rule.deployment.get("enabled", True))
+        dep_alerting = bool(rule.deployment.get("alerting", True))
         try:
             self.set_rule_state(
                 rule_id=secops_id,
-                enabled=rule.deployment.enabled,
-                alerting=rule.deployment.alerting,
+                enabled=dep_enabled,
+                alerting=dep_alerting,
             )
         except Exception:
             logger.warning(
@@ -168,8 +170,8 @@ class SecOpsDeployerAdapter(RuleDeployerPort):
                 "[enabled=%s, alerting=%s] failed",
                 rule.metadata.name,
                 secops_id,
-                rule.deployment.enabled,
-                rule.deployment.alerting,
+                dep_enabled,
+                dep_alerting,
             )
             try:
                 self.delete_rule(secops_id)
@@ -200,11 +202,13 @@ class SecOpsDeployerAdapter(RuleDeployerPort):
             body={"text": rule_text},
             params={"update_mask": "text"},
         )
+        dep_enabled = bool(rule.deployment.get("enabled", True))
+        dep_alerting = bool(rule.deployment.get("alerting", True))
         try:
             self.set_rule_state(
                 rule_id=secops_id,
-                enabled=rule.deployment.enabled,
-                alerting=rule.deployment.alerting,
+                enabled=dep_enabled,
+                alerting=dep_alerting,
             )
         except Exception:
             logger.warning(
@@ -212,8 +216,8 @@ class SecOpsDeployerAdapter(RuleDeployerPort):
                 "[enabled=%s, alerting=%s] failed",
                 rule.metadata.name,
                 secops_id,
-                rule.deployment.enabled,
-                rule.deployment.alerting,
+                dep_enabled,
+                dep_alerting,
             )
             raise
         self._remote_ids_by_name[rule.metadata.name] = secops_id

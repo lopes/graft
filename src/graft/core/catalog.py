@@ -67,9 +67,9 @@ def resolve_rule_deployment_status(
 ) -> str:
     if adapter is not None and hasattr(adapter, "resolve_deployment_status"):
         return adapter.resolve_deployment_status(rule, managed_state=managed_state)
-    if rule.is_managed or not rule.deployment.enabled:
+    if rule.is_managed or not bool(rule.deployment.get("enabled", True)):
         return "disabled"
-    if not rule.deployment.alerting:
+    if rule.deployment.get("alerting") is False:
         return "silent"
     return "enabled"
 

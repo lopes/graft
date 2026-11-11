@@ -57,11 +57,12 @@ Engine-native detection query string. Each engine adapter compiles and validates
 - **Example (Google SecOps):** Contains YARA-L 2.0 sections (`events:`, `match:`, `outcome:`, `condition:`). Graft automatically synthesizes the `rule <name> { meta: ... }` wrapper (`id`, `description`, `tactic`, and `technique`) when sending to Chronicle APIs.
 
 ### Block 3: `deployment`
-Operational controls governing how the rule runs in the target engine.
+Engine-specific operational controls governing how the rule runs in the target detection engine.
 
-- `enabled` *(boolean, required)*: Whether the rule is actively executing against telemetry.
-- `alerting` *(boolean, required)*: Whether matches produce SOC alerts or silent detections.
-- Engine-specific deployment parameters (for example, `run_frequency: live | hourly | daily | unspecified` in Google SecOps) are validated by the engine's `custom.schema.json`.
+In Core ([`base_custom.schema.json`](../../src/graft/core/schemas/base_custom.schema.json) and [`BaseDeploymentConfig`](../../src/graft/core/models/rule.py)), `deployment` is an empty object container (`type: object`)—Core never centralizes or assumes engine-specific deployment parameters. Instead, each engine adapter defines and validates its own native `deployment` schema in `src/graft/engines/<engine>/schemas/custom.schema.json`:
+
+- **Google SecOps (`secops`):** Requires `enabled` (`boolean`), `alerting` (`boolean`), and `run_frequency` (`"live" | "hourly" | "daily" | "unspecified"`).
+- **Google Threat Intelligence (`gti`):** Requires `type` (`"livehunt" | "retrohunt"`) and `enabled` (`boolean`). For `type: "livehunt"`, requires `subtype` (`"file" | "url" | "domain" | "ip_address"`) and supports optional `daily_limit` (`1..10000`) and `notification_emails`. For `type: "retrohunt"`, requires `corpus` (`"main" | "goodware"`) and supports optional `start_time`, `end_time`, and `notification_emails`.
 
 
 ### Block 4: `runbook`

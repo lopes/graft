@@ -345,3 +345,58 @@ def test_load_rule_from_yaml_allows_valid_64_char_filename_different_from_metada
     rule_file.write_text(valid_yaml_content, encoding="utf-8")
     envelope = load_rule_from_yaml(rule_file)
     assert envelope.metadata.name == "powershell_encoded_launch"
+
+
+def test_engine_specific_deployment_parameters_roundtrip_cleanly(
+    tmp_path: Path,
+) -> None:
+    engine_rule_yaml = """metadata:
+  id: "c4e9b8f2-89b1-4f81-9b16-928d54128f73"
+  name: "custom_engine_rule"
+  description: "Engine rule with native deployment parameters"
+  owners:
+    - "Detection Engineering"
+  mitre:
+    initial-access:
+      - "T1566.002"
+  tags:
+    - "custom"
+  references:
+    - "https://example.com"
+logic: |
+  condition:
+    true
+deployment:
+  enabled: true
+  match_object_type: "url"
+  daily_limit: 250
+  notification_emails:
+    - "alerts@example.com"
+runbook:
+  context: "Context text"
+  triage: "Triage text"
+  response: "Response text"
+tests: []
+"""
+    envelope = load_rule_from_str(engine_rule_yaml, schema_name="base_custom")
+    assert envelope.deployment.enabled is True
+    assert envelope.deployment.to_dict() == {
+        "enabled": True,
+        "match_object_type": "url",
+        "daily_limit": 250,
+        "notification_emails": ["alerts@example.com"],
+    }
+
+    dumped_dict = rule_to_dict(envelope)
+    assert "run_frequency" not in dumped_dict["deployment"]
+    assert dumped_dict["deployment"] == {
+        "enabled": True,
+        "match_object_type": "url",
+        "daily_limit": 250,
+        "notification_emails": ["alerts@example.com"],
+    }
+
+    out_file = tmp_path / "custom_engine_rule.yaml"
+    dump_rule_to_yaml(envelope, out_file)
+    reloaded = load_rule_from_yaml(out_file, schema_name="base_custom")
+    assert reloaded == envelope

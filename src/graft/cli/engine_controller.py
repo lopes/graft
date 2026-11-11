@@ -697,11 +697,27 @@ class EngineCommandController:
                     comparator if callable(comparator) else None
                 )
 
+                dep_cmp = getattr(deployer, "are_deployments_equal", None)
+                if not callable(dep_cmp):
+                    dep_cmp = getattr(adapter, "are_deployments_equal", None)
+                deployment_comparator: Callable[[RuleEnvelope, RuleEnvelope], bool] | None = (
+                    dep_cmp if callable(dep_cmp) else None
+                )
+
+                create_flt = getattr(deployer, "should_deploy_rule", None)
+                if not callable(create_flt):
+                    create_flt = getattr(adapter, "should_deploy_rule", None)
+                should_create_filter: Callable[[RuleEnvelope], bool] | None = (
+                    create_flt if callable(create_flt) else None
+                )
+
                 reconciler = CustomRuleReconciler()
                 diff = reconciler.diff(
                     current=remote,
                     desired=desired,
                     content_comparator=content_comparator,
+                    deployment_comparator=deployment_comparator,
+                    should_create_filter=should_create_filter,
                     scoped=not all_rules,
                 )
 
@@ -837,12 +853,28 @@ class EngineCommandController:
                     comparator if callable(comparator) else None
                 )
 
+                dep_cmp = getattr(deployer, "are_deployments_equal", None)
+                if not callable(dep_cmp):
+                    dep_cmp = getattr(adapter, "are_deployments_equal", None)
+                deployment_comparator: Callable[[RuleEnvelope, RuleEnvelope], bool] | None = (
+                    dep_cmp if callable(dep_cmp) else None
+                )
+
+                create_flt = getattr(deployer, "should_deploy_rule", None)
+                if not callable(create_flt):
+                    create_flt = getattr(adapter, "should_deploy_rule", None)
+                should_create_filter: Callable[[RuleEnvelope], bool] | None = (
+                    create_flt if callable(create_flt) else None
+                )
+
                 custom_reconciler = CustomRuleReconciler()
                 try:
                     diff = custom_reconciler.apply(
                         desired=desired,
                         port=deployer,
                         content_comparator=content_comparator,
+                        deployment_comparator=deployment_comparator,
+                        should_create_filter=should_create_filter,
                         scoped=not all_rules,
                     )
                 except Exception:

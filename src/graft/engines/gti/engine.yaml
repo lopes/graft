@@ -1,0 +1,25 @@
+name: gti
+display_name: Google Threat Intelligence
+description: Google Threat Intelligence (VirusTotal v3 Livehunt & Retrohunt) Detection Engine Adapter
+adapter_class: graft.engines.gti.adapter:GTIAdapter
+
+capabilities:
+  custom_rules: true
+  datasets: false
+  syntax_verification: true
+  managed_rules: false
+  replay_testing: true
+
+environments:
+  - staging
+  - production
+
+env_vars:
+  required:
+    - GRAFT_GTI_API_KEY
+  optional:
+    - GRAFT_GTI_STAGING_API_KEY
+    - GRAFT_GTI_PROD_API_KEY
+    - GRAFT_GTI_BASE_URL
+    - GRAFT_GTI_FILTER
+    - GRAFT_GTI_NOTIFICATION_EMAILS

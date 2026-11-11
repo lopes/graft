@@ -398,6 +398,8 @@ class CustomRuleReconciler:
         current: tuple[RuleEnvelope, ...],
         desired: tuple[RuleEnvelope, ...],
         content_comparator: Callable[[RuleEnvelope, RuleEnvelope], bool] | None = None,
+        deployment_comparator: Callable[[RuleEnvelope, RuleEnvelope], bool] | None = None,
+        should_create_filter: Callable[[RuleEnvelope], bool] | None = None,
         scoped: bool = False,
     ) -> CustomRulesReconciliationDiff:
         matched_current_indices: set[int] = set()
@@ -427,7 +429,13 @@ class CustomRuleReconciler:
                         break
 
             if curr_rule is None or curr_idx is None:
-                rules_to_create.append(des_rule)
+                should_create = True
+                if should_create_filter is not None:
+                    flt_res = should_create_filter(des_rule)
+                    if isinstance(flt_res, bool):
+                        should_create = flt_res
+                if should_create:
+                    rules_to_create.append(des_rule)
                 continue
 
             matched_current_indices.add(curr_idx)
@@ -437,11 +445,11 @@ class CustomRuleReconciler:
             else:
                 content_equal = des_rule.logic == curr_rule.logic
 
-            deployment_equal = (
-                des_rule.deployment.enabled == curr_rule.deployment.enabled
-                and des_rule.deployment.alerting == curr_rule.deployment.alerting
-                and des_rule.deployment.run_frequency == curr_rule.deployment.run_frequency
-            )
+            deployment_equal = des_rule.deployment == curr_rule.deployment
+            if deployment_comparator is not None:
+                dep_res = deployment_comparator(des_rule, curr_rule)
+                if isinstance(dep_res, bool):
+                    deployment_equal = dep_res
             name_equal = des_rule.metadata.name == curr_rule.metadata.name
 
             if not content_equal or not deployment_equal or not name_equal:
@@ -464,6 +472,8 @@ class CustomRuleReconciler:
         desired: tuple[RuleEnvelope, ...],
         port: RuleDeployerPort,
         content_comparator: Callable[[RuleEnvelope, RuleEnvelope], bool] | None = None,
+        deployment_comparator: Callable[[RuleEnvelope, RuleEnvelope], bool] | None = None,
+        should_create_filter: Callable[[RuleEnvelope], bool] | None = None,
         scoped: bool = False,
     ) -> CustomRulesReconciliationDiff:
         logger.info("Starting custom rules reconciliation against target tenant")
@@ -472,6 +482,8 @@ class CustomRuleReconciler:
             current=current,
             desired=desired,
             content_comparator=content_comparator,
+            deployment_comparator=deployment_comparator,
+            should_create_filter=should_create_filter,
             scoped=scoped,
         )
 

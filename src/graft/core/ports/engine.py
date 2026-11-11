@@ -41,9 +41,11 @@ class EngineAdapter(Protocol):
                         return "silent"
                     return "disabled"
             return "disabled"
-        if not rule.deployment.enabled:
+        if not bool(rule.deployment.get("enabled", True)):
             return "disabled"
-        return "enabled" if rule.deployment.alerting else "silent"
+        if rule.deployment.get("alerting") is False:
+            return "silent"
+        return "enabled"
 
     def has_managed_rule_id(self, managed_id: str, state: ManagedState) -> bool:
         return any(rs.id == managed_id for rs in state.rulesets)
@@ -65,6 +67,12 @@ class EngineAdapter(Protocol):
 
     def get_default_rule_logic(self, rule_name: str) -> str:
         return f'events | where rule_name == "{rule_name}" and event_type == "USER_LOGIN"'
+
+    def get_default_deployment_config(self) -> dict[str, object]:
+        return {"enabled": False}
+
+    def get_default_test_event_payload(self) -> dict[str, object]:
+        return {"metadata": {"event_type": "USER_LOGIN"}}
 
     def validate_rule_dataset_references(
         self,

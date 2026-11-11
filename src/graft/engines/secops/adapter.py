@@ -169,9 +169,9 @@ class SecOpsAdapter(EngineAdapter):
                         return "silent"
                     return "disabled"
             return "disabled"
-        if not rule.deployment.enabled:
+        if not bool(rule.deployment.get("enabled", True)):
             return "disabled"
-        if rule.deployment.alerting:
+        if bool(rule.deployment.get("alerting", True)):
             return "enabled"
         return "silent"
 
@@ -189,6 +189,16 @@ class SecOpsAdapter(EngineAdapter):
   $e.metadata.event_type = "USER_LOGIN"
 condition:
   $e"""
+
+    def get_default_deployment_config(self) -> dict[str, object]:
+        return {
+            "enabled": False,
+            "alerting": False,
+            "run_frequency": "live",
+        }
+
+    def get_default_test_event_payload(self) -> dict[str, object]:
+        return {"metadata": {"event_type": "USER_LOGIN"}}
 
     def validate_rule_dataset_references(
         self,
@@ -229,11 +239,11 @@ condition:
             fallback_id=remote_rule.metadata.id,
             fallback_name=remote_rule.metadata.name,
         )
-        raw_freq = remote_rule.deployment.run_frequency
+        raw_freq = str(remote_rule.deployment.get("run_frequency", "unspecified"))
         run_freq = raw_freq if raw_freq and raw_freq != "unspecified" else "live"
         deployment = BaseDeploymentConfig(
-            enabled=remote_rule.deployment.enabled,
-            alerting=remote_rule.deployment.alerting,
+            enabled=bool(remote_rule.deployment.get("enabled", True)),
+            alerting=bool(remote_rule.deployment.get("alerting", True)),
             run_frequency=run_freq,
         )
         runbook = Runbook(

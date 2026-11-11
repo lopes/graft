@@ -169,10 +169,8 @@ class {class_prefix}Adapter(EngineAdapter):
                         return "silent"
                     return "disabled"
             return "disabled"
-        if not rule.deployment.enabled:
+        if not bool(rule.deployment.get("enabled", True)):
             return "disabled"
-        if not rule.deployment.alerting:
-            return "silent"
         return "enabled"
 """
     adapter_py.write_text(adapter_content, encoding="utf-8")
@@ -267,25 +265,11 @@ class {class_prefix}DeployerAdapter(RuleDeployerPort):
         "deployment": {{
           "type": "object",
           "required": [
-            "enabled",
-            "alerting",
-            "run_frequency"
+            "enabled"
           ],
           "properties": {{
             "enabled": {{
               "type": "boolean"
-            }},
-            "alerting": {{
-              "type": "boolean"
-            }},
-            "run_frequency": {{
-              "type": "string",
-              "enum": [
-                "unspecified",
-                "live",
-                "hourly",
-                "daily"
-              ]
             }}
           }},
           "additionalProperties": false
@@ -473,6 +457,42 @@ def _resolve_default_rule_logic(engine: str, rule_name: str, root: Path) -> str:
     return fallback
 
 
+def _resolve_default_deployment_config(engine: str, root: Path) -> dict[str, object]:
+    fallback: dict[str, object] = {"enabled": False}
+    engines_dir = root / "src" / "graft" / "engines"
+    candidates: tuple[Path | None, ...] = (engines_dir, None) if engines_dir.is_dir() else (None,)
+    for candidate_dir in candidates:
+        registry = EngineRegistry(engines_dir=candidate_dir)
+        if not registry.has(engine):
+            continue
+        try:
+            adapter = registry.load_adapter(engine)
+        except EngineError:
+            return fallback
+        if hasattr(adapter, "get_default_deployment_config"):
+            return adapter.get_default_deployment_config()
+        return fallback
+    return fallback
+
+
+def _resolve_default_test_event_payload(engine: str, root: Path) -> dict[str, object]:
+    fallback: dict[str, object] = {"metadata": {"event_type": "USER_LOGIN"}}
+    engines_dir = root / "src" / "graft" / "engines"
+    candidates: tuple[Path | None, ...] = (engines_dir, None) if engines_dir.is_dir() else (None,)
+    for candidate_dir in candidates:
+        registry = EngineRegistry(engines_dir=candidate_dir)
+        if not registry.has(engine):
+            continue
+        try:
+            adapter = registry.load_adapter(engine)
+        except EngineError:
+            return fallback
+        if hasattr(adapter, "get_default_test_event_payload"):
+            return adapter.get_default_test_event_payload()
+        return fallback
+    return fallback
+
+
 def scaffold_rule(
     engine: str,
     rule_name: str,
@@ -536,6 +556,8 @@ def scaffold_rule(
     else:
         rule_uuid = str(uuid.uuid4())
         default_logic = _resolve_default_rule_logic(engine, rule_name, root)
+        default_deployment = _resolve_default_deployment_config(engine, root)
+        default_test_payload = _resolve_default_test_event_payload(engine, root)
 
         doc = {
             "metadata": {
@@ -550,11 +572,7 @@ def scaffold_rule(
                 "references": ["https://attack.mitre.org/techniques/T1059/001/"],
             },
             "logic": default_logic,
-            "deployment": {
-                "enabled": False,
-                "alerting": False,
-                "run_frequency": "live",
-            },
+            "deployment": default_deployment,
             "runbook": {
                 "context": "Context and background regarding this detection.",
                 "triage": "1. Verify principal user and host.\n2. Examine correlated telemetry.",
@@ -567,7 +585,7 @@ def scaffold_rule(
                     "events": [
                         {
                             "timestamp": "2026-09-17T12:00:00Z",
-                            "payload": {"metadata": {"event_type": "USER_LOGIN"}},
+                            "payload": default_test_payload,
                         }
                     ],
                     "expect": 1,
