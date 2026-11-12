@@ -260,3 +260,124 @@ def test_gti_replay_retrohunt_fails_closed_when_job_not_finished_and_unescapes_s
     )
     res_unit = replay.run_test_vector(rule, unit_vec)
     assert res_unit.passed is True
+
+
+def test_gti_replay_supports_native_yarax_quantifiers_regex_defined_and_counts() -> None:
+    replay = GTIReplayAdapter(client=None)
+
+    # 1. Trackers & regex matches & defined
+    tracker_rule = RuleEnvelope(
+        metadata=RuleMetadata(
+            id="8f14e45f-ceea-467a-a124-000000000005",
+            name="lh_corporate_analytics_tracker_cloned",
+            description="Detects cloned tracker IDs",
+        ),
+        logic="""import "vt"
+
+condition:
+  (
+    for any tracker in vt.net.url.trackers: (
+      tracker.id == "G-ACME000001" or
+      tracker.id == "GTM-ACME001"
+    )
+  ) and
+  vt.net.domain.root != "acme.com" and
+  vt.net.url.new_url and
+  (
+    (defined vt.net.url.analysis_stats.malicious and vt.net.url.analysis_stats.malicious >= 1) or
+    vt.net.url.path matches /\\/(login|signin|sso|verify)\\b/i
+  )""",
+        deployment=BaseDeploymentConfig.from_dict({"enabled": True}),
+    )
+    pos_tracker = TestVector(
+        id="pos_tracker",
+        description="Matches cloned tracker on login path",
+        expect=1,
+        events=(
+            TestEvent(
+                timestamp="2026-10-15T12:00:00Z",
+                payload={
+                    "vt.net.url.trackers": [{"id": "G-ACME000001"}],
+                    "vt.net.domain.root": "acme-login-portal.test",
+                    "vt.net.url.new_url": True,
+                    "vt.net.url.path": "/sso/auth",
+                },
+            ),
+        ),
+    )
+    neg_tracker = TestVector(
+        id="neg_tracker",
+        description="Legitimate acme.com domain excluded",
+        expect=0,
+        events=(
+            TestEvent(
+                timestamp="2026-10-15T12:00:00Z",
+                payload={
+                    "vt.net.url.trackers": [{"id": "G-ACME000001"}],
+                    "vt.net.domain.root": "acme.com",
+                    "vt.net.url.new_url": True,
+                    "vt.net.url.path": "/sso/auth",
+                },
+            ),
+        ),
+    )
+    assert replay.run_test_vector(tracker_rule, pos_tracker).passed is True
+    assert replay.run_test_vector(tracker_rule, neg_tracker).passed is True
+
+    # 2. Regex strings, occurrence count (#bin1 + #bin2) > 8, size suffixes, and any of ($prefix_*)
+    card_and_leak_rule = RuleEnvelope(
+        metadata=RuleMetadata(
+            id="8f14e45f-ceea-467a-a124-000000000006",
+            name="lh_payment_card_and_secret_check",
+            description="Detects card BIN counts and secret prefixes",
+        ),
+        logic="""import "vt"
+
+strings:
+  $bin1 = /377000[0-9]{10}/
+  $bin2 = /491000[0-9]{10}/
+  $org_domain = "acme.com" nocase wide ascii
+  $org_name = "acme" fullword nocase wide ascii
+
+condition:
+  vt.metadata.new_file and
+  filesize < 5MB and
+  (#bin1 + #bin2) > 8 and
+  any of ($org_*)""",
+        deployment=BaseDeploymentConfig.from_dict({"enabled": True}),
+    )
+    nine_cards = " ".join(
+        [f"377000111122223{i}" for i in range(5)] + [f"491000111122223{i}" for i in range(4)]
+    )
+    pos_cards = TestVector(
+        id="pos_cards",
+        description="9 cards + acme.com under 5MB triggers",
+        expect=1,
+        events=(
+            TestEvent(
+                timestamp="2026-10-15T12:00:00Z",
+                payload={
+                    "vt.metadata.new_file": True,
+                    "filesize": 102400,
+                    "sample_text": f"ACME Bank dump acme.com: {nine_cards}",
+                },
+            ),
+        ),
+    )
+    neg_cards = TestVector(
+        id="neg_cards",
+        description="Only 2 cards does not exceed threshold of 8",
+        expect=0,
+        events=(
+            TestEvent(
+                timestamp="2026-10-15T12:00:00Z",
+                payload={
+                    "vt.metadata.new_file": True,
+                    "filesize": 102400,
+                    "sample_text": "ACME Bank dump acme.com: 3770001111222231 4910001111222232",
+                },
+            ),
+        ),
+    )
+    assert replay.run_test_vector(card_and_leak_rule, pos_cards).passed is True
+    assert replay.run_test_vector(card_and_leak_rule, neg_cards).passed is True

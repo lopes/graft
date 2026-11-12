@@ -54,7 +54,8 @@ In day-to-day SOC and detection engineering operations, the primary question whe
 
 ### Block 2: `logic`
 Engine-native detection query string. Each engine adapter compiles and validates this block according to its target query language.
-- **Example (Google SecOps):** Contains YARA-L 2.0 sections (`events:`, `match:`, `outcome:`, `condition:`). Graft automatically synthesizes the `rule <name> { meta: ... }` wrapper (`id`, `description`, `tactic`, and `technique`) when sending to Chronicle APIs.
+- **Example (Google SecOps — `secops`):** Contains YARA-L 2.0 sections (`events:`, `match:`, `outcome:`, `condition:`). Graft automatically synthesizes the `rule <name> { meta: ... }` wrapper (`id`, `description`, `owners`, `mitre_tactic`, `mitre_technique`, `tags`) when sending to Chronicle APIs.
+- **Example (Google Threat Intelligence — `gti`):** Contains native YARA-X top-level `import "<module>"` statements (`import "vt"`, `import "pe"`, etc.) followed by optional `strings:` and `condition:` without an outer `rule <name> { meta: ... }` wrapper. Graft partitions `import "..."` lines above `rule <name> { ... }` and injects `meta:` attribution (`graft_id`, `description`, `owners`, `mitre_tactic`, `mitre_technique`, `tags`) while preserving any custom analyst `meta:` key-values.
 
 ### Block 3: `deployment`
 Engine-specific operational controls governing how the rule runs in the target detection engine.
@@ -567,6 +568,7 @@ During `graft lint`, Graft cross-validates custom rule logic against all active 
 - **Column Check:** If `<name>` exists in `datasets/<name>.yaml`, any `%<name>` reference in rule logic must access `.value` (`%<name>.value`). Bare `%<name>` or unknown columns (`%<name>.ip`) fail linting immediately.
 - **Operator Check:** Because Graft datasets are literal `STRING` lists, referencing a local Graft dataset with `in cidr %<name>...` or `in regex %<name>...` fails linting with a clear diagnostic.
 - **Additive Coexistence for Unmanaged or Archived Tables:** If a rule references `%external_cmdb_table.cidr_range` (or a dataset moved to `datasets/_archived/`) that is not an active file in `datasets/`, `graft lint` passes silently.
+- **Engines Without Dataset Support (`datasets: false`, e.g., `gti`):** Engines whose runtime lacks external lookup tables (such as Google Threat Intelligence's YARA-X engine) reject `%<dataset>` tokens during `graft lint` (`validate_gti_dataset_references`), ensuring rules remain 100% native YARA-X without preprocessor interpolation hacks.
 
 ---
 

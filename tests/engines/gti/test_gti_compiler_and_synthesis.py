@@ -106,6 +106,35 @@ condition:
     assert deconstructed.logic.strip() == rule.logic.strip()
 
 
+def test_synthesize_and_deconstruct_multi_tactic_mitre_is_idempotent() -> None:
+    rule = RuleEnvelope(
+        metadata=RuleMetadata(
+            id="8f14e45f-ceea-467a-a124-000000000001",
+            name="lh_americas_financial_malware_family_uploaded",
+            description="Matches high-severity financial malware submitted from Americas countries",
+            owners=("Threat Intelligence", "Detection Engineering"),
+            mitre={
+                "execution": ("T1204.002",),
+                "credential-access": ("T1555.003",),
+            },
+            tags=("americas", "banking-trojan", "breeze-comet", "financial"),
+        ),
+        logic='import "vt"\n\ncondition:\n  vt.metadata.new_file',
+        deployment=BaseDeploymentConfig.from_dict(
+            {"type": "livehunt", "subtype": "file", "enabled": True, "daily_limit": 100}
+        ),
+    )
+    first_synth, _ = synthesize_yara_rule(rule)
+    remote_envelope = RuleEnvelope(
+        metadata=RuleMetadata(id="", name=rule.metadata.name, description=""),
+        logic=first_synth,
+        deployment=rule.deployment,
+    )
+    deconstructed = deconstruct_yara_rule(remote_envelope)
+    second_synth, _ = synthesize_yara_rule(deconstructed)
+    assert first_synth.strip() == second_synth.strip()
+
+
 def test_deconstruct_brownfield_yara_rule_populates_lint_valid_defaults() -> None:
     brownfield_yara = """import "vt"
 

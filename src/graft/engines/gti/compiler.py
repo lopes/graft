@@ -222,10 +222,10 @@ def synthesize_yara_rule(rule: RuleEnvelope) -> tuple[str, int]:
         owners_str = ", ".join(rule.metadata.owners)
         meta_lines.append(f'    owners = "{_escape_yara_str(owners_str)}"')
     if rule.metadata.mitre:
-        tactics = list(rule.metadata.mitre.keys())
+        tactics = sorted(rule.metadata.mitre.keys())
         techniques: list[str] = []
-        for t_list in rule.metadata.mitre.values():
-            for tech in t_list:
+        for tactic in tactics:
+            for tech in sorted(rule.metadata.mitre[tactic]):
                 if tech not in techniques:
                     techniques.append(tech)
         if tactics:

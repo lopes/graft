@@ -26,6 +26,7 @@ flowchart TD
 
     subgraph DrivenEngines["Driven Engines (src/graft/engines/)"]
         SECOPS["Google SecOps Engine<br/>• Chronicle REST Client (urllib)<br/>• Data Tables Dataset Adapter<br/>• YARA-L Compiler Adapter<br/>• Custom Rule Deployer<br/>• Curated RuleSet Reconciler<br/>• Staging Replay Harness"]
+        GTI["Google Threat Intelligence Engine<br/>• VirusTotal v3 REST Client (urllib)<br/>• Native YARA-X Compiler Adapter<br/>• Livehunt &amp; Retrohunt Deployer<br/>• Dual-Mode Replay Harness"]
         FUTURE["Future Engines<br/>• Microsoft Sentinel<br/>• Splunk<br/>• CrowdStrike"]
     end
 

@@ -17,9 +17,18 @@ Before running any commands, review the infrastructure components that will be p
 | **Automation Identity** | Service Account: `graft-secops-deployer` | Dedicated identity with `roles/chronicle.editor` granting least-privilege permissions to manage rules and inject test replay events. |
 | **Developer Impersonation** | IAM Policy: `roles/iam.serviceAccountTokenCreator` | Permits authorized engineers to impersonate `graft-secops-deployer` locally via `gcloud`, keeping workstations free of static JSON credential files. |
 | **Workload Identity Pool** | `graft-pool` | Establishes a trust boundary within GCP for external OpenID Connect (OIDC) authentication. |
-| **GitHub OIDC Provider** | `graft-gh-provider` | Exchanges GitHub Actions runner tokens for temporary GCP access tokens, scoped strictly to the `lopes/graft` repository. |
+| **GitHub OIDC Provider** | `graft-gh-provider` | Exchanges GitHub Actions runner tokens for temporary GCP access tokens, scoped strictly to the `<owner>/<repo>` repository. |
 | **Pre-Flight Dry Run** | Non-destructive API test | Submits a lightweight dummy rule to `:verifyRuleText` to prove credentials and routing work before saving. |
 | **Environment Export** | `.env` and `gh` CLI commands | Emits copy-pasteable configuration blocks for local CLI development and automated GitHub Actions secret registration. |
+
+### What Graft Commands & Deploys in Google SecOps
+
+| Artifact / Capability | Supported in `secops`? | How Graft Handles It |
+| :--- | :---: | :--- |
+| **Custom YARA-L 2.0 Rules** (`rulesets/secops/custom/*.yaml`) | **Yes** (`custom_rules: true`) | Synchronized via `graft secops diff`, `apply`, and `pull` against Chronicle `v1` `/rules` and `/rules/{id}/deployment`. Synthesizes Graft `meta:` attribution (`id`, `description`, `owners`, `mitre_tactic`, `mitre_technique`, `tags`) into YARA-L 2.0 and reconciles rule revisions in-place without resetting detection history. |
+| **Reusable String Datasets** (`datasets/<name>.yaml`) | **Yes** (`datasets: true`) | Synchronized to Google SecOps **Data Tables** (`v1` `/dataTables`, single `STRING` column named `value`) via `SecOpsDatasetAdapter` before custom rules run. Referenced in YARA-L 2.0 as `%<name>.value`; expired `ttl:YYYY-MM-DD` entries are filtered automatically in UTC and archived datasets clear remote rows to `0`. |
+| **Vendor-Managed Curated Rule Sets & Exclusions** (`rulesets/secops/managed/`) | **Yes** (`managed_rules: true`) | Synchronizes GCTI Curated Rule Set deployments (`PRECISE` / `BROAD` `enabled` & `alerting`) and `findingsRefinements` detection exclusions from `rulesets/secops/managed/index.yaml`, plus optional 4-block rule registrations (`managed/<rule>.yaml`) for MITRE ATT&CK coverage and runbooks. |
+| **Server-Side Syntax Verification & Quarantined Replay** (`verify` / `test`) | **Yes** (`syntax_verification: true`, `replay_testing: true`) | `graft secops verify` validates YARA-L 2.0 syntax via Chronicle `:verifyRuleText` (with automatic placeholder substitution for new local datasets). `graft secops test` pre-syncs referenced datasets to Staging and evaluates synthetic UDM test vectors in quarantine. |
 
 ### Architectural Topologies
 
@@ -188,7 +197,7 @@ content-type: application/json; charset=UTF-8
 
 ---
 
-## 4. Output & Annotate Environment Variables
+## 4. Local Workstation & GitHub Actions Configuration
 
 Once the dry-run passes, run this snippet directly in Cloud Shell to print the unified configuration block on screen:
 
@@ -208,15 +217,34 @@ export GRAFT_SECOPS_WIF_PROVIDER="${WIF_PROVIDER}"
 EOF
 ```
 
+### 1. Local Workstation Configuration (`src/graft/engines/secops/.env`)
+
+Copy [`.env.example`](../.env.example) to `src/graft/engines/secops/.env` (automatically loaded by Graft at startup and ignored by Git via `.gitignore`) and paste the exported block:
+
+```bash
+cp src/graft/engines/secops/.env.example src/graft/engines/secops/.env
+```
+
+Locally, Graft authenticates directly against GCP via `gcloud` service account impersonation (Option 1) or via `GRAFT_SECOPS_TOKEN` (Option 2).
+
+### 2. GitHub Actions CI/CD Configuration (`gh secret` & `gh variable`)
+
+Register the secrets and repository variables in your GitHub repository (**Settings $\rightarrow$ Secrets and variables $\rightarrow$ Actions** or via the GitHub CLI):
+
+```bash
+# 1. Register Workload Identity Provider and Service Account Email as encrypted GitHub Secrets
+gh secret set GRAFT_SECOPS_WIF_PROVIDER --body "${WIF_PROVIDER}" --repo "${REPO_SLUG}"
+gh secret set "GRAFT_SECOPS_${TARGET_ENV_UPPER}_SA_EMAIL" --body "${SA_EMAIL}" --repo "${REPO_SLUG}"
+
+# 2. Register Project, Location, and Instance ID as GitHub Repository Variables
+gh variable set "GRAFT_SECOPS_${TARGET_ENV_UPPER}_PROJECT" --body "${PROJECT_ID}" --repo "${REPO_SLUG}"
+gh variable set "GRAFT_SECOPS_${TARGET_ENV_UPPER}_LOCATION" --body "${SECOPS_LOCATION}" --repo "${REPO_SLUG}"
+gh variable set "GRAFT_SECOPS_${TARGET_ENV_UPPER}_INSTANCE_ID" --body "${INSTANCE_ID}" --repo "${REPO_SLUG}"
+```
+
 > [!IMPORTANT]
-> **Action Required: Copy and record these 5 values now.**  
-> Your GCP environment and SecOps instance are now fully configured and pre-flight verified. Once you close this Cloud Shell session, these session environment variables will be cleared from terminal memory.
->
-> - **Local CLI:** Paste this block directly into `src/graft/engines/secops/.env` (or your root `.env` file; see [`src/graft/engines/secops/.env.example`](../.env.example)). Locally, Graft authenticates directly against GCP via `gcloud` impersonation (Option 1) or via `GRAFT_SECOPS_TOKEN` (Option 2).
-> - **GitHub Actions:** In your GitHub repository (**Settings** > **Secrets and variables** > **Actions**), register these same 5 values:
->   - **Secrets (`${{ secrets.* }}`):** `GRAFT_SECOPS_WIF_PROVIDER` and `GRAFT_SECOPS_${TARGET_ENV_UPPER}_SA_EMAIL`
->   - **Variables (`${{ vars.* }}`):** `GRAFT_SECOPS_${TARGET_ENV_UPPER}_PROJECT`, `GRAFT_SECOPS_${TARGET_ENV_UPPER}_LOCATION`, and `GRAFT_SECOPS_${TARGET_ENV_UPPER}_INSTANCE_ID`
->   *(GitHub Actions uses the WIF Provider and SA Email to authenticate automatically via OIDC, eliminating static private keys).*
+> **Action Required: Copy and record these 5 values before closing Cloud Shell.**  
+> Once you close the Cloud Shell session, session environment variables are cleared from terminal memory. GitHub Actions uses `GRAFT_SECOPS_WIF_PROVIDER` and `GRAFT_SECOPS_${TARGET_ENV_UPPER}_SA_EMAIL` to authenticate automatically via OIDC, eliminating static service account JSON keys.
 
 ---
 
@@ -714,7 +742,58 @@ sequenceDiagram
 
 ---
 
-## 12. Google Cloud Audit Logging & Security Telemetry
+## 12. Configuring `deployment`, Authoring Native YARA-L 2.0 `logic`, & CLI Reference
+
+### 1. Configuring `deployment` (`schemas/custom.schema.json`)
+
+Every custom rule in `rulesets/secops/custom/*.yaml` validates its `deployment` block against [`src/graft/engines/secops/schemas/custom.schema.json`](../schemas/custom.schema.json):
+
+```yaml
+deployment:
+  enabled: true
+  alerting: false
+  run_frequency: "live"
+```
+
+| Field | Type & Constraints | Description |
+| :--- | :--- | :--- |
+| `enabled` | `boolean` (default `false`) | Whether the custom YARA-L 2.0 rule is actively evaluating UDM telemetry in Google SecOps. |
+| `alerting` | `boolean` (default `false`) | Whether rule detections generate live alerts in the SOC triage queue (`enabled: true, alerting: false` runs in silent dark-launch mode). |
+| `run_frequency` | `"live" \| "hourly" \| "daily"` (default `"live"`) | Execution cadence for the rule deployment in Google SecOps. |
+
+### 2. Authoring Native YARA-L 2.0 `logic` & Synthesis (`graft secops render`)
+
+In `logic:`, analysts write only the inner YARA-L 2.0 sections (`events:`, optional `match:`, `outcome:`, and `condition:`) without the outer `rule <name> { meta: ... }` wrapper. Running `uv run graft secops render` synthesizes the complete YARA-L 2.0 rule with injected `meta:` attribution (`id`, `description`, `owners`, `mitre_tactic`, `mitre_technique`, `tags`).
+
+### 3. CLI Operations Reference
+
+```bash
+# 1. Scaffold a new SecOps custom rule (or --managed <uuid> for a registered Curated Rule Set)
+uv run graft secops new workspace_nrd_email_opened
+
+# 2. Validate YAML schemas, %<dataset>.value references, and MITRE mappings offline
+uv run graft --json lint
+
+# 3. Render synthesized YARA-L 2.0 rules offline (with injected meta: attribution)
+uv run graft --json secops render --all
+
+# 4. Verify YARA-L 2.0 syntax against Chronicle :verifyRuleText
+uv run graft --json secops verify --all
+
+# 5. Execute quarantined synthetic UDM replay test vectors in Staging
+uv run graft --json secops test
+
+# 6. Diff and apply datasets (Data Tables), custom rules, and managed curated content
+uv run graft --json secops diff --all
+uv run graft --json secops apply --all
+
+# 7. Pull existing custom rules, Data Tables, and Curated Rule Sets from SecOps into Git
+uv run graft --json secops pull
+```
+
+---
+
+## 13. Google Cloud Audit Logging & Security Telemetry
 
 Every WIF token exchange and Chronicle API mutation generates an immutable Cloud Audit Log entry in Google Cloud Logging. Monitor these log streams to audit rule deployments and detect anomalous credential usage:
 

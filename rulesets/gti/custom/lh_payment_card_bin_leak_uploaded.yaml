@@ -1,0 +1,92 @@
+metadata:
+  id: "8f14e45f-ceea-467a-a124-000000000004"
+  name: "lh_payment_card_bin_leak_uploaded"
+  description: "Matches newly uploaded documents or archives containing bulk ACME Financial payment card BIN numbers"
+  owners:
+    - "Threat Intelligence"
+    - "Fraud & Brand Protection"
+  mitre:
+    collection:
+      - "T1005"
+    exfiltration:
+      - "T1567.002"
+  tags:
+    - "acme"
+    - "card-bin"
+    - "data-leak"
+    - "financial"
+  references:
+    - "https://gtidocs.virustotal.com/docs/file-hunting"
+    - "https://attack.mitre.org/techniques/T1005/"
+    - "https://attack.mitre.org/techniques/T1567/002/"
+
+logic: |
+  import "vt"
+
+  strings:
+    // Synthetic 6-digit issuer BIN prefixes assigned to ACME Financial payment cards
+    $bin_amex_acme = /377000[0-9]{10}/
+    $bin_visa_acme = /491000[0-9]{10}/
+    $org_acme = "acme" nocase
+
+  condition:
+    // Match newly uploaded office documents, PDFs, text files, or ZIP archives with >8 card PANs
+    vt.metadata.new_file and
+    (#bin_amex_acme + #bin_visa_acme) > 8 and
+    $org_acme and
+    (
+      vt.metadata.file_type == vt.FileType.DOC or
+      vt.metadata.file_type == vt.FileType.DOCX or
+      vt.metadata.file_type == vt.FileType.XLS or
+      vt.metadata.file_type == vt.FileType.XLSX or
+      vt.metadata.file_type == vt.FileType.PPT or
+      vt.metadata.file_type == vt.FileType.PPTX or
+      vt.metadata.file_type == vt.FileType.PDF or
+      vt.metadata.file_type == vt.FileType.PPSX or
+      vt.metadata.file_type == vt.FileType.ODP or
+      vt.metadata.file_type == vt.FileType.ODS or
+      vt.metadata.file_type == vt.FileType.ODT or
+      vt.metadata.file_type == vt.FileType.ODF or
+      vt.metadata.file_type == vt.FileType.ODG or
+      vt.metadata.file_type == vt.FileType.RTF or
+      vt.metadata.file_type == vt.FileType.TEXT or
+      vt.metadata.file_type == vt.FileType.ZIP
+    )
+
+deployment:
+  type: "livehunt"
+  subtype: "file"
+  enabled: true
+  daily_limit: 100
+
+runbook:
+  context: |
+    Carding syndicates, Magecart web-skimming operators (`G0037` FIN6, `G0046` FIN7), and infostealer aggregators frequently upload stolen payment card dumps, reconciliation spreadsheets, or ZIP archives to VirusTotal during staging or automated scanning (`T1005`, `T1567.002`). This `subtype: "file"` Livehunt rule monitors newly submitted documents, spreadsheets, PDFs, text files, and ZIP archives (`vt.metadata.new_file`) for more than 8 occurrences (`(#bin_amex_acme + #bin_visa_acme) > 8`) of 16-digit Primary Account Numbers (PANs) matching ACME Financial's issuer Bank Identification Numbers (`377000...` and `491000...`) alongside the `"acme"` institution identifier. Requiring more than 8 PAN regex matches plus the institution keyword eliminates isolated numeric collisions in benign documents, though synthetic PCI test fixtures uploaded by QA engineers without redaction could trigger an alert.
+  triage: |
+    1. Retrieve the matched file metadata (`sha256`, `vt.metadata.file_type`, `vt.metadata.submitter.country`, and submission filenames) in Google Threat Intelligence without downloading raw cardholder data onto unapproved workstations.
+    2. Extract the matched 16-digit PANs in an isolated fraud-analysis environment, validate Luhn checksums, and cross-reference against ACME Financial's card management system to verify whether the cards are live customer accounts or synthetic test numbers.
+    3. Correlate the exposed card population to identify a common point of compromise (e.g., a specific merchant checkout gateway, third-party processor, or internal ACME database export; `DC0055` File Access, `DC0085` Network Traffic Content).
+  response: |
+    1. Immediately transmit verified compromised PANs to ACME Financial's card fraud & re-issuance pipeline to place fraud blocks, notify affected cardholders, and reissue payment cards.
+    2. If the file originated from an internal ACME workstation or contractor upload, investigate DLP logs (`M1057` Data Loss Prevention) and contain the source account/endpoint.
+    3. Request file removal or restricted visibility through Google Threat Intelligence support if the artifact contains sensitive customer PII/PCI data.
+
+tests:
+  - id: "match_bulk_acme_payment_card_bin_dump"
+    description: "Newly uploaded text dump containing 9 ACME payment card numbers and the ACME identifier triggers a match"
+    expect: 1
+    events:
+      - timestamp: "2026-10-15T12:00:00Z"
+        payload:
+          vt.metadata.new_file: true
+          vt.metadata.file_type: "vt.FileType.TEXT"
+          sample_text: "ACME Financial card export: 3770001111222230 3770001111222231 3770001111222232 3770001111222233 3770001111222234 4910001111222235 4910001111222236 4910001111222237 4910001111222238"
+  - id: "ignore_below_threshold_card_count"
+    description: "Document with only 2 card numbers below the >8 bulk threshold does not trigger a match"
+    expect: 0
+    events:
+      - timestamp: "2026-10-15T12:05:00Z"
+        payload:
+          vt.metadata.new_file: true
+          vt.metadata.file_type: "vt.FileType.TEXT"
+          sample_text: "ACME Financial sample: 3770001111222230 4910001111222235"

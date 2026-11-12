@@ -1,8 +1,9 @@
 # Synthetic Replay Testing & Quarantine Harness
 
-> [!WARNING]
-> **Experimental Capability**
-> Synthetic replay testing is currently an experimental capability and architectural specification (`ReplayHarnessPort`). For example, the Google SecOps public REST API does not currently expose synchronous endpoints for in-memory synthetic UDM ingestion or ad-hoc rule execution. The `tests:` block is preserved in the rule envelope schema for design readiness.
+> [!NOTE]
+> **Engine-Specific Replay Implementations (`ReplayHarnessPort`):**
+> - **Google Threat Intelligence (`gti` — Active Out-of-the-Box):** [`GTIReplayAdapter`](../../src/graft/engines/gti/replay.py) provides dual-mode replay testing today: **Mode 1 (Offline Synthetic YARA-X Unit Evaluation)** runs 100% offline in memory with zero API credentials (evaluating `vt.*`, `filesize`, `defined`, `for any/all`, regexes, `#var` counts, and `strings:` / `sample_text`, and runs automatically in CI Gate 5b on every PR), while **Mode 2 (`mode: "retrohunt"`)** submits an on-demand Retrohunt job against GTI's `"main"` or `"goodware"` corpus and cleans it up in a `finally:` block.
+> - **Google SecOps (`secops` — Quarantined Staging Evaluation):** [`SecOpsReplayAdapter`](../../src/graft/engines/secops/replay.py) pre-synchronizes referenced local datasets (`%<name>.value`) to a dedicated Staging SecOps tenant, deploys a temporary non-alerting quarantine rule, injects synthetic UDM events, evaluates detections over the bounding time window, and tears down the temporary rule in `finally:`.
 
 Static syntax linting validates query structure, but cannot verify whether complex regular expressions, multi-event time windows, or outcome calculations match true attack patterns. Graft addresses this with an automated **Synthetic Replay Harness** (`ReplayHarnessPort`).
 

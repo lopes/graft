@@ -6,7 +6,7 @@
 
 <p align="center">
   <strong>Write Once, Defend Everywhere.</strong><br>
-  <em>An extensible, vendor-agnostic Detection-as-Code (DaC) platform engineered for Google SecOps and modern enterprise security operations.</em>
+  <em>An extensible, vendor-agnostic Detection-as-Code (DaC) platform engineered for Google SecOps, Google Threat Intelligence, and modern enterprise security operations.</em>
 </p>
 
 <p align="center">
@@ -37,7 +37,7 @@ In horticulture, **grafting** joins a shoot from one plant onto the rootstock of
 Graft acts as the unified trunk:
 
 - **Standardized Core:** Author, document, and test detection rules (`metadata`, `logic`, `deployment`, `runbook`, `tests`) alongside reusable, engine-agnostic contextual datasets (`datasets/<name>.yaml`) in a unified, version-controlled repository.
-- **Resilient Branches (Ports & Adapters):** Seamlessly "graft" rules and datasets into production **Detection Engines**—defined in Graft as *any system that processes raw telemetry and generates security alerts from it* (spanning SIEM, EDR/XDR, CNAPP, NDR, and identity security platforms). Deploy natively into **Google SecOps** using YARA-L 2.0 and Data Tables today, and branch into auxiliary SIEMs, EDRs, or cloud runtime engines tomorrow without refactoring engineering workflows.
+- **Resilient Branches (Ports & Adapters):** Seamlessly "graft" rules and datasets into production **Detection Engines**—defined in Graft as *any system that processes raw telemetry and generates security alerts from it* (spanning SIEM, CTI hunting platforms, EDR/XDR, CNAPP, NDR, and identity security platforms). Deploy natively into **Google SecOps** (YARA-L 2.0 & Data Tables) and **Google Threat Intelligence** (VirusTotal v3 YARA-X Livehunt & Retrohunt) today, and branch into auxiliary SIEMs, EDRs, or cloud runtime engines tomorrow without refactoring engineering workflows.
 - **Multi-Track Governance:** Manage reusable string datasets (`datasets/<name>.yaml`), bespoke organizational detections (`rulesets/<engine>/custom/`), and vendor-managed detections (`rulesets/<engine>/managed/index.yaml` and optional registered rule envelopes `rulesets/<engine>/managed/<rule_name>.yaml`) under GitOps plan/apply reconciliation.
 - **Frictionless CI/CD:** Decouple detection authoring from manual UI workflows with automated schema validation, dataset cross-reference checks, pre-merge API syntax dry runs (e.g., `verifyRuleText` in Google SecOps), and synthetic replay testing against dedicated staging infrastructure.
 
@@ -151,7 +151,8 @@ For the complete architectural overview and philosophy, visit the **[Graft Docum
 ### Prerequisites
 - **Python >= 3.13**
 - **[uv](https://docs.astral.sh/uv/)** (Fast Python package and project manager)
-- **Google Cloud SDK (`gcloud`)** with access to a Google SecOps tenant instance (see [src/graft/engines/secops/docs/README.md](src/graft/engines/secops/docs/README.md))
+- **Google SecOps (`secops`):** Google Cloud SDK (`gcloud`) with access to a Google SecOps tenant instance (see [src/graft/engines/secops/docs/README.md](src/graft/engines/secops/docs/README.md))
+- **Google Threat Intelligence (`gti`):** Dedicated non-admin GTI User Account and `x-apikey` (see [src/graft/engines/gti/docs/README.md](src/graft/engines/gti/docs/README.md))
 
 ### Installation & Quality Verification
 
@@ -166,6 +167,7 @@ uv sync
 # Configure local environment templates (platform & engine credentials)
 cp .env.example .env
 cp src/graft/engines/secops/.env.example src/graft/engines/secops/.env
+cp src/graft/engines/gti/.env.example src/graft/engines/gti/.env
 
 # Run static quality gates & test suite
 uv run ruff check .
@@ -239,15 +241,17 @@ Graft also includes repository-native AI agent skills under [`.agents/skills/`](
 graft engines
 graft --json engines
 
-# Synthesize engine-native query text (e.g. full YARA-L rule with meta:) completely offline
+# Synthesize engine-native query text (e.g. full YARA-L or YARA-X rule with meta:) completely offline
 graft secops render rulesets/secops/custom/workspace_nrd_email_opened.yaml
-graft secops render --all
+graft gti render rulesets/gti/custom/lh_rogue_ssl_certificate_brand_impersonated.yaml
 
-# Dry-run YARA-L syntax against Google SecOps verifyRuleText (non-destructive)
-graft secops verify rulesets/secops/custom/workspace_nrd_email_opened.yaml
+# Dry-run syntax against Google SecOps verifyRuleText or GTI's server-side YARA-X compiler
+graft secops verify --all
+graft gti verify --all
 
-# Execute synthetic UDM replay tests in isolated staging quarantine (pre-syncs referenced datasets)
+# Execute synthetic replay tests (Staging SIEM quarantine for secops; offline YARA-X / Retrohunt for gti)
 graft secops test
+graft gti test
 
 # Test only rules modified in the current Git branch or working tree
 graft secops test --changed-only

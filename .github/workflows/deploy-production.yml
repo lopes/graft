@@ -34,6 +34,7 @@ jobs:
       GRAFT_SECOPS_PROD_LOCATION: ${{ vars.GRAFT_SECOPS_PROD_LOCATION }}
       GRAFT_SECOPS_PROD_INSTANCE_ID: ${{ vars.GRAFT_SECOPS_PROD_INSTANCE_ID }}
       GRAFT_GTI_API_KEY: ${{ secrets.GRAFT_GTI_API_KEY }}
+      GRAFT_GTI_PROD_API_KEY: ${{ secrets.GRAFT_GTI_PROD_API_KEY }}
       GRAFT_GTI_FILTER: ${{ vars.GRAFT_GTI_FILTER || 'owner:self' }}
       GRAFT_GTI_NOTIFICATION_EMAILS: ${{ vars.GRAFT_GTI_NOTIFICATION_EMAILS }}
 
@@ -73,7 +74,7 @@ jobs:
         run: uv run graft secops apply --env production --all
 
       - name: Apply GitOps desired state to Production GTI account
-        if: env.GRAFT_GTI_API_KEY != ''
+        if: env.GRAFT_GTI_PROD_API_KEY != '' || env.GRAFT_GTI_API_KEY != ''
         run: uv run graft gti apply --env production --all
 
       - name: Generate threat matrix and visibility catalogs

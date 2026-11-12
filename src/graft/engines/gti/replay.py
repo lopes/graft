@@ -20,18 +20,77 @@ from graft.engines.gti.compiler import (
 logger = logging.getLogger("graft.gti.replay")
 
 _STRING_DEF_RE = re.compile(r'^\s*(\$[a-zA-Z0-9_]+)\s*=\s*"((?:[^"\\]|\\.)*)"(.*)$')
+_REGEX_DEF_RE = re.compile(r"^\s*(\$[a-zA-Z0-9_]+)\s*=\s*/((?:[^/\\]|\\.)*)/([a-zA-Z]*)(.*)$")
 _CMP_OP_RE = re.compile(
-    r'\b([a-zA-Z0-9_.]+)\s+(icontains|contains|startswith|endswith|matches|==|!=|<=|>=|<|>)\s+("(?:[^"\\]|\\.)*"|-?\d+|[a-zA-Z0-9_.]+)'
+    r"(?<![a-zA-Z0-9_.$])([a-zA-Z0-9_.]+|-?\d+)\s+"
+    r"(icontains|contains|istartswith|startswith|iendswith|endswith|iequals|matches|==|!=|<=|>=|<|>)\s+"
+    r'("(?:[^"\\]|\\.)*"|/(?:[^/\\]|\\.)*/[a-zA-Z]*|-?\d+(?:KB|MB|GB)?\b|[a-zA-Z0-9_.]+)'
 )
+_SIZE_LITERAL_RE = re.compile(r"^(-?\d+)(KB|MB|GB)?$", re.IGNORECASE)
+_FOR_HEADER_RE = re.compile(
+    r"\bfor\s+(any|all)\s+([a-zA-Z_][a-zA-Z0-9_]*)\s+in\s+([a-zA-Z0-9_.]+)\s*:\s*\("
+)
+_DEFINED_PAREN_RE = re.compile(r"\bdefined\s*\(\s*([a-zA-Z_][a-zA-Z0-9_.]*)\s*\)")
+_DEFINED_BARE_RE = re.compile(r"\bdefined\s+([a-zA-Z_][a-zA-Z0-9_.]*)\b")
+_QUANTIFIER_OF_RE = re.compile(
+    r"\b(any|all|\d+)\s+of\s+(them|\(\s*\$[a-zA-Z0-9_*]+(?:\s*,\s*\$[a-zA-Z0-9_*]+)*\s*\))"
+)
+_COUNT_VAR_RE = re.compile(r"#([a-zA-Z0-9_]+)\b")
+_ARITH_SUM_PAREN_RE = re.compile(r"\(\s*(\d+(?:\s*\+\s*\d+)+)\s*\)")
+_ARITH_SUM_BARE_RE = re.compile(r"\b(\d+(?:\s*\+\s*\d+)+)\b")
+
+
+class _StringSpec:
+    def __init__(
+        self,
+        pattern: str,
+        *,
+        is_regex: bool,
+        nocase: bool,
+        fullword: bool,
+    ) -> None:
+        self.pattern = pattern
+        self.is_regex = is_regex
+        self.nocase = nocase
+        self.fullword = fullword
+
+
+def _parse_string_def_line(line: str) -> tuple[str, _StringSpec] | None:
+    m_str = _STRING_DEF_RE.match(line)
+    if m_str:
+        mods = m_str.group(3).lower()
+        return (
+            m_str.group(1),
+            _StringSpec(
+                _unescape_yara_str(m_str.group(2)),
+                is_regex=False,
+                nocase="nocase" in mods,
+                fullword="fullword" in mods,
+            ),
+        )
+    m_re = _REGEX_DEF_RE.match(line)
+    if m_re:
+        flags = m_re.group(3).lower()
+        mods = m_re.group(4).lower()
+        return (
+            m_re.group(1),
+            _StringSpec(
+                m_re.group(2),
+                is_regex=True,
+                nocase=("i" in flags) or ("nocase" in mods),
+                fullword="fullword" in mods,
+            ),
+        )
+    return None
 
 
 def _extract_strings_and_condition(
     rule: RuleEnvelope,
-) -> tuple[dict[str, tuple[str, bool]], str]:
+) -> tuple[dict[str, _StringSpec], str]:
     _, raw_body = _partition_imports_and_body(rule.logic)
     _, _, cleaned_body = _extract_meta_and_body(raw_body)
 
-    string_defs: dict[str, tuple[str, bool]] = {}
+    string_defs: dict[str, _StringSpec] = {}
     cond_lines: list[str] = []
     section: str | None = None
 
@@ -43,12 +102,9 @@ def _extract_strings_and_condition(
             section = "strings"
             after = stripped[len("strings:") :].strip()
             if after:
-                m = _STRING_DEF_RE.match(after)
-                if m:
-                    string_defs[m.group(1)] = (
-                        _unescape_yara_str(m.group(2)),
-                        "nocase" in m.group(3).lower(),
-                    )
+                parsed = _parse_string_def_line(after)
+                if parsed:
+                    string_defs[parsed[0]] = parsed[1]
             continue
         if stripped == "condition:" or stripped.startswith("condition:"):
             section = "condition"
@@ -58,12 +114,9 @@ def _extract_strings_and_condition(
             continue
 
         if section == "strings":
-            m = _STRING_DEF_RE.match(stripped)
-            if m:
-                string_defs[m.group(1)] = (
-                    _unescape_yara_str(m.group(2)),
-                    "nocase" in m.group(3).lower(),
-                )
+            parsed = _parse_string_def_line(stripped)
+            if parsed:
+                string_defs[parsed[0]] = parsed[1]
         elif section == "condition":
             cond_lines.append(stripped)
 
@@ -90,16 +143,136 @@ def _parse_literal(token: str, payload: Mapping[str, object]) -> object:
         return True
     if tok.lower() == "false":
         return False
-    if re.match(r"^-?\d+$", tok):
-        return int(tok)
+    m_size = _SIZE_LITERAL_RE.match(tok)
+    if m_size:
+        val = int(m_size.group(1))
+        unit = (m_size.group(2) or "").upper()
+        if unit == "KB":
+            return val * 1024
+        if unit == "MB":
+            return val * 1024 * 1024
+        if unit == "GB":
+            return val * 1024 * 1024 * 1024
+        return val
     looked_up = _lookup_field(payload, tok)
     if looked_up is not None:
         return looked_up
     return tok
 
 
+def _count_string_matches(
+    var_name: str,
+    spec: _StringSpec,
+    sample_text: str,
+    payload: Mapping[str, object],
+) -> int:
+    count_key = f"#{var_name[1:]}"
+    if count_key in payload:
+        raw_cnt = payload[count_key]
+        if isinstance(raw_cnt, (int, float)) and not isinstance(raw_cnt, bool):
+            return int(raw_cnt)
+    if var_name in payload:
+        raw_val = payload[var_name]
+        if isinstance(raw_val, (int, float)) and not isinstance(raw_val, bool):
+            return int(raw_val)
+        return 1 if bool(raw_val) else 0
+
+    flags = re.IGNORECASE if spec.nocase else 0
+    if spec.is_regex:
+        return len(re.findall(spec.pattern, sample_text, flags=flags))
+    if spec.fullword:
+        return len(re.findall(rf"\b{re.escape(spec.pattern)}\b", sample_text, flags=flags))
+    if not spec.pattern:
+        return 0
+    if spec.nocase:
+        return sample_text.lower().count(spec.pattern.lower())
+    return sample_text.count(spec.pattern)
+
+
+def _find_matching_paren(text: str, open_idx: int) -> int:
+    depth = 0
+    in_quote = False
+    in_regex = False
+    escaped = False
+    for idx in range(open_idx, len(text)):
+        ch = text[idx]
+        if escaped:
+            escaped = False
+            continue
+        if ch == "\\":
+            escaped = True
+            continue
+        if in_quote:
+            if ch == '"':
+                in_quote = False
+            continue
+        if in_regex:
+            if ch == "/":
+                in_regex = False
+            continue
+        if ch == '"':
+            in_quote = True
+            continue
+        if ch == "/":
+            prev = text[:idx].rstrip()
+            if prev.endswith("matches") or prev.endswith("("):
+                in_regex = True
+                continue
+        if ch == "(":
+            depth += 1
+        elif ch == ")":
+            depth -= 1
+            if depth == 0:
+                return idx
+    return -1
+
+
+def _expand_for_loops(
+    string_defs: Mapping[str, _StringSpec],
+    expr: str,
+    payload: Mapping[str, object],
+) -> str:
+    while True:
+        m = _FOR_HEADER_RE.search(expr)
+        if not m:
+            break
+        quantifier = m.group(1)
+        loop_var = m.group(2)
+        collection_path = m.group(3)
+        open_paren_idx = m.end() - 1
+        close_paren_idx = _find_matching_paren(expr, open_paren_idx)
+        if close_paren_idx == -1:
+            break
+
+        inner_expr = expr[open_paren_idx + 1 : close_paren_idx]
+        collection_obj = _lookup_field(payload, collection_path)
+        items: list[object] = (
+            list(collection_obj) if isinstance(collection_obj, (list, tuple)) else []
+        )
+
+        if not items:
+            loop_result = False
+        else:
+            outcomes: list[bool] = []
+            for item in items:
+                child_payload = dict(payload)
+                child_payload[loop_var] = item
+                if isinstance(item, Mapping):
+                    for k, v in item.items():
+                        child_payload[f"{loop_var}.{k}"] = v
+                outcomes.append(
+                    _evaluate_condition_against_payload(string_defs, inner_expr, child_payload)
+                )
+            loop_result = any(outcomes) if quantifier == "any" else all(outcomes)
+
+        expr = (
+            expr[: m.start()] + ("True" if loop_result else "False") + expr[close_paren_idx + 1 :]
+        )
+    return expr
+
+
 def _evaluate_condition_against_payload(
-    string_defs: Mapping[str, tuple[str, bool]],
+    string_defs: Mapping[str, _StringSpec],
     condition_expr: str,
     payload: Mapping[str, object],
 ) -> bool:
@@ -111,35 +284,99 @@ def _evaluate_condition_against_payload(
         return False
 
     sample_text = str(payload.get("sample_text", ""))
-    expr = condition_expr
+    expr = _expand_for_loops(string_defs, condition_expr, payload)
+
+    string_counts: dict[str, int] = {
+        var_name: _count_string_matches(var_name, spec, sample_text, payload)
+        for var_name, spec in string_defs.items()
+    }
+
+    def _eval_quantifier_of(match: re.Match[str]) -> str:
+        quant = match.group(1)
+        target = match.group(2).strip()
+        if target == "them":
+            candidate_vars = list(string_defs.keys())
+        else:
+            inner = target[1:-1]
+            patterns = [p.strip() for p in inner.split(",") if p.strip()]
+            candidate_vars = []
+            for var_name in string_defs:
+                for pat in patterns:
+                    if pat.endswith("*"):
+                        if var_name.startswith(pat[:-1]):
+                            candidate_vars.append(var_name)
+                            break
+                    elif var_name == pat:
+                        candidate_vars.append(var_name)
+                        break
+        matched_count = sum(1 for v in candidate_vars if string_counts.get(v, 0) > 0)
+        if quant == "any":
+            return "True" if matched_count >= 1 else "False"
+        if quant == "all":
+            return (
+                "True"
+                if (len(candidate_vars) > 0 and matched_count == len(candidate_vars))
+                else "False"
+            )
+        return "True" if matched_count >= int(quant) else "False"
+
+    expr = _QUANTIFIER_OF_RE.sub(_eval_quantifier_of, expr)
+
+    def _eval_count_var(match: re.Match[str]) -> str:
+        var_name = f"${match.group(1)}"
+        return str(string_counts.get(var_name, 0))
+
+    expr = _COUNT_VAR_RE.sub(_eval_count_var, expr)
+
+    def _eval_arith_sum(match: re.Match[str]) -> str:
+        parts = [int(p.strip()) for p in match.group(1).split("+")]
+        return str(sum(parts))
+
+    expr = _ARITH_SUM_PAREN_RE.sub(_eval_arith_sum, expr)
+    expr = _ARITH_SUM_BARE_RE.sub(_eval_arith_sum, expr)
 
     for var_name in sorted(string_defs.keys(), key=len, reverse=True):
-        needle, nocase = string_defs[var_name]
-        if var_name in payload:
-            matched = bool(payload[var_name])
-        elif nocase:
-            matched = needle.lower() in sample_text.lower()
-        else:
-            matched = needle in sample_text
+        matched = string_counts.get(var_name, 0) > 0
         expr = re.sub(
             rf"{re.escape(var_name)}\b",
             "True" if matched else "False",
             expr,
         )
 
+    def _eval_defined(match: re.Match[str]) -> str:
+        field_name = match.group(1)
+        return "True" if _lookup_field(payload, field_name) is not None else "False"
+
+    expr = _DEFINED_PAREN_RE.sub(_eval_defined, expr)
+    expr = _DEFINED_BARE_RE.sub(_eval_defined, expr)
+
     def _eval_cmp(match: re.Match[str]) -> str:
         lhs_name = match.group(1)
         op = match.group(2)
         rhs_tok = match.group(3)
-        lhs_val = _lookup_field(payload, lhs_name)
-        rhs_val = _parse_literal(rhs_tok, payload)
+        lhs_val = (
+            int(lhs_name) if re.match(r"^-?\d+$", lhs_name) else _lookup_field(payload, lhs_name)
+        )
 
         if lhs_val is None:
             return "False"
+
+        if op == "matches" and rhs_tok.startswith("/"):
+            last_slash = rhs_tok.rfind("/")
+            pattern = rhs_tok[1:last_slash]
+            flags_str = rhs_tok[last_slash + 1 :].lower()
+            flags = re.IGNORECASE if "i" in flags_str else 0
+            if "s" in flags_str:
+                flags |= re.DOTALL
+            return "True" if re.search(pattern, str(lhs_val), flags=flags) is not None else "False"
+
+        rhs_val = _parse_literal(rhs_tok, payload)
         if op == "==":
             return "True" if str(lhs_val) == str(rhs_val) else "False"
         if op == "!=":
             return "True" if str(lhs_val) != str(rhs_val) else "False"
+        if op == "iequals":
+            return "True" if str(lhs_val).lower() == str(rhs_val).lower() else "False"
         if op in ("<", "<=", ">", ">="):
             try:
                 l_num = float(str(lhs_val))
@@ -159,8 +396,12 @@ def _evaluate_condition_against_payload(
             return "True" if str(rhs_val) in str(lhs_val) else "False"
         if op == "startswith":
             return "True" if str(lhs_val).startswith(str(rhs_val)) else "False"
+        if op == "istartswith":
+            return "True" if str(lhs_val).lower().startswith(str(rhs_val).lower()) else "False"
         if op == "endswith":
             return "True" if str(lhs_val).endswith(str(rhs_val)) else "False"
+        if op == "iendswith":
+            return "True" if str(lhs_val).lower().endswith(str(rhs_val).lower()) else "False"
         if op == "matches":
             return "True" if re.search(str(rhs_val), str(lhs_val)) is not None else "False"
         return "False"
@@ -180,7 +421,7 @@ def _evaluate_condition_against_payload(
 
 
 def _safe_eval_bool_ast(expr: str) -> bool:
-    tree = ast.parse(expr, mode="eval")
+    tree = ast.parse(expr.strip(), mode="eval")
 
     def _eval_node(node: ast.AST) -> bool:
         if isinstance(node, ast.Expression):

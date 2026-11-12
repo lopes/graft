@@ -190,41 +190,43 @@ jobs:
       issues: write
     env:
       GRAFT_GTI_API_KEY: ${{ secrets.GRAFT_GTI_API_KEY }}
+      GRAFT_GTI_STAGING_API_KEY: ${{ secrets.GRAFT_GTI_STAGING_API_KEY }}
+      GRAFT_GTI_PROD_API_KEY: ${{ secrets.GRAFT_GTI_PROD_API_KEY }}
       GRAFT_GTI_FILTER: ${{ vars.GRAFT_GTI_FILTER || 'owner:self' }}
       GRAFT_GTI_NOTIFICATION_EMAILS: ${{ vars.GRAFT_GTI_NOTIFICATION_EMAILS }}
 
     steps:
       - name: Checkout repository
-        if: env.GRAFT_GTI_API_KEY != ''
+        if: env.GRAFT_GTI_API_KEY != '' || env.GRAFT_GTI_STAGING_API_KEY != '' || env.GRAFT_GTI_PROD_API_KEY != ''
         uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
       - name: Install uv
-        if: env.GRAFT_GTI_API_KEY != ''
+        if: env.GRAFT_GTI_API_KEY != '' || env.GRAFT_GTI_STAGING_API_KEY != '' || env.GRAFT_GTI_PROD_API_KEY != ''
         uses: astral-sh/setup-uv@v7
         with:
           enable-cache: true
 
       - name: Set up Python 3.13
-        if: env.GRAFT_GTI_API_KEY != ''
+        if: env.GRAFT_GTI_API_KEY != '' || env.GRAFT_GTI_STAGING_API_KEY != '' || env.GRAFT_GTI_PROD_API_KEY != ''
         run: uv python install 3.13
 
       - name: Install dependencies
-        if: env.GRAFT_GTI_API_KEY != ''
+        if: env.GRAFT_GTI_API_KEY != '' || env.GRAFT_GTI_STAGING_API_KEY != '' || env.GRAFT_GTI_PROD_API_KEY != ''
         run: uv sync --locked
 
       - name: Gate 6 - GTI server-side YARA-X compiler dry-run
-        if: env.GRAFT_GTI_API_KEY != ''
+        if: env.GRAFT_GTI_STAGING_API_KEY != '' || env.GRAFT_GTI_API_KEY != ''
         run: uv run graft gti verify
 
       - name: Gate 7 - GTI synthetic and Retrohunt replay test harness
-        if: env.GRAFT_GTI_API_KEY != ''
+        if: env.GRAFT_GTI_STAGING_API_KEY != '' || env.GRAFT_GTI_API_KEY != ''
         run: uv run graft gti test
 
       - name: Gate 8 - GTI GitOps scoped reconciliation plan
         id: gti_diff
-        if: env.GRAFT_GTI_API_KEY != ''
+        if: env.GRAFT_GTI_PROD_API_KEY != '' || env.GRAFT_GTI_API_KEY != ''
         run: |
           set +e
           DIFF_OUTPUT=$(uv run graft gti diff --env production 2>&1)
@@ -248,7 +250,7 @@ jobs:
           } > gti_diff_summary.md
 
       - name: Post GTI GitOps diff summary to PR
-        if: env.GRAFT_GTI_API_KEY != '' && github.event_name == 'pull_request'
+        if: (env.GRAFT_GTI_PROD_API_KEY != '' || env.GRAFT_GTI_API_KEY != '') && github.event_name == 'pull_request'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GH_REPO: ${{ github.repository }}

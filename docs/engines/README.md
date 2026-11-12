@@ -64,6 +64,8 @@ For example, an engine declaring all five capabilities (such as `secops`) mounts
 - `graft <engine> pull [--target all|custom|managed|datasets] [--out-datasets-dir DIR] [--force]`: Pull detection rules, managed state, or compatible datasets (`--target datasets`) from target tenant to local repository.
 - `graft <engine> managed {diff,apply,pull}`: Granular commands for vendor-managed content and exclusions.
 
+Engines with selective capabilities (such as `gti`, which enables `custom_rules`, `syntax_verification`, and `replay_testing` while setting `datasets: false` and `managed_rules: false`) automatically expose only the applicable commands (`new`, `render`, `verify`, `test`, `diff`, `apply`, `pull` for custom rules) and omit `managed` and `--target datasets`.
+
 ---
 
 ## 3. Available Documentation

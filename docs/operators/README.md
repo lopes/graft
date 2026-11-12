@@ -54,8 +54,9 @@ flowchart TD
 - **Full Catalog Reconciliation (`--all`):** Evaluates every detection rule and managed ruleset across the entire repository against the tenant. Used in mainline deployments and automated cron drift detection to guarantee complete catalog convergence.
 
 ### 3. Zero-Trust Security & Identity Federation
-- **Zero Static Keys:** Long-lived static credentials or service account JSON keys are strictly prohibited.
-- **Cryptographic Identity Federation:** CI/CD runners authenticate via short-lived OIDC token exchange pinned to the repository identity (for example, GCP Workload Identity Federation with `assertion.repository == 'lopes/graft'` for Google SecOps).
+- **Zero Static Keys (Where OIDC Is Supported):** For cloud platforms supporting OpenID Connect (such as Google SecOps), long-lived static credentials or service account JSON keys are strictly prohibited.
+- **Cryptographic Identity Federation:** CI/CD runners authenticate via short-lived OIDC token exchange pinned to the repository identity (for example, GCP Workload Identity Federation with `assertion.repository == '<owner>/<repo>'` for Google SecOps).
+- **Dedicated Least-Privilege Account Isolation (`owner:self`):** For threat intelligence platforms that authenticate via API keys (such as Google Threat Intelligence / VirusTotal v3), Graft isolates automation state inside a dedicated non-admin GTI user account (`GRAFT_GTI_FILTER="owner:self"`) with pre-mutation ownership guards (`OwnershipGuardError`).
 - **Short-Lived Developer Credentials:** Local developers authenticate via ephemeral session tokens or service account impersonation (e.g., `gcloud auth login` with impersonation).
 
 
@@ -69,4 +70,5 @@ flowchart TD
 | **[GitOps Reconciliation & Detection Synchronization](gitops_reconciliation.md)** | Deep dive into Scoped vs. Full Catalog reconciliation, zero-cost no-op diffing, untracked rule reporting, and drift remediation. |
 | **[CI/CD Automation & Infrastructure](cicd_and_infrastructure.md)** | GitHub Actions pipeline architecture, Workload Identity Federation setup, workflow path filtering, and automated drift monitoring cron jobs. |
 | **[Security Architecture & Best Practices](security.md)** | WIF token exchange mechanics, fork isolation defenses, developer impersonation workflows, and Google Cloud audit logging. |
-| **[Google SecOps Engine Reference](../../src/graft/engines/secops/README.md)** | Tenant coordinates, environment variables, authentication flags, and API quotas for the Google SecOps adapter. |
+| **[Google SecOps (`secops`) Engine Reference](../../src/graft/engines/secops/README.md)** | Tenant coordinates, environment variables, WIF setup, Data Tables, Curated Rule Sets, and API quotas for the [Google SecOps Setup Guide](../../src/graft/engines/secops/docs/README.md). |
+| **[Google Threat Intelligence (`gti`) Engine Reference](../../src/graft/engines/gti/README.md)** | Dedicated non-admin GTI account setup, Livehunt & Retrohunt YARA-X synthesis, `owner:self` isolation, and CI secrets for the [GTI Setup Guide](../../src/graft/engines/gti/docs/README.md). |
