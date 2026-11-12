@@ -3,8 +3,7 @@ metadata:
   name: "lh_rogue_ssl_certificate_brand_impersonated"
   description: "Matches external domains presenting X.509 SSL/TLS certificates spoofing ACME Financial in Subject or SAN"
   owners:
-    - "Threat Intelligence"
-    - "Detection Engineering"
+    - "Joe Lopes"
   mitre:
     resource-development:
       - "T1587.003"

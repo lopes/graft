@@ -3,8 +3,7 @@ metadata:
   name: "lh_corporate_favicon_visual_phishing_hosted"
   description: "Matches high-severity malicious external URLs serving ACME Financial's favicon perceptual dhash"
   owners:
-    - "Threat Intelligence"
-    - "Detection Engineering"
+    - "Joe Lopes"
   mitre:
     initial-access:
       - "T1566.002"

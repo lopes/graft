@@ -3,8 +3,7 @@ metadata:
   name: "lh_corporate_analytics_tracker_cloned"
   description: "Matches external phishing URLs cloning ACME Financial web analytics tracker IDs on suspicious paths"
   owners:
-    - "Threat Intelligence"
-    - "Detection Engineering"
+    - "Joe Lopes"
   mitre:
     initial-access:
       - "T1566.002"

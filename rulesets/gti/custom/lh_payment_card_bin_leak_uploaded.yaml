@@ -3,8 +3,7 @@ metadata:
   name: "lh_payment_card_bin_leak_uploaded"
   description: "Matches newly uploaded documents or archives containing bulk ACME Financial payment card BIN numbers"
   owners:
-    - "Threat Intelligence"
-    - "Fraud & Brand Protection"
+    - "Joe Lopes"
   mitre:
     collection:
       - "T1005"
