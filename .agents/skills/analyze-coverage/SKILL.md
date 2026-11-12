@@ -61,8 +61,8 @@ uv run graft --json export catalog --format json --enrich
 ```
 
 Determine:
-- Which **platforms** (`IaaS`, `SaaS`, `Office Suite`, `Identity Provider`, `Linux`, `Windows`, `macOS`, `Network Devices`, `Containers`) and **perimeter tags** (`gcp`, `aws`, `workspace`, `iam`, `network`) are actively monitored.
-- Which rules are `enabled` (alerting), `silent` (dark-launch / telemetry), or `disabled` (`enabled: false`).
+- Which **engines** (`secops` for internal SIEM/UDM telemetry; `gti` for external VirusTotal v3 Livehunt & Retrohunt horizon hunting), **platforms** (`IaaS`, `SaaS`, `Office Suite`, `Identity Provider`, `Linux`, `Windows`, `macOS`, `Network Devices`, `Containers`, `PRE`), and **perimeter tags** (`gcp`, `aws`, `workspace`, `iam`, `network`, `acme`, `phishing`, `tls`, `financial`) are monitored.
+- Which rules are `enabled` (alerting), `silent` (dark-launch / telemetry, or GTI Livehunt with empty `notification_emails`), or `disabled` (`enabled: false`, including dormant GTI Retrohunt jobs `rh_*` and disabled Livehunt templates `lh_*`).
 - Which **Data Components (`DCxxxx`)** are already proven to be ingested by active rules.
 
 ### Step 2: Run 3-State Gap Analysis (`covered` / `partial` / `uncovered`)
@@ -87,9 +87,9 @@ Keep these exact `graft mitre gaps` mechanics in mind:
    - **`partial`**: For a parent with in-scope sub-techniques, either only the parent ID is mapped generically, **or** a subset (not all) of its in-scope sub-techniques is covered. For a sub-technique, a rule mapped the parent ID generically without the specific sub-technique.
    - **`uncovered`**: Neither the technique nor any related parent/sub-technique is mapped by an active rule.
 3. **`disabled` Rules Are Excluded from Active Coverage:**
-   - Rules with status `disabled` (`enabled: false` or disabled in `managed/index.yaml`) do **not** count toward `covered` in `graft mitre gaps` or `graft mitre inspect`. Techniques backed only by `silent` rules (`enabled: true, alerting: false`) do count as `covered`—flag `silent`-only coverage in your report so operators know it does not page the SOC.
+   - Rules with status `disabled` (`enabled: false` in `secops` or `gti`, including dormant GTI Retrohunt jobs `rh_*` and disabled Livehunt rules `lh_*`, or disabled in `managed/index.yaml`) do **not** count toward `covered` in `graft mitre gaps` or `graft mitre inspect`. Call out dormant `gti` rules in your report so operators know which techniques already have authored Livehunt/Retrohunt logic ready to enable. Techniques backed only by `silent` rules (`enabled: true, alerting: false` in `secops`, or `enabled: true` with no notification emails in `gti`) do count as `covered`—flag `silent`-only coverage so operators know it does not page the SOC.
 
-### Step 3: Audit Procedural Depth & Cross-Perimeter Asymmetry on "Covered" Techniques
+### Step 3: Audit Procedural Depth & Cross-Perimeter / Multi-Engine Asymmetry on "Covered" Techniques
 Because a `covered` matrix cell only proves *at least one active rule maps to `Txxxx.xxx`*, use the technique ID as a foreign key to inspect its underlying `DETxxxx` strategies and `ANxxxx` analytics:
 
 ```bash
@@ -97,8 +97,8 @@ uv run graft --json mitre inspect <covered_Txxxx> --analytics --platform "<platf
 ```
 
 Compare the repository's existing rule(s) against the returned STIX enrichments to drive the **Engineering Feedback Loop**:
-1. **Procedure / Analytic Depth:** Does the existing rule only detect one narrow tool, command line, or event type while the technique's `ANxxxx` analytics describe broader behavioral patterns or additional `log_sources`? Are there `mutable_elements` (thresholds, allowlists, principal baselines) that should be extracted into a Graft dataset (`datasets/<name>.yaml`)?
-2. **Cross-Perimeter Asymmetry:** If the repository monitors multiple perimeters (e.g., rules tagged `aws` and `gcp`, or `workspace` and `iam`), does a `covered` technique only have a rule for one perimeter while leaving sibling `ANxxxx` log sources (`AWS:CloudTrail` vs. `gcp:audit`) unmonitored?
+1. **Procedure / Analytic Depth:** Does the existing rule only detect one narrow tool, command line, or event type while the technique's `ANxxxx` analytics describe broader behavioral patterns or additional `log_sources`? For `secops` rules, are there `mutable_elements` (thresholds, allowlists, principal baselines) that should be extracted into a Graft dataset (`datasets/<name>.yaml`)?
+2. **Cross-Perimeter & Multi-Engine Asymmetry (`secops` vs. `gti`):** If the repository monitors multiple perimeters or engines, does a `covered` technique only have a rule for one surface while leaving sibling surfaces unmonitored? Consider how internal **Google SecOps (`secops`)** telemetry (Cloud Audit Logs, Workspace, EDR, network flows) and external **Google Threat Intelligence (`gti`)** horizon hunting (Livehunt file/URL/domain/IP streams and Retrohunt corpus sweeps across `resource-development`, `initial-access`, `credential-access`, and `exfiltration`) complement each other for defense-in-depth.
 
 ### Step 4: Deep-Dive Top Priority Gaps with `graft mitre inspect`
 Select the top 3–5 highest-priority `uncovered` or `partial` gaps and fetch their detection blueprints:
@@ -110,7 +110,7 @@ uv run graft --json mitre inspect <Txxxx.xxx> --analytics --platform "<platform>
 Extract:
 - **`DETxxxx` (Detection Strategy)** and **`ANxxxx` (Platform-Specific Analytics)** behavioral descriptions.
 - **`log_sources`** (`name`, `channel`, and `DCxxxx` data component ID—noting whether existing rules already ingest that `DCxxxx`).
-- **`mutable_elements`** (`field` and `description`) that should be tuned or backed by `datasets/<name>.yaml`.
+- **`mutable_elements`** (`field` and `description`) that should be tuned (or backed by `datasets/<name>.yaml` for `secops`).
 - **`Mxxxx` (Mitigations)** for defense-in-depth compensating controls when telemetry is unavailable.
 
 ---
@@ -126,13 +126,13 @@ Present a concise, candid report that separates scope assumptions, procedural de
 - **MITRE ATT&CK Version:** `v<version>`
 - **Evaluated Scope:** `<explicit flags or --infer-scope>` (Note any platforms excluded or unmonitored due to missing CMDB context)
 - **Technique Roll-Up:** `<covered>` Covered | `<partial>` Partial | `<uncovered>` Uncovered (out of `<total_in_scope>` in-scope techniques)
-- **Inferred Telemetry Footprint:** Active platforms (`<platforms>`) and proven Data Components (`<DCxxxx>`)
-- **Deployment Posture Caveats:** Any techniques relying on `silent` (non-alerting) rules or shadowed by `disabled` rules
+- **Inferred Telemetry Footprint:** Active engines (`secops`, `gti`), platforms (`<platforms>`), and proven Data Components (`<DCxxxx>`)
+- **Deployment Posture Caveats:** Any techniques relying on `silent` (non-alerting) rules or shadowed by `disabled` rules (including dormant `gti` Livehunt/Retrohunt rules)
 
 ### 2. Procedural Depth & Cross-Perimeter Audit of "Covered" Techniques (TT vs. TTP)
 | Mapped Technique | Existing Rule(s) | Procedural / Perimeter Blind Spot (`ANxxxx` / Log Surface) | Recommended Hardening or Companion Rule |
 | :--- | :--- | :--- | :--- |
-| `Txxxx.xxx` | `<rule_name>` (`<tags/status>`) | Covers `<procedure/surface A>`, misses `<procedure/surface B or mutable_element>` | Harden `<rule_name>` / Scaffold companion rule |
+| `Txxxx.xxx` | `<rule_name>` (`<engine>/<tags>/<status>`) | Covers `<procedure/surface A>`, misses `<procedure/surface B or mutable_element>` | Harden `<rule_name>` / Scaffold companion rule in `secops` or `gti` |
 
 ### 3. Top Prioritized Detection Gaps (Ranked by Threat Group Prevalence & Log Availability)
 | Rank | Technique | State | Groups (`Gxxxx`) | Required Data Components (`DCxxxx`) | Target Strategy & Analytic (`DET` / `AN`) |
@@ -141,10 +141,11 @@ Present a concise, candid report that separates scope assumptions, procedural de
 
 ### 4. Ready-to-Scaffold Detection Blueprints (Closing the Loop)
 For each recommended new or companion rule:
-- **Proposed Rule Slug (`<subject>_<fact>`):** `<name>`
+- **Target Engine:** `secops` (YARA-L 2.0) or `gti` (YARA-X `livehunt` / `retrohunt`)
+- **Proposed Rule Slug (`<subject>_<fact>`, or `lh_`/`rh_` for `gti`):** `<name>`
 - **Target Technique & Tactic:** `<tactic>: ["<Txxxx.xxx>"]`
-- **MITRE Analytic (`ANxxxx`) & Log Source:** `<log_source name/channel>`
+- **MITRE Analytic (`ANxxxx`) & Log Source:** `<log_source name/channel or GTI entity stream>`
 - **Tunable Parameters (`mutable_elements`):** `<fields to tune or extract into datasets/>`
 - **Compensating Mitigations (`Mxxxx`):** `<mitigations>`
-- **Next Step:** `uv run graft new rule <name> --engine <engine>` (or `/scaffold-rule`)
+- **Next Step:** `uv run graft new rule <name> --engine <secops|gti>` (or `/scaffold-rule`)
 ```

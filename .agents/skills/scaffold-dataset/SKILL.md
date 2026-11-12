@@ -48,7 +48,8 @@ flowchart TD
 
 - **Two-Block Envelope Only:** Every dataset file contains strictly `metadata` and `values`. Never add `type`, `columns`, `logic`, `deployment`, `runbook`, or `tests` (`additionalProperties: false`).
 - **Filename Stem Parity:** `metadata.name` must strictly equal the YAML filename stem (`datasets/<name>.yaml`).
-- **String-Only Literal Values:** Every item in `values` is a literal string (`1..256` characters) synchronized to a single canonical column named `value` (`%<name>.value` in Google SecOps YARA-L). Do not use CIDR or regex syntax expecting CIDR/regex evaluation unless literal string matching is intended.
+- **String-Only Literal Values:** Every item in `values` is a literal string (`1..256` characters) synchronized to a single canonical column named `value` (`%<name>.value` in Google SecOps YARA-L 2.0). Do not use CIDR or regex syntax expecting CIDR/regex evaluation unless literal string matching is intended.
+- **Engine Capability Boundary (`datasets: true` vs. `datasets: false`):** Datasets are synchronized to engines implementing `DatasetPort` (such as `secops` Data Tables). Engines whose runtime does not support external lookup tables (such as `gti` YARA-X, which declares `datasets: false`) keep rules 100% native YARA-X and reject `%<dataset>` references during `graft lint`.
 
 ---
 
