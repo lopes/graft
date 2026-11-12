@@ -15,6 +15,8 @@
   <a href="https://www.python.org/"><img src="https://img.shields.io/badge/python-%3E%3D3.13-blue" alt="Python Version"></a>
   <a href="https://github.com/astral-sh/ruff"><img src="https://img.shields.io/badge/code%20style-ruff-000000.svg" alt="Code Style: ruff"></a>
   <a href="http://mypy-lang.org/"><img src="https://img.shields.io/badge/type_checked-mypy-informational" alt="Type Checked: mypy"></a>
+  <a href="src/graft/engines/secops/docs/README.md"><img src="https://img.shields.io/badge/Google-SecOps-4285F4.svg" alt="Google: SecOps"></a>
+  <a href="src/graft/engines/gti/docs/README.md"><img src="https://img.shields.io/badge/Google-GTI-4285F4.svg" alt="Google: GTI"></a>
 </p>
 
 > [!WARNING]
