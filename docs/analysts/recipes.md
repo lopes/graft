@@ -299,8 +299,8 @@ Rather than hardcoding engine-to-color mappings, Graft empowers operators to sel
 # Export Google SecOps layer (e.g. blue)
 graft export matrix --format navigator --engine secops --color "#4285F4" --out exports/secops.json
 
-# Export auxiliary engine layer (e.g. green)
-graft export matrix --format navigator --engine sentinel --color "#008744" --out exports/sentinel.json
+# Export Google Threat Intelligence layer (e.g. green)
+graft export matrix --format navigator --engine gti --color "#008744" --out exports/gti.json
 ```
 
 Each generated layer scopes techniques to tactic shortnames (e.g. `initial-access`, `defense-impairment`) and sets `selectTechniquesAcrossTactics: false`. This ensures technique scores and annotations remain locked to their relevant tactic column without bleeding across unrelated columns.
@@ -311,7 +311,7 @@ Each technique in the layer is enriched with:
 
 #### 2. Combining Layers in MITRE Navigator
 1. Navigate to the [MITRE ATT&CK Navigator Web App](https://mitre-attack.github.io/attack-navigator/).
-2. Open each exported layer (`exports/secops.json` as Layer **`a`**, `exports/sentinel.json` as Layer **`b`**).
+2. Open each exported layer (`exports/secops.json` as Layer **`a`**, `exports/gti.json` as Layer **`b`**).
 3. Click **"+" > Create Layer from Other Layers** to combine them using mathematical expressions:
    - **Combined Footprint (Union):** `max(a, b)` highlights all techniques covered by at least one engine.
    - **Redundant Defenses (Intersection):** `min(a, b)` highlights techniques covered by both engines simultaneously.
@@ -496,4 +496,65 @@ Never delete a Data Table directly in the SIEM while rules still reference `%<na
 2. **Sync Deprecation:** Merge or run `graft secops apply --env production`. If the table exists on the SIEM, Graft clears its rows to `0` and updates its description to `"Deprecated on Graft"` so existing rules keep compiling without matching stale values.
 3. **Remove Rule References:** Remove `%security_assessment_ips.value` from your rules and deploy.
 4. **Delete on SIEM & Optional Git Cleanup:** Delete the `"Deprecated on Graft"` table in the SIEM console. Once deleted remotely (404), Graft ignores the archived file on future runs, and you may optionally delete `datasets/_archived/security_assessment_ips.yaml` from Git.
+
+---
+
+## Recipe 12: Authoring, Testing & Deploying Google Threat Intelligence (`gti`) Livehunt & Retrohunt Rules
+
+### Objective
+Author a native YARA-X Livehunt (`lh_`) or Retrohunt (`rh_`) detection rule for Google Threat Intelligence (`rulesets/gti/custom/*.yaml`), render the synthesized YARA-X rule with injected `meta:` attribution, verify it against GTI's server-side YARA-X compiler, run deterministic synthetic test vectors, and deploy it under the dedicated Graft GTI account (`owner:self`).
+
+### Step 1: Scaffold the GTI Rule
+Prefix Livehunt rules with `lh_` and Retrohunt rules with `rh_`:
+```bash
+uv run graft gti new lh_rogue_ssl_certificate_brand_impersonated
+```
+
+### Step 2: Configure `deployment` (`livehunt` vs. `retrohunt`) & Author Native YARA-X `logic`
+Edit [`rulesets/gti/custom/lh_rogue_ssl_certificate_brand_impersonated.yaml`](../../rulesets/gti/custom/lh_rogue_ssl_certificate_brand_impersonated.yaml). In `logic:`, write only top-level `import "<module>"` statements (`import "vt"`, `import "pe"`, etc.) followed by optional `strings:` and `condition:` (never include the outer `rule <name> { ... }` wrapper):
+```yaml
+logic: |
+  import "vt"
+
+  condition:
+    vt.net.domain.root != "acme.com" and
+    defined vt.net.domain.https_certificate.subject.common_name and
+    (
+      vt.net.domain.raw matches /\bacme\b/i or
+      vt.net.domain.https_certificate.subject.common_name matches /\bacme\b/i or
+      (
+        vt.net.domain.https_certificate.subject.organization matches /\bacme\b/i and
+        for any name in vt.net.domain.https_certificate.subject_alternative_name : (
+          name == vt.net.domain.raw
+        )
+      )
+    )
+
+deployment:
+  type: "livehunt"
+  subtype: "domain"
+  enabled: true
+  daily_limit: 100
+```
+*(For a Retrohunt rule like [`rh_corporate_secret_key_leak_swept.yaml`](../../rulesets/gti/custom/rh_corporate_secret_key_leak_swept.yaml), set `type: "retrohunt"`, `corpus: "main"`, and `enabled: false` so it stays dormant in Git until you are ready to submit a historical scan job).*
+
+### Step 3: Render, Verify, Test & Deploy
+```bash
+# 1. Offline schema, deployment type/subtype, and MITRE ATT&CK validation
+uv run graft --json lint rulesets/gti/
+
+# 2. Preview the synthesized YARA-X rule with injected meta: attribution
+uv run graft gti render rulesets/gti/custom/lh_rogue_ssl_certificate_brand_impersonated.yaml
+
+# 3. Verify against GTI's server-side YARA-X compiler (transient disabled ruleset probe)
+uv run graft --json gti verify --all
+
+# 4. Run offline synthetic positive and negative test vectors
+uv run graft --json gti test
+
+# 5. Diff and apply to the dedicated Graft GTI account (scoped to owner:self)
+uv run graft --json gti diff --all
+uv run graft --json gti apply --all
+```
+
 

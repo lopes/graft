@@ -112,6 +112,9 @@ Graft separates privileges across three distinct principal tiers:
 | **Local Developer** | Automation Identity level | Granted token-creator / impersonation rights on the automation identity (never direct SIEM admin rights on personal accounts), ensuring all actions are auditable and short-lived. |
 | **CI/CD OIDC Principal** | Automation Identity level | Authorizes the repository-pinned OIDC federation principal to assume the automation identity during CI/CD runs. |
 
+### Engine-Specific Identity Caveat: Google Threat Intelligence (`gti`)
+Unlike cloud SIEMs with IAM service accounts (such as Google SecOps), Google Threat Intelligence authenticates via an API key (`x-apikey`) tied to a **GTI User Account** inside an Organization / Group. Always provision a **dedicated non-admin GTI user account** exclusively for Graft (`GRAFT_GTI_FILTER="owner:self"` default) so human analysts' personal Livehunt rulesets and Retrohunt jobs never overlap with Graft's state. **Never grant Group Administrator privileges to the Graft user account**, as a Group Admin can modify or delete any colleague's rulesets across the entire organization; additionally, [`GTIDeployerAdapter`](../../src/graft/engines/gti/deployer.py) explicitly verifies `relationships.owner.data.id == current_user_id` so colleague rulesets with Group Edit access (`relationships.editors`) enabled are never modified or flagged as untracked drift. See **[GTI Permissions & Least-Privilege Crash Course](../../src/graft/engines/gti/docs/README.md#2-environment-configuration-least-privilege-account--gti-permissions)** for details.
+
 ---
 
 ## 6. Secrets & Environment Isolation

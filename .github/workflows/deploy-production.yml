@@ -17,7 +17,6 @@ name: Deploy Production & Publish Catalogs
 
 permissions:
   contents: read
-  id-token: write
 
 concurrency:
   group: deploy-production
@@ -25,13 +24,19 @@ concurrency:
 
 jobs:
   deploy-production:
-    name: Deploy to SecOps & Publish Value Artifacts
+    name: Deploy to Engines & Publish Value Artifacts
     runs-on: ubuntu-latest
-    if: vars.GRAFT_SECOPS_PROD_PROJECT != ''
+    permissions:
+      contents: read
+      id-token: write
     env:
       GRAFT_SECOPS_PROD_PROJECT: ${{ vars.GRAFT_SECOPS_PROD_PROJECT }}
       GRAFT_SECOPS_PROD_LOCATION: ${{ vars.GRAFT_SECOPS_PROD_LOCATION }}
       GRAFT_SECOPS_PROD_INSTANCE_ID: ${{ vars.GRAFT_SECOPS_PROD_INSTANCE_ID }}
+      GRAFT_GTI_API_KEY: ${{ secrets.GRAFT_GTI_API_KEY }}
+      GRAFT_GTI_PROD_API_KEY: ${{ secrets.GRAFT_GTI_PROD_API_KEY }}
+      GRAFT_GTI_FILTER: ${{ vars.GRAFT_GTI_FILTER || 'owner:self' }}
+      GRAFT_GTI_NOTIFICATION_EMAILS: ${{ vars.GRAFT_GTI_NOTIFICATION_EMAILS }}
 
     steps:
       - name: Checkout repository (full history for git blame)
@@ -55,6 +60,7 @@ jobs:
 
       - name: Authenticate to Google Cloud via Workload Identity Federation
         id: auth
+        if: env.GRAFT_SECOPS_PROD_PROJECT != ''
         uses: google-github-actions/auth@v3
         with:
           token_format: "access_token"
@@ -62,9 +68,14 @@ jobs:
           service_account: ${{ secrets.GRAFT_SECOPS_PROD_SA_EMAIL }}
 
       - name: Apply GitOps desired state to Production SecOps tenant
+        if: env.GRAFT_SECOPS_PROD_PROJECT != ''
         env:
           GRAFT_SECOPS_TOKEN: ${{ steps.auth.outputs.access_token }}
         run: uv run graft secops apply --env production --all
+
+      - name: Apply GitOps desired state to Production GTI account
+        if: env.GRAFT_GTI_PROD_API_KEY != '' || env.GRAFT_GTI_API_KEY != ''
+        run: uv run graft gti apply --env production --all
 
       - name: Generate threat matrix and visibility catalogs
         run: |

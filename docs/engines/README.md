@@ -64,6 +64,8 @@ For example, an engine declaring all five capabilities (such as `secops`) mounts
 - `graft <engine> pull [--target all|custom|managed|datasets] [--out-datasets-dir DIR] [--force]`: Pull detection rules, managed state, or compatible datasets (`--target datasets`) from target tenant to local repository.
 - `graft <engine> managed {diff,apply,pull}`: Granular commands for vendor-managed content and exclusions.
 
+Engines with selective capabilities (such as `gti`, which enables `custom_rules`, `syntax_verification`, and `replay_testing` while setting `datasets: false` and `managed_rules: false`) automatically expose only the applicable commands (`new`, `render`, `verify`, `test`, `diff`, `apply`, `pull` for custom rules) and omit `managed` and `--target datasets`.
+
 ---
 
 ## 3. Available Documentation
@@ -71,5 +73,6 @@ For example, an engine declaring all five capabilities (such as `secops`) mounts
 Engine-specific setup guides, IAM policies, and operational runbooks are co-located directly inside each engine package under `src/graft/engines/<engine>/docs/`:
 
 - **[Google SecOps (`secops`) Engine Package](../../src/graft/engines/secops/README.md) & [Setup & Operations Guide](../../src/graft/engines/secops/docs/README.md):** GCP IAM permissions, Workload Identity Federation provisioning, dual-tenant staging vs. production topologies, Data Tables synchronization, Curated Rule Sets, and `findingsRefinements` exclusion runbooks.
+- **[Google Threat Intelligence (`gti`) Engine Package](../../src/graft/engines/gti/README.md) & [Setup & Operations Guide](../../src/graft/engines/gti/docs/README.md):** VirusTotal v3 Livehunt & Retrohunt native YARA-X synthesis (`import "vt"`), explicit `deployment.type` (`livehunt` | `retrohunt`) and `deployment.subtype` (`file` | `url` | `domain` | `ip_address`) schemas, shared-organization ownership guards (`GRAFT_GTI_FILTER`), transient disabled-ruleset verification, and synthetic / Retrohunt validation.
 - **[Pluggable Engine Adapter Framework](../developers/framework.md):** Architectural specification, abstraction layers, Core ports, and dynamic capabilities-driven routing.
 - **[Extending & Bootstrapping Engines](../developers/extending_engines.md):** Step-by-step developer tutorial on bootstrapping a new engine adapter (e.g. CrowdStrike, Microsoft Sentinel, Splunk) via `graft new engine`.

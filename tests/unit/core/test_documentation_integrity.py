@@ -119,29 +119,32 @@ def test_governance_and_release_files_complete() -> None:
 
 def test_core_and_cli_have_no_hardcoded_secops_coupled_branches() -> None:
     for core_py in sorted(Path("src/graft/core").rglob("*.py")):
-        content = core_py.read_text(encoding="utf-8")
-        assert "secops" not in content.lower(), (
-            f"Driving Core file {core_py} contains engine-specific 'secops' reference"
-        )
+        content = core_py.read_text(encoding="utf-8").lower()
+        for eng_token in ("secops", "gti"):
+            assert eng_token not in content, (
+                f"Driving Core file {core_py} contains engine-specific '{eng_token}' reference"
+            )
 
     for cli_py in sorted(Path("src/graft/cli").rglob("*.py")):
         if cli_py.name == "main.py":
             continue
-        content = cli_py.read_text(encoding="utf-8")
-        assert "secops" not in content.lower(), (
-            f"Driving CLI file {cli_py} contains engine-specific 'secops' reference"
-        )
+        content = cli_py.read_text(encoding="utf-8").lower()
+        for eng_token in ("secops", "gti"):
+            assert eng_token not in content, (
+                f"Driving CLI file {cli_py} contains engine-specific '{eng_token}' reference"
+            )
 
     engine_controller = Path("src/graft/cli/engine_controller.py").read_text(encoding="utf-8")
     assert "adapter: Any" not in engine_controller, (
         "engine_controller.py must type adapter as EngineAdapter, not Any"
     )
 
-    root_env_example = Path(".env.example").read_text(encoding="utf-8")
-    assert "secops" not in root_env_example.lower(), (
-        "Root .env.example must remain core-only; engine templates belong in "
-        "src/graft/engines/<engine>/.env.example"
-    )
+    root_env_example = Path(".env.example").read_text(encoding="utf-8").lower()
+    for eng_token in ("secops", "gti"):
+        assert eng_token not in root_env_example, (
+            "Root .env.example must remain core-only; engine templates belong in "
+            "src/graft/engines/<engine>/.env.example"
+        )
 
 
 def test_unit_tests_have_no_secops_references() -> None:
@@ -150,13 +153,13 @@ def test_unit_tests_have_no_secops_references() -> None:
     for test_py in sorted(Path("tests/unit").rglob("*.py")):
         if test_py == self_rel:
             continue
-        content = test_py.read_text(encoding="utf-8")
-        if "secops" in content.lower():
+        content = test_py.read_text(encoding="utf-8").lower()
+        if "secops" in content or "gti" in content:
             violations.append(str(test_py))
 
     assert not violations, (
-        "Engine-specific 'secops' references found in tests/unit/ "
-        "(move SecOps tests to tests/engines/secops/):\n" + "\n".join(violations)
+        "Engine-specific ('secops' / 'gti') references found in tests/unit/ "
+        "(move engine tests to tests/engines/<engine>/):\n" + "\n".join(violations)
     )
 
 

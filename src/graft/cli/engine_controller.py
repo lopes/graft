@@ -562,12 +562,42 @@ class EngineCommandController:
 
         failed = 0
         total_vectors = 0
+        skipped_vectors = 0
+        skip_reason = ""
         results_list: list[dict[str, Any]] = []
 
         for rule in rules_with_tests:
             for vec in rule.tests:
                 total_vectors += 1
                 res = replay.run_test_vector(rule, vec)
+                unavail = getattr(replay, "unavailable_reason", None)
+                if not res.passed and isinstance(unavail, str) and unavail:
+                    if require_staging:
+                        err_msg = f"--require-staging was specified but {unavail}"
+                        if json_output:
+                            sys.stdout.write(
+                                json.dumps({"success": False, "error": err_msg}) + "\n"
+                            )
+                        else:
+                            sys.stderr.write(f"Error: {err_msg}.\n")
+                        return 1
+                    skipped_vectors += 1
+                    skip_reason = unavail
+                    results_list.append(
+                        {
+                            "rule": rule.metadata.name,
+                            "test_id": res.test_id,
+                            "passed": True,
+                            "skipped": True,
+                            "message": unavail,
+                        }
+                    )
+                    if not json_output:
+                        sys.stdout.write(
+                            f"[WARNING] Skipping replay test "
+                            f"{rule.metadata.name} :: {res.test_id}: {unavail}\n"
+                        )
+                    continue
                 if not res.passed:
                     failed += 1
                 results_list.append(
@@ -583,6 +613,22 @@ class EngineCommandController:
                         sys.stdout.write(f"[PASS] {rule.metadata.name} :: {res.test_id}\n")
                     else:
                         sys.stderr.write(f"[FAIL] {rule.metadata.name} :: {res.test_id}\n")
+
+        if total_vectors > 0 and skipped_vectors == total_vectors:
+            if json_output:
+                sys.stdout.write(
+                    json.dumps(
+                        {
+                            "success": True,
+                            "skipped": True,
+                            "reason": skip_reason,
+                            "total": 0,
+                            "results": [],
+                        }
+                    )
+                    + "\n"
+                )
+            return 0
 
         if json_output:
             sys.stdout.write(
@@ -697,11 +743,27 @@ class EngineCommandController:
                     comparator if callable(comparator) else None
                 )
 
+                dep_cmp = getattr(deployer, "are_deployments_equal", None)
+                if not callable(dep_cmp):
+                    dep_cmp = getattr(adapter, "are_deployments_equal", None)
+                deployment_comparator: Callable[[RuleEnvelope, RuleEnvelope], bool] | None = (
+                    dep_cmp if callable(dep_cmp) else None
+                )
+
+                create_flt = getattr(deployer, "should_deploy_rule", None)
+                if not callable(create_flt):
+                    create_flt = getattr(adapter, "should_deploy_rule", None)
+                should_create_filter: Callable[[RuleEnvelope], bool] | None = (
+                    create_flt if callable(create_flt) else None
+                )
+
                 reconciler = CustomRuleReconciler()
                 diff = reconciler.diff(
                     current=remote,
                     desired=desired,
                     content_comparator=content_comparator,
+                    deployment_comparator=deployment_comparator,
+                    should_create_filter=should_create_filter,
                     scoped=not all_rules,
                 )
 
@@ -837,12 +899,28 @@ class EngineCommandController:
                     comparator if callable(comparator) else None
                 )
 
+                dep_cmp = getattr(deployer, "are_deployments_equal", None)
+                if not callable(dep_cmp):
+                    dep_cmp = getattr(adapter, "are_deployments_equal", None)
+                deployment_comparator: Callable[[RuleEnvelope, RuleEnvelope], bool] | None = (
+                    dep_cmp if callable(dep_cmp) else None
+                )
+
+                create_flt = getattr(deployer, "should_deploy_rule", None)
+                if not callable(create_flt):
+                    create_flt = getattr(adapter, "should_deploy_rule", None)
+                should_create_filter: Callable[[RuleEnvelope], bool] | None = (
+                    create_flt if callable(create_flt) else None
+                )
+
                 custom_reconciler = CustomRuleReconciler()
                 try:
                     diff = custom_reconciler.apply(
                         desired=desired,
                         port=deployer,
                         content_comparator=content_comparator,
+                        deployment_comparator=deployment_comparator,
+                        should_create_filter=should_create_filter,
                         scoped=not all_rules,
                     )
                 except Exception:
@@ -1128,12 +1206,13 @@ def register_engine_commands(
         )
         new_p.add_argument("rule_name", help="Technical rule name (lowercase slug)")
         new_p.add_argument("--out", help="Custom target path for rule YAML")
-        new_p.add_argument(
-            "--managed",
-            default=None,
-            metavar="MANAGED_ID",
-            help="Scaffold a registered managed rule in rulesets/<engine>/managed/",
-        )
+        if caps.managed_rules:
+            new_p.add_argument(
+                "--managed",
+                default=None,
+                metavar="MANAGED_ID",
+                help="Scaffold a registered managed rule in rulesets/<engine>/managed/",
+            )
 
         targets: list[str] = ["custom"]
         if caps.datasets:
@@ -1183,10 +1262,12 @@ def register_engine_commands(
         pull_p.add_argument("--env", choices=envs, default=envs[-1] if envs else "production")
         pull_p.add_argument("--target", choices=pull_targets, default=pull_targets[0])
         pull_p.add_argument("--out-dir", default=f"rulesets/{manifest.name}/custom")
-        pull_p.add_argument(
-            "--out-manifest", default=f"rulesets/{manifest.name}/managed/index.yaml"
-        )
-        pull_p.add_argument("--out-datasets-dir", default="datasets")
+        if caps.managed_rules:
+            pull_p.add_argument(
+                "--out-manifest", default=f"rulesets/{manifest.name}/managed/index.yaml"
+            )
+        if caps.datasets:
+            pull_p.add_argument("--out-datasets-dir", default="datasets")
         pull_p.add_argument("--force", action="store_true")
 
     if caps.syntax_verification:

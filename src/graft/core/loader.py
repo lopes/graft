@@ -108,19 +108,14 @@ def load_rule_from_str(
     if isinstance(managed_raw, dict) and "id" in managed_raw:
         managed_ref = ManagedRuleRef(id=str(managed_raw["id"]))
         logic_str = ""
-        deployment = BaseDeploymentConfig(
-            enabled=False,
-            alerting=False,
-            run_frequency="unspecified",
-        )
+        deployment = BaseDeploymentConfig()
     else:
         logic_str = str(data.get("logic", ""))
         deployment_raw: dict[str, Any] = data.get("deployment", {})
-        deployment = BaseDeploymentConfig(
-            enabled=bool(deployment_raw.get("enabled", True)),
-            alerting=bool(deployment_raw.get("alerting", True)),
-            run_frequency=str(deployment_raw.get("run_frequency", "unspecified")),
-        )
+        if deployment_raw:
+            deployment = BaseDeploymentConfig.from_dict(deployment_raw)
+        else:
+            deployment = BaseDeploymentConfig()
 
     runbook_raw: dict[str, Any] = data.get("runbook", {})
     runbook = Runbook(
@@ -247,11 +242,7 @@ def rule_to_dict(rule: RuleEnvelope) -> dict[str, Any]:
         }
     else:
         doc["logic"] = rule.logic
-        doc["deployment"] = {
-            "enabled": rule.deployment.enabled,
-            "alerting": rule.deployment.alerting,
-            "run_frequency": rule.deployment.run_frequency,
-        }
+        doc["deployment"] = rule.deployment.to_dict()
 
     doc["runbook"] = {
         "context": rule.runbook.context,

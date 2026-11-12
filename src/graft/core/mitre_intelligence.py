@@ -92,6 +92,7 @@ def _normalize_rules(
     rules: Sequence[RuleInputItem],
 ) -> list[tuple[RuleEnvelope, str, str | None, str]]:
     normalized: list[tuple[RuleEnvelope, str, str | None, str]] = []
+    adapter_cache: dict[str, Any] = {}
     for item in rules:
         if isinstance(item, tuple):
             rule_obj = item[0]
@@ -106,12 +107,23 @@ def _normalize_rules(
 
         if explicit_status is not None:
             status = explicit_status
-        elif rule_obj.is_managed or not rule_obj.deployment.enabled:
-            status = "disabled"
-        elif not rule_obj.deployment.alerting:
-            status = "silent"
         else:
-            status = "enabled"
+            from graft.core.catalog import resolve_rule_deployment_status
+
+            adapter = None
+            if engine_name != "custom":
+                if engine_name not in adapter_cache:
+                    from graft.core.engine_registry import EngineRegistry
+
+                    reg = EngineRegistry()
+                    try:
+                        adapter_cache[engine_name] = (
+                            reg.load_adapter(engine_name) if reg.has(engine_name) else None
+                        )
+                    except Exception:
+                        adapter_cache[engine_name] = None
+                adapter = adapter_cache[engine_name]
+            status = resolve_rule_deployment_status(rule_obj, engine=engine_name, adapter=adapter)
 
         normalized.append((rule_obj, engine_name, path_val, status))
     return normalized

@@ -69,26 +69,26 @@ Evaluate each rule across all blocks and classify every check as `PASS`, `WARN`,
   - Verify tactics and techniques are active (flagging any revoked or deprecated IDs) and use the **most specific sub-technique** (`TXXXX.XXX`) that reflects the telemetry in `logic` so downstream foreign-key joins (`Gxxxx`, `DETxxxx`, `ANxxxx`, `DCxxxx`, `Mxxxx`) remain accurate.
   - Flag leftover `graft new rule` stub mappings (`execution: ["T1059.001"]`) when the rule is unrelated to PowerShell.
 - **Tags:**
-  - Does `metadata.tags` contain 2–3 broad, reusable lowercase platform/surface labels (e.g., `gcp`, `iam`, `workspace`, `email`, `whois`, `gcti`, `network`)?
-  - Flag tags that duplicate the engine name (`secops`), rule type (`custom`, `managed`), or MITRE tactic names (`initial-access`, `persistence`).
+  - Does `metadata.tags` contain 2–3 broad, reusable lowercase platform/surface labels matching `^[a-z0-9_/:-]{1,32}$` (e.g., `gcp`, `iam`, `workspace`, `email`, `whois`, `web`, `sso`, `phishing`, `windows`, `pe`, `network`)?
+  - Flag tags that duplicate the engine name (`secops`, `gti`), rule/deployment type or subtype (`custom`, `managed`, `livehunt`, `retrohunt`, `url`, `file`), or MITRE tactic names (`initial-access`, `persistence`, `reconnaissance`).
 - **References:**
-  - Do `metadata.references` cite the matching MITRE technique URLs and/or relevant vendor docs or threat research (flagging leftover `T1059/001` stub URLs)?
+  - Do `metadata.references` cite relevant vendor docs, threat research, or community rule attributions (flagging any redundant MITRE ATT&CK technique URLs like `https://attack.mitre.org/techniques/...`, since `metadata.mitre` already maps techniques)?
 
 ### Block 2: `logic` *(Custom Rules Only)*
-- **Stub Detection:** Flag immediately (`FAIL`) if `logic` still contains the default `USER_LOGIN` stub from `graft new rule`.
+- **Stub Detection:** Flag immediately (`FAIL`) if `logic` still contains the default `USER_LOGIN` (`secops`) or bare `vt.net.url.new_url` (`gti`) stub from `graft new rule`.
 - **Semantic Alignment & Procedural Depth:** Does the query actually detect the behavior claimed in `metadata.description`, `runbook.context`, and the technique's MITRE `DETxxxx` / `ANxxxx` analytics (`log_sources` and `mutable_elements`)? Flag if the query is brittle (e.g., matching a single tool filename when the underlying `DCxxxx` data component supports a broader behavioral predicate, or hardcoding thresholds/allowlists that belong in a dataset).
 - **Query Hygiene & Performance:**
-  - Are event variable names descriptive (`$mail`, `$whois`, `$iam` rather than `$e1`, `$e2`)?
+  - Are event/string variable names descriptive (`$mail`, `$whois`, `$iam`, `$str_minidump` rather than `$e1`, `$e2`)?
   - Are multi-event joins selective and bounded by an explicit, justified `match:` time window?
   - Are magic numbers (such as `604800` seconds or numeric `product_event_type` codes) explained with inline comments?
   - Are unanchored regexes or overly broad predicates likely to cause high false-positive volume?
-  - If `logic` references a local dataset in `datasets/<name>.yaml`, verify it uses `%<name>.value` and literal string membership (`in %<name>.value`, never `in cidr` or `in regex`).
-  - Verify `logic` does **not** include an outer `rule <name> { meta: ... }` wrapper (Graft synthesizes the wrapper automatically for SecOps).
+  - If `logic` references a local dataset in `datasets/<name>.yaml` (`secops`), verify it uses `%<name>.value` and literal string membership (`in %<name>.value`, never `in cidr` or `in regex`); for `gti`, verify `logic` contains zero `%<dataset>` references (`datasets: false`).
+  - Verify `logic` does **not** include an outer `rule <name> { meta: ... }` wrapper (Graft synthesizes the wrapper automatically for `secops` and `gti`).
 
 ### Block 3: `deployment` / `managed`
 - **Custom Rules (`deployment`):**
-  - Check `enabled`, `alerting`, and `run_frequency`.
-  - Emit a `WARN` if a newly scaffolded or high-noise rule sets `alerting: true` without tuned exclusions or high-confidence predicates.
+  - For `secops`, check `enabled`, `alerting`, and `run_frequency` (emit a `WARN` if a newly scaffolded or high-noise rule sets `alerting: true` without tuned exclusions).
+  - For `gti`, check `type` (`"livehunt"` or `"retrohunt"`) and `enabled`: verify `subtype` (`"file" | "url" | "domain" | "ip_address"`) and `daily_limit` on `livehunt` rules, or `corpus` (`"main" | "goodware"`) and optional `start_time`/`end_time` on `retrohunt` rules (emit a `WARN` if a `retrohunt` rule is committed with `enabled: true` when intended to remain dormant in Git).
 - **Registered Managed Rules (`managed`):**
   - Verify `managed.id` exists in `rulesets/<engine>/managed/index.yaml` and that `metadata.name` / `runbook` accurately describe that specific vendor ruleset.
 

@@ -1,0 +1,75 @@
+metadata:
+  id: "8f14e45f-ceea-467a-a124-000000000005"
+  name: "lh_corporate_favicon_visual_phishing_hosted"
+  description: "Matches high-severity malicious external URLs serving ACME Financial's favicon perceptual dhash"
+  owners:
+    - "Joe Lopes"
+  mitre:
+    initial-access:
+      - "T1566.002"
+    stealth:
+      - "T1036.005"
+  tags:
+    - "acme"
+    - "dhash"
+    - "favicon"
+    - "phishing"
+  references:
+    - "https://gtidocs.virustotal.com/docs/url-object"
+
+logic: |
+  import "vt"
+
+  condition:
+    // Gatekeeper: newly observed external URL rated High-Severity Malicious by GTI
+    vt.net.url.new_url and
+    vt.net.domain.root != "acme.com" and
+    vt.net.url.gti_assessment.verdict.value == vt.GtiVerdict.VERDICT_MALICIOUS and
+    vt.net.url.gti_assessment.severity.value == vt.GtiSeverity.SEVERITY_HIGH and
+    // Visual brand impersonation: perceptual difference hash (dhash) of ACME Financial's favicon
+    (
+      vt.net.url.favicon.dhash == "0f334d4d4d69330f" or
+      vt.net.url.favicon.dhash == "f0ccecededb0d0f0"
+    )
+
+deployment:
+  type: "livehunt"
+  subtype: "url"
+  enabled: false
+  daily_limit: 100
+
+runbook:
+  context: |
+    Sophisticated phishing kits targeting ACME Financial (`acme.com`) frequently obfuscate HTML text, render login forms using canvas/images, or dynamically load DOM elements so keyword-based scanners fail (`T1566.002`, `T1036.005`). However, to make the browser tab appear authentic to victims, these kits almost always serve ACME Financial's favicon (`<link rel="icon">`). This `subtype: "url"` Livehunt rule matches newly observed URLs outside `acme.com` that carry a GTI High-Severity Malicious verdict (`VERDICT_MALICIOUS` and `SEVERITY_HIGH`) and match the perceptual difference hash (`vt.net.url.favicon.dhash`) of ACME Financial's primary or inverted brand icon (`0f334d4d4d69330f` or `f0ccecededb0d0f0`). Because perceptual `dhash` resists minor image resizing, compression, or format conversion (`.ico` to `.png`), this rule catches visual clones even when the adversary re-encodes the icon.
+  triage: |
+    1. Open the matched URL (`vt.net.url.raw`) and root domain (`vt.net.domain.root`) in Google Threat Intelligence and inspect the rendered page screenshot, favicon preview (`vt.net.url.favicon`), and GTI verdict assessment.
+    2. Pivot on `vt.net.url.favicon.dhash` and `vt.net.url.favicon.raw_md5` in GTI to uncover sibling phishing domains deployed from the same phishing kit campaign.
+    3. Search ACME Financial's secure web gateway, DNS logs, and email gateway telemetry (`DC0085` Network Traffic Content, `DC0082` Network Connection Creation) for any employee clicks or referral traffic to the matched domain cluster.
+  response: |
+    1. Block the matched root domain (`vt.net.domain.root`) and any sibling domains sharing the favicon cluster at corporate DNS, web proxy, and email security controls (`M1021` Restrict Web-Based Content).
+    2. For any employee or customer identified in proxy or IdP logs as visiting the phishing URL, terminate active sessions, rotate credentials, and verify MFA factors (`M1032` Multi-factor Authentication, `M1027` Password Policies).
+    3. File emergency phishing takedown notices with the domain registrar and hosting provider.
+
+tests:
+  - id: "match_external_malicious_url_with_acme_favicon_dhash"
+    description: "High-severity malicious external URL serving ACME Financial's favicon dhash triggers a match"
+    expect: 1
+    events:
+      - timestamp: "2026-10-15T12:00:00Z"
+        payload:
+          vt.net.url.new_url: true
+          vt.net.domain.root: "secure-acme-auth.test"
+          vt.net.url.gti_assessment.verdict.value: "vt.GtiVerdict.VERDICT_MALICIOUS"
+          vt.net.url.gti_assessment.severity.value: "vt.GtiSeverity.SEVERITY_HIGH"
+          vt.net.url.favicon.dhash: "0f334d4d4d69330f"
+  - id: "ignore_unmatched_favicon_dhash"
+    description: "External URL with an unrelated favicon dhash does not trigger a match"
+    expect: 0
+    events:
+      - timestamp: "2026-10-15T12:05:00Z"
+        payload:
+          vt.net.url.new_url: true
+          vt.net.domain.root: "secure-acme-auth.test"
+          vt.net.url.gti_assessment.verdict.value: "vt.GtiVerdict.VERDICT_MALICIOUS"
+          vt.net.url.gti_assessment.severity.value: "vt.GtiSeverity.SEVERITY_HIGH"
+          vt.net.url.favicon.dhash: "1111222233334444"

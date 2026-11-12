@@ -22,14 +22,15 @@ flowchart TD
             G3["Gate 3: mypy --strict"]
             G4["Gate 4: pytest"]
             G5["Gate 5: graft lint"]
-            G1 --> G2 --> G3 --> G4 --> G5
+            G5B["Gate 5b: graft gti test (Offline Synthetic YARA-X)"]
+            G1 --> G2 --> G3 --> G4 --> G5 --> G5B
         end
 
-        subgraph CLOUD["Cloud Gates (secops-cloud-gates)"]
-            WIF_PR["WIF Token Exchange"]
-            G6["Gate 6: Chronicle verifyRuleText Dry-Run"]
-            G7["Gate 7: Synthetic UDM Replay Tests"]
-            G8["Gate 8: Scoped GitOps Diff Plan"]
+        subgraph CLOUD["Cloud Gates (secops-cloud-gates &amp; gti-cloud-gates)"]
+            WIF_PR["Auth: GCP WIF (secops) / GTI Secret (gti)"]
+            G6["Gate 6: Server-Side Compiler Dry-Run (verify)"]
+            G7["Gate 7: Staging / Retrohunt Replay Tests (test)"]
+            G8["Gate 8: Scoped GitOps Diff Plan (diff)"]
             COMMENT["Post Reconcile Plan as PR Comment"]
             WIF_PR --> G6 --> G7 --> G8 --> COMMENT
         end
@@ -38,13 +39,13 @@ flowchart TD
         OFFLINE --> CLOUD
     end
 
-    subgraph PROD["2. Mainline Deployment & Daily TTL Sync (.github/workflows/deploy-production.yml)"]
+    subgraph PROD["2. Mainline Deployment &amp; Daily TTL Sync (.github/workflows/deploy-production.yml)"]
         direction TB
         MERGE["Merge to main OR Daily Schedule (cron '0 0 * * *')"]
         LINT_SANITY["graft lint Sanity Check"]
-        WIF_PROD["WIF Token Exchange"]
-        APPLY_ALL["graft secops apply --env production --all<br/>(Datasets + Custom Rules + Managed Convergence)"]
-        EXPORTS["Generate MITRE Navigator Layer & Rule Catalogs"]
+        WIF_PROD["Auth: GCP WIF (secops) / GTI Secret (gti)"]
+        APPLY_ALL["graft secops apply --env production --all<br/>graft gti apply --env production --all"]
+        EXPORTS["Generate MITRE Navigator Layer &amp; Rule Catalogs"]
         ARTIFACTS["Publish Governance Release Artifacts"]
         
         MERGE --> LINT_SANITY --> WIF_PROD --> APPLY_ALL --> EXPORTS --> ARTIFACTS
@@ -78,13 +79,19 @@ Runs on standard `ubuntu-latest` without requiring cloud credentials:
 - **Gate 3 (Static Typing):** `uv run mypy --strict src tests` guarantees 100% type safety with zero `Any` leakage.
 - **Gate 4 (Unit & Engine Tests):** `uv run pytest tests/unit tests/engines` executes all isolated unit and engine contract tests in sub-seconds.
 - **Gate 5 (Rules, Datasets & Schemas):** `uv run graft lint` validates datasets (`datasets/*.yaml`, including `ttl:YYYY-MM-DD` inline comment directives), custom rules (`%<name>.value` cross-references), and managed manifests against Draft 2020-12 schemas and MITRE ATT&CK technique IDs.
+- **Gate 5b (Offline GTI Synthetic YARA-X Unit Tests):** `uv run graft gti test` evaluates all synthetic `vt.*`, `filesize`, and `strings:` test vectors in `rulesets/gti/custom/*.yaml` completely offline in memory without requiring GTI API credentials.
 - **Advisory Upstream MITRE Release Check (Non-Blocking):** `uv run graft mitre update --check || true` checks the upstream MITRE ATT&CK Enterprise index and surfaces an informational notice when a newer ATT&CK release is available without failing offline builds.
 
-### 2. Cloud Gates (`secops-cloud-gates`)
-Requires WIF credentials and runs only on trusted internal branches:
-- **Gate 6 (Compiler Dry-Run):** `uv run graft secops verify --env staging` invokes Chronicle's `:verifyRuleText` endpoint to ensure YARA-L logic compiles cleanly against the live tenant schema without saving or deploying anything.
-- **Gate 7 (Synthetic Replay):** `uv run graft secops test` runs synthetic test fixtures against staging infrastructure (or non-alerting quarantine).
-- **Gate 8 (Scoped Reconciliation Diff):** `uv run graft secops diff --env production` computes a Scoped diff of datasets and rules modified in the branch and posts the plan directly to the PR discussion.
+### 2. Cloud Gates (`secops-cloud-gates` & `gti-cloud-gates`)
+Run on trusted internal branches when engine credentials are configured in GitHub Secrets/Variables:
+- **Google SecOps (`secops-cloud-gates`, via GCP WIF):**
+  - **Gate 6 (Compiler Dry-Run):** `uv run graft secops verify --env staging` invokes Chronicle's `:verifyRuleText` endpoint to ensure YARA-L logic compiles cleanly against the live tenant schema without saving or deploying anything.
+  - **Gate 7 (Synthetic Replay):** `uv run graft secops test` runs synthetic test fixtures against staging infrastructure (or non-alerting quarantine).
+  - **Gate 8 (Scoped Reconciliation Diff):** `uv run graft secops diff --env production` computes a scoped diff of datasets and rules modified in the branch and posts the plan directly to the PR discussion.
+- **Google Threat Intelligence (`gti-cloud-gates`, active when `secrets.GRAFT_GTI_API_KEY` is set):**
+  - **Gate 6 (Server-Side YARA-X Dry-Run):** `uv run graft gti verify` validates modified rules against GTI's server-side YARA-X compiler via a transient disabled ruleset.
+  - **Gate 7 (Synthetic & Retrohunt Replay):** `uv run graft gti test` executes synthetic unit vectors and any on-demand `mode: "retrohunt"` corpus checks.
+  - **Gate 8 (Scoped Reconciliation Diff):** `uv run graft gti diff --env production` computes the scoped Livehunt/Retrohunt plan (isolated to `owner:self` by default) and posts it to the PR.
 
 ---
 
@@ -98,8 +105,9 @@ When a pull request is merged into `main`—or at `00:00` UTC every day (`schedu
 4. **Full Catalog Reconciliation:**
    ```bash
    uv run graft secops apply --env production --all
+   uv run graft gti apply --env production --all
    ```
-   Enforces full convergence across reusable datasets (`datasets/*.yaml` and `datasets/_archived/*.yaml`), custom detection rules, and vendor-managed curated content. Running daily at `00:00` UTC guarantees that dataset values whose `ttl:YYYY-MM-DD` expiration date passed the previous UTC day are automatically removed from the SIEM even on days without Git commits, while also healing any out-of-band console drift.
+   Enforces full convergence across reusable datasets (`datasets/*.yaml` and `datasets/_archived/*.yaml`), custom detection rules (Google SecOps YARA-L 2.0 rules, GTI Livehunt rulesets, and enabled GTI Retrohunt jobs under `owner:self`), and vendor-managed curated content. Running daily at `00:00` UTC guarantees that dataset values whose `ttl:YYYY-MM-DD` expiration date passed the previous UTC day are automatically removed from the SIEM even on days without Git commits, while also healing any out-of-band console drift.
 5. **Governance Artifact Generation:**
    ```bash
    mkdir -p exports layers
@@ -146,6 +154,7 @@ Graft pipelines authenticate to downstream SIEM and cloud APIs using short-lived
    - **Repository Variables (`${{ vars.* }}`):** Store non-sensitive tenant routing coordinates (e.g., `GRAFT_<ENGINE>_PROD_*` and `GRAFT_<ENGINE>_STAGING_*`).
 4. **Engine-Specific Provisioning Runbooks:**
    - For step-by-step `gcloud` commands to provision Google Cloud Workload Identity Federation, service accounts, and GitHub Actions secrets/variables for Google SecOps, see the **[Google SecOps Engine Setup & Operations Guide](../../src/graft/engines/secops/docs/README.md)**.
+   - For provisioning a dedicated non-admin GTI User Account, local `src/graft/engines/gti/.env`, and GitHub Actions `GRAFT_GTI_API_KEY` secret for Google Threat Intelligence, see the **[Google Threat Intelligence (`gti`) Engine Setup & Operations Guide](../../src/graft/engines/gti/docs/README.md)**.
 
 ---
 

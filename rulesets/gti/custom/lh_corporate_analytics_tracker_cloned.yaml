@@ -1,0 +1,97 @@
+metadata:
+  id: "8f14e45f-ceea-467a-a124-000000000003"
+  name: "lh_corporate_analytics_tracker_cloned"
+  description: "Matches external phishing URLs cloning ACME Financial web analytics tracker IDs on suspicious paths"
+  owners:
+    - "Joe Lopes"
+  mitre:
+    initial-access:
+      - "T1566.002"
+    resource-development:
+      - "T1585.002"
+  tags:
+    - "acme"
+    - "phishing"
+    - "tracker"
+    - "web"
+  references:
+    - "https://gtidocs.virustotal.com/docs/url-hunting"
+
+logic: |
+  import "vt"
+
+  condition:
+    // Gatekeeper: external newly observed URL containing one of ACME Financial's web analytics tracker IDs
+    (
+      for any tracker in vt.net.url.trackers: (
+        tracker.id == "G-ACME000001" or
+        tracker.id == "G-ACME000002" or
+        tracker.id == "GTM-ACME001"
+      )
+    ) and
+    vt.net.domain.root != "acme.com" and
+    vt.net.url.new_url and
+    // Risk correlation: GTI/AV malicious or suspicious signal, credential-harvesting URI path, or malicious download
+    (
+      (
+        (defined vt.net.url.analysis_stats.malicious and vt.net.url.analysis_stats.malicious >= 1) or
+        (defined vt.net.url.analysis_stats.suspicious and vt.net.url.analysis_stats.suspicious >= 1) or
+        (
+          defined vt.net.url.gti_assessment.verdict.value and
+          (
+            vt.net.url.gti_assessment.verdict.value == vt.GtiVerdict.VERDICT_MALICIOUS or
+            vt.net.url.gti_assessment.verdict.value == vt.GtiVerdict.VERDICT_SUSPICIOUS
+          )
+        )
+      ) or
+      (
+        vt.net.url.path matches /\/(login|signin|auth|sso|verify|account|portal|secure|password|checkpoint|credential|webmail|update)\b/i or
+        vt.net.url.path matches /\.(php|asp|aspx|jsp)\b/i
+      ) or
+      (
+        defined vt.net.url.downloaded_file.analysis_stats.malicious and
+        vt.net.url.downloaded_file.analysis_stats.malicious >= 1
+      )
+    )
+
+deployment:
+  type: "livehunt"
+  subtype: "url"
+  enabled: false
+  daily_limit: 100
+
+runbook:
+  context: |
+    When phishing operators use automated website cloners (`HTTrack`, `SingleFile`) or reverse-proxy AiTM frameworks (`Evilginx2`, `Modlishka`) to mirror ACME Financial's (`acme.com`) online banking portal, they routinely fail to strip embedded Google Analytics (`G-ACME000001`, `G-ACME000002`) and Google Tag Manager (`GTM-ACME001`) script tags from the cloned HTML DOM. This `subtype: "url"` Livehunt rule inspects `vt.net.url.trackers` across newly observed external URLs (`vt.net.domain.root != "acme.com"`) and correlates stolen ACME tracker IDs against three threat signals: (1) GTI or AV malicious/suspicious verdict assessment, (2) zero-day credential harvesting paths (`/login`, `/signin`, `/sso`, `/verify`, or dynamic `.php`/`.aspx` handlers), or (3) malicious downloaded files (`vt.net.url.downloaded_file.analysis_stats.malicious >= 1`). Authorized third-party web agencies staging pre-release pages outside `acme.com` can be excluded by adding their staging root domain to the condition.
+  triage: |
+    1. Inspect `vt.net.url.raw`, `vt.net.domain.root`, and the matched `vt.net.url.trackers` entry in Google Threat Intelligence to verify which ACME Financial property was cloned.
+    2. Review the URL's HTTP response headers, DOM screenshot, and any downloaded payload (`vt.net.url.downloaded_file`) to determine whether the site is an active credential harvester or malware delivery page.
+    3. Query ACME Financial's proxy, DNS, and IdP authentication logs (`DC0085` Network Traffic Content, `DC0067` Logon Session Creation) for referrals or user visits to `vt.net.domain.root`.
+  response: |
+    1. Block `vt.net.domain.root` and `vt.net.url.raw` across ACME Financial's web proxy, DNS firewall, and email security gateway (`M1021` Restrict Web-Based Content).
+    2. Configure ACME's Google Analytics / Tag Manager properties to alert on or drop telemetry beacons carrying a `document.location.hostname` outside `*.acme.com`.
+    3. Reset credentials and revoke session tokens for any employee or customer account that submitted credentials to the cloned portal (`M1017` User Training, `M1027` Password Policies).
+
+tests:
+  - id: "match_cloned_acme_tracker_on_external_sso_login_url"
+    description: "External newly observed URL embedding ACME's G-ACME000001 tracker on an SSO login path triggers a match"
+    expect: 1
+    events:
+      - timestamp: "2026-10-15T12:00:00Z"
+        payload:
+          vt.net.url.trackers:
+            - id: "G-ACME000001"
+          vt.net.domain.root: "acme-online-banking.test"
+          vt.net.url.new_url: true
+          vt.net.url.path: "/sso/login"
+  - id: "ignore_acme_tracker_on_legitimate_corporate_domain"
+    description: "Legitimate acme.com URL carrying ACME's analytics tracker is excluded"
+    expect: 0
+    events:
+      - timestamp: "2026-10-15T12:05:00Z"
+        payload:
+          vt.net.url.trackers:
+            - id: "G-ACME000001"
+          vt.net.domain.root: "acme.com"
+          vt.net.url.new_url: true
+          vt.net.url.path: "/sso/login"

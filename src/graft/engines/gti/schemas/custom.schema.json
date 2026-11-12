@@ -1,0 +1,133 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "gti_custom.schema.json",
+  "title": "Google Threat Intelligence (GTI) Custom Rule Envelope Schema",
+  "type": "object",
+  "allOf": [
+    {
+      "$ref": "base_custom.schema.json"
+    },
+    {
+      "type": "object",
+      "properties": {
+        "deployment": {
+          "type": "object",
+          "required": [
+            "type",
+            "enabled"
+          ],
+          "properties": {
+            "type": {
+              "type": "string",
+              "enum": [
+                "livehunt",
+                "retrohunt"
+              ]
+            },
+            "enabled": {
+              "type": "boolean"
+            },
+            "subtype": {
+              "type": "string",
+              "enum": [
+                "file",
+                "url",
+                "domain",
+                "ip_address"
+              ]
+            },
+            "daily_limit": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 10000
+            },
+            "corpus": {
+              "type": "string",
+              "enum": [
+                "main",
+                "goodware"
+              ]
+            },
+            "start_time": {
+              "type": "string",
+              "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?(Z|[+-]\\d{2}:\\d{2})$"
+            },
+            "end_time": {
+              "type": "string",
+              "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?(Z|[+-]\\d{2}:\\d{2})$"
+            },
+            "notification_emails": {
+              "type": "array",
+              "uniqueItems": true,
+              "items": {
+                "type": "string",
+                "minLength": 3,
+                "maxLength": 256,
+                "pattern": "\\S"
+              }
+            }
+          },
+          "dependentRequired": {
+            "end_time": [
+              "start_time"
+            ]
+          },
+          "additionalProperties": false,
+          "if": {
+            "properties": {
+              "type": {
+                "const": "livehunt"
+              }
+            },
+            "required": [
+              "type"
+            ]
+          },
+          "then": {
+            "required": [
+              "subtype"
+            ],
+            "not": {
+              "anyOf": [
+                {
+                  "required": [
+                    "corpus"
+                  ]
+                },
+                {
+                  "required": [
+                    "start_time"
+                  ]
+                },
+                {
+                  "required": [
+                    "end_time"
+                  ]
+                }
+              ]
+            }
+          },
+          "else": {
+            "required": [
+              "corpus"
+            ],
+            "not": {
+              "anyOf": [
+                {
+                  "required": [
+                    "subtype"
+                  ]
+                },
+                {
+                  "required": [
+                    "daily_limit"
+                  ]
+                }
+              ]
+            }
+          }
+        }
+      }
+    }
+  ]
+}

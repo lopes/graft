@@ -380,3 +380,32 @@ def test_export_catalog_with_enrich_flag() -> None:
 
     enriched_table = render_catalog_table([entry], enrich=True)
     assert "Platforms" in enriched_table
+
+
+def test_resolve_rule_deployment_status_loads_adapter_by_engine_name() -> None:
+    from unittest.mock import MagicMock
+
+    rule = RuleEnvelope(
+        metadata=RuleMetadata(
+            id="00000000-0000-0000-0000-000000000001",
+            name="custom_silent_rule",
+            description="Silent via engine adapter",
+        ),
+        logic="condition: true",
+        deployment=BaseDeploymentConfig.from_dict({"enabled": True, "notify": []}),
+        runbook=Runbook(context="c", triage="t", response="r"),
+        tests=(),
+    )
+    mock_adapter = MagicMock()
+    mock_adapter.resolve_deployment_status.return_value = "silent"
+
+    with (
+        patch("graft.core.engine_registry.EngineRegistry.has", return_value=True),
+        patch(
+            "graft.core.engine_registry.EngineRegistry.load_adapter",
+            return_value=mock_adapter,
+        ),
+    ):
+        entry = build_catalog_entry_from_rule(rule, engine="mock_eng")
+        assert entry.status == "silent"
+        mock_adapter.resolve_deployment_status.assert_called_once_with(rule, managed_state=None)

@@ -46,7 +46,7 @@ Regardless of your persona, three foundational principles govern the platform:
 ### 1. Hexagonal Architecture (Ports & Adapters)
 - **Driving Core (`src/graft/core/`):** 100% engine-agnostic domain logic. Implements rule and dataset parsing, schema validation, STIX MITRE matrices, Git blame extraction, and catalog export. **Zero imports of cloud SDKs or SIEM clients.**
 - **Engine Ports (`src/graft/core/ports/`):** Strict `typing.Protocol` interfaces defining granular capabilities ([`DatasetPort`](../src/graft/core/ports/dataset.py), [`RuleCompilerPort`](../src/graft/core/ports/compiler.py), [`RuleDeployerPort`](../src/graft/core/ports/deployer.py), [`ManagedEnginePort`](../src/graft/core/ports/managed.py), [`ReplayHarnessPort`](../src/graft/core/ports/replay.py)) and the composite [`EngineAdapter`](../src/graft/core/ports/engine.py).
-- **Driven Engines (`src/graft/engines/`):** Self-contained, encapsulated packages (e.g., `secops`) carrying the full burden of translating external vendor APIs and query syntaxes. Core never adapts to an engine; engines adapt to Core.
+- **Driven Engines (`src/graft/engines/`):** Self-contained, encapsulated packages (e.g., `secops`, `gti`) carrying the full burden of translating external vendor APIs and query syntaxes. Core never adapts to an engine; engines adapt to Core.
 
 ### 2. Multi-Track Content Governance
 Graft organizes detection content into three version-controlled tracks:

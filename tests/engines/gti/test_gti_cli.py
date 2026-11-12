@@ -1,0 +1,393 @@
+from __future__ import annotations
+
+import json
+from pathlib import Path
+from unittest.mock import patch
+
+import pytest
+
+from graft.cli.main import main
+from graft.core.models.compiler import CompilationResult
+from graft.engines.gti.adapter import GTIAdapter
+
+
+def test_gti_engine_registered_in_cli_engines_json(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    rc = main(["--json", "engines"])
+    assert rc == 0
+    out = json.loads(capsys.readouterr().out)
+    engines_by_name = {e["name"]: e for e in out["engines"]}
+    assert "gti" in engines_by_name
+    gti_info = engines_by_name["gti"]
+    assert gti_info["capabilities"] == {
+        "custom_rules": True,
+        "datasets": False,
+        "syntax_verification": True,
+        "managed_rules": False,
+        "replay_testing": True,
+    }
+
+
+def test_gti_cli_new_and_render_and_test_offline(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    rule_out = tmp_path / "rulesets" / "gti" / "custom" / "test_phish_url.yaml"
+    rc_new = main(["--json", "gti", "new", "test_phish_url", "--out", str(rule_out)])
+    assert rc_new == 0
+    new_payload = json.loads(capsys.readouterr().out)
+    assert new_payload["success"] is True
+    assert rule_out.is_file()
+
+    rc_lint = main(["--json", "lint", str(rule_out)])
+    assert rc_lint == 0
+    lint_payload = json.loads(capsys.readouterr().out)
+    assert lint_payload["success"] is True
+
+    rc_render = main(["--json", "gti", "render", str(rule_out)])
+    assert rc_render == 0
+    render_payload = json.loads(capsys.readouterr().out)
+    assert render_payload["success"] is True
+    rendered = render_payload["rules"][0]["rendered"]
+    assert "rule test_phish_url {" in rendered
+    assert 'graft_id = "' in rendered
+
+    rc_test = main(["--json", "gti", "test", str(rule_out)])
+    assert rc_test == 0
+    test_payload = json.loads(capsys.readouterr().out)
+    assert test_payload["success"] is True
+
+
+def test_gti_cli_verify_and_diff_and_apply_with_mocked_ports(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    rule_out = tmp_path / "rulesets" / "gti" / "custom" / "test_livehunt_rule.yaml"
+    main(["--json", "gti", "new", "test_livehunt_rule", "--out", str(rule_out)])
+    capsys.readouterr()
+
+    with patch.object(
+        GTIAdapter,
+        "get_compiler",
+    ) as mock_get_compiler:
+        mock_compiler = mock_get_compiler.return_value
+        mock_compiler.verify_rule.return_value = CompilationResult(success=True)
+        rc_verify = main(["--json", "gti", "verify", str(rule_out)])
+        assert rc_verify == 0
+        verify_out = json.loads(capsys.readouterr().out)
+        assert verify_out["success"] is True
+
+    with patch.object(
+        GTIAdapter,
+        "get_deployer",
+    ) as mock_get_deployer:
+        mock_deployer = mock_get_deployer.return_value
+        mock_deployer.list_rules.return_value = ()
+        mock_deployer.create_rule.return_value = "gti_rs_001"
+
+        rc_diff = main(["--json", "gti", "diff", "--all"])
+        assert rc_diff == 2
+        diff_out = json.loads(capsys.readouterr().out)
+        assert diff_out["custom"]["has_changes"] is True
+        assert diff_out["custom"]["rules_to_create"] == ["test_livehunt_rule"]
+
+        rc_apply = main(["--json", "gti", "apply", "--all"])
+        assert rc_apply == 0
+        apply_out = json.loads(capsys.readouterr().out)
+        assert apply_out["success"] is True
+        mock_deployer.create_rule.assert_called_once()
+
+
+def test_gti_schema_and_yara_adversarial_inputs(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    bad_gti_rule = tmp_path / "rulesets" / "gti" / "custom" / "bad_match_type.yaml"
+    bad_gti_rule.parent.mkdir(parents=True)
+    bad_gti_rule.write_text(
+        """metadata:
+  id: "8f14e45f-ceea-467a-a124-000000000099"
+  name: "bad_match_type"
+  description: "Invalid subtype value"
+  owners: ["SOC"]
+  mitre:
+    initial-access: ["T1566.002"]
+  tags: ["gti"]
+  references: ["https://example.com"]
+logic: |
+  import "vt"
+  condition:
+    vt.net.url.new_url
+deployment:
+  type: "livehunt"
+  subtype: "ip"
+  enabled: true
+runbook:
+  context: "ctx"
+  triage: "tri"
+  response: "resp"
+tests: []
+""",
+        encoding="utf-8",
+    )
+
+    rc = main(["--json", "lint", str(bad_gti_rule)])
+    assert rc == 1
+    out = json.loads(capsys.readouterr().out)
+    assert out["success"] is False
+    assert "subtype" in out["results"][0]["errors"][0]
+
+    bad_brace_rule = tmp_path / "rulesets" / "gti" / "custom" / "bad_brace_rule.yaml"
+    bad_brace_rule.write_text(
+        """metadata:
+  id: "8f14e45f-ceea-467a-a124-000000000098"
+  name: "bad_brace_rule"
+  description: "Unbalanced parentheses in YARA condition"
+  owners: ["SOC"]
+  mitre:
+    initial-access: ["T1566.002"]
+  tags: ["gti"]
+  references: ["https://example.com"]
+logic: |
+  import "vt"
+  condition:
+    (vt.net.url.new_url
+deployment:
+  type: "livehunt"
+  subtype: "url"
+  enabled: false
+runbook:
+  context: "ctx"
+  triage: "tri"
+  response: "resp"
+tests: []
+""",
+        encoding="utf-8",
+    )
+
+    rc_verify = main(["--json", "gti", "verify", str(bad_brace_rule)])
+    assert rc_verify == 1
+    verify_out = json.loads(capsys.readouterr().out)
+    assert verify_out["success"] is False
+    assert "Unbalanced parentheses" in verify_out["diagnostics"][0]["error"]
+
+    bad_retro_rule = tmp_path / "rulesets" / "gti" / "custom" / "bad_retro_rule.yaml"
+    bad_retro_rule.write_text(
+        """metadata:
+  id: "8f14e45f-ceea-467a-a124-000000000097"
+  name: "bad_retro_rule"
+  description: "Retrohunt rule with livehunt daily_limit field"
+  owners: ["SOC"]
+  mitre:
+    initial-access: ["T1566.002"]
+  tags: ["gti"]
+  references: ["https://example.com"]
+logic: |
+  import "vt"
+  condition:
+    vt.metadata.new_file
+deployment:
+  type: "retrohunt"
+  enabled: false
+  corpus: "main"
+  daily_limit: 50
+runbook:
+  context: "ctx"
+  triage: "tri"
+  response: "resp"
+tests: []
+""",
+        encoding="utf-8",
+    )
+    rc_retro = main(["--json", "lint", str(bad_retro_rule)])
+    assert rc_retro == 1
+    retro_out = json.loads(capsys.readouterr().out)
+    assert retro_out["success"] is False
+
+    missing_corpus_rule = tmp_path / "rulesets" / "gti" / "custom" / "missing_corpus_rule.yaml"
+    missing_corpus_rule.write_text(
+        """metadata:
+  id: "8f14e45f-ceea-467a-a124-000000000096"
+  name: "missing_corpus_rule"
+  description: "Retrohunt rule missing required corpus field"
+  owners: ["SOC"]
+  mitre:
+    initial-access: ["T1566.002"]
+  tags: ["gti"]
+  references: ["https://example.com"]
+logic: |
+  import "vt"
+  condition:
+    vt.metadata.new_file
+deployment:
+  type: "retrohunt"
+  enabled: false
+runbook:
+  context: "ctx"
+  triage: "tri"
+  response: "resp"
+tests: []
+""",
+        encoding="utf-8",
+    )
+    rc_missing_corpus = main(["--json", "lint", str(missing_corpus_rule)])
+    assert rc_missing_corpus == 1
+    missing_corpus_out = json.loads(capsys.readouterr().out)
+    assert missing_corpus_out["success"] is False
+    assert "corpus" in missing_corpus_out["results"][0]["errors"][0]
+
+
+def test_gti_adapter_get_deployer_raises_without_credentials(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("GRAFT_GTI_API_KEY", raising=False)
+    monkeypatch.delenv("GRAFT_GTI_STAGING_API_KEY", raising=False)
+    monkeypatch.delenv("GRAFT_GTI_PROD_API_KEY", raising=False)
+
+    adapter = GTIAdapter(env="production")
+    with pytest.raises(RuntimeError, match="GRAFT_GTI"):
+        adapter.get_deployer()
+
+
+def test_gti_cli_retrohunt_test_vector_skips_cleanly_without_credentials(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    monkeypatch.delenv("GRAFT_GTI_API_KEY", raising=False)
+    monkeypatch.delenv("GRAFT_GTI_STAGING_API_KEY", raising=False)
+    monkeypatch.delenv("GRAFT_GTI_PROD_API_KEY", raising=False)
+
+    retro_rule_file = tmp_path / "rulesets" / "gti" / "custom" / "retro_corpus_probe.yaml"
+    retro_rule_file.parent.mkdir(parents=True)
+    retro_rule_file.write_text(
+        """metadata:
+  id: "8f14e45f-ceea-467a-a124-000000000095"
+  name: "retro_corpus_probe"
+  description: "Retrohunt corpus probe rule"
+  owners: ["SOC"]
+  mitre:
+    initial-access: ["T1566.002"]
+  tags: ["windows", "pe"]
+  references: ["https://example.com"]
+logic: |
+  import "vt"
+  condition:
+    vt.metadata.new_file
+deployment:
+  type: "retrohunt"
+  enabled: false
+  corpus: "goodware"
+runbook:
+  context: "ctx"
+  triage: "tri"
+  response: "resp"
+tests:
+  - id: "retrohunt_goodware_zero_fp"
+    description: "Check zero matches on goodware corpus"
+    expect: 0
+    events:
+      - timestamp: "2026-10-15T12:00:00Z"
+        payload:
+          mode: "retrohunt"
+          corpus: "goodware"
+""",
+        encoding="utf-8",
+    )
+
+    rc_test = main(["--json", "gti", "test", str(retro_rule_file)])
+    assert rc_test == 0
+    out_test = json.loads(capsys.readouterr().out)
+    assert out_test["success"] is True
+    assert out_test["skipped"] is True
+
+    rc_req = main(["--json", "gti", "test", "--require-staging", str(retro_rule_file)])
+    assert rc_req == 1
+    out_req = json.loads(capsys.readouterr().out)
+    assert out_req["success"] is False
+
+
+def test_gti_cli_mixed_failing_unit_vector_and_unauthenticated_retrohunt_fails(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    monkeypatch.delenv("GRAFT_GTI_API_KEY", raising=False)
+    monkeypatch.delenv("GRAFT_GTI_STAGING_API_KEY", raising=False)
+    monkeypatch.delenv("GRAFT_GTI_PROD_API_KEY", raising=False)
+
+    mixed_rule = tmp_path / "rulesets" / "gti" / "custom" / "mixed_vectors_probe.yaml"
+    mixed_rule.parent.mkdir(parents=True)
+    mixed_rule.write_text(
+        """metadata:
+  id: "8f14e45f-ceea-467a-a124-000000000094"
+  name: "mixed_vectors_probe"
+  description: "Rule mixing offline unit vectors and retrohunt vector"
+  owners: ["SOC"]
+  mitre:
+    initial-access: ["T1566.002"]
+  tags: ["windows", "pe"]
+  references: ["https://example.com"]
+logic: |
+  import "vt"
+  condition:
+    vt.metadata.new_file
+deployment:
+  type: "retrohunt"
+  enabled: false
+  corpus: "goodware"
+runbook:
+  context: "ctx"
+  triage: "tri"
+  response: "resp"
+tests:
+  - id: "failing_offline_unit_vector"
+    description: "Intentionally failing offline vector"
+    expect: 1
+    events:
+      - timestamp: "2026-10-15T12:00:00Z"
+        payload:
+          vt.metadata.new_file: false
+  - id: "retrohunt_goodware_zero_fp"
+    description: "Skipped retrohunt vector without credentials"
+    expect: 0
+    events:
+      - timestamp: "2026-10-15T12:00:00Z"
+        payload:
+          mode: "retrohunt"
+          corpus: "goodware"
+""",
+        encoding="utf-8",
+    )
+
+    rc = main(["--json", "gti", "test", str(mixed_rule)])
+    assert rc == 1
+    out = json.loads(capsys.readouterr().out)
+    assert out["success"] is False
+    assert out["failed"] == 1
+
+
+def test_gti_workflow_steps_and_cloud_gates() -> None:
+    import yaml
+
+    pr_data = yaml.safe_load(Path(".github/workflows/pr-validation.yml").read_text("utf-8"))
+    jobs = pr_data.get("jobs", {})
+    assert "gti-cloud-gates" in jobs
+    gti_job = jobs["gti-cloud-gates"]
+    assert "dependabot[bot]" in str(gti_job.get("if", ""))
+    pr_runs = [s.get("run", "") for j in jobs.values() for s in j.get("steps", []) if "run" in s]
+    assert any("graft gti verify" in r for r in pr_runs)
+    assert any("graft gti test" in r for r in pr_runs)
+    assert any("graft gti diff" in r for r in pr_runs)
+
+    deploy_data = yaml.safe_load(Path(".github/workflows/deploy-production.yml").read_text("utf-8"))
+    deploy_runs = [
+        s.get("run", "")
+        for j in deploy_data.get("jobs", {}).values()
+        for s in j.get("steps", [])
+        if "run" in s
+    ]
+    assert any("graft gti apply --env production --all" in r for r in deploy_runs)

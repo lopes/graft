@@ -111,17 +111,29 @@ def calculate_mitre_coverage(
     tech_tactics_map: dict[str, set[str]] = {}
     pair_map: dict[tuple[str, str], dict[str, Any]] = {}
     matched_rule_names: set[str] = set()
+    adapter_cache: dict[str, Any] = {}
 
     for rule, engine, path, explicit_status in normalized:
         rule_name = rule.metadata.name
         if explicit_status is not None:
             status = explicit_status
-        elif rule.is_managed or not rule.deployment.enabled:
-            status = "disabled"
-        elif not rule.deployment.alerting:
-            status = "silent"
         else:
-            status = "enabled"
+            from graft.core.catalog import resolve_rule_deployment_status
+
+            adapter = None
+            if engine != "custom":
+                if engine not in adapter_cache:
+                    from graft.core.engine_registry import EngineRegistry
+
+                    reg = EngineRegistry()
+                    try:
+                        adapter_cache[engine] = (
+                            reg.load_adapter(engine) if reg.has(engine) else None
+                        )
+                    except Exception:
+                        adapter_cache[engine] = None
+                adapter = adapter_cache[engine]
+            status = resolve_rule_deployment_status(rule, engine=engine, adapter=adapter)
 
         for tactic, tech_list in rule.metadata.mitre.items():
             for tech_id in tech_list:

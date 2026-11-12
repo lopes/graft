@@ -65,6 +65,7 @@ Custom detection rules are authored in 5-block envelope YAML files under `rulese
    - Deployment configuration (`enabled`, `alerting`, and engine-specific cadence) is compared against live tenant deployment state.
    - If changes are detected, `RuleDeployerPort.update_rule()` updates the rule in-place on the tenant and synchronizes deployment toggles.
    - **Example (Google SecOps):** Compiles YARA-L via `synthesize_yaral_rule`, compares semantic equivalence via `secops_rule_content_matches`, and resolves the Chronicle resource ID (`ru_<uuid>`) to target `PATCH rules/{resource_id}?update_mask=text` and `PATCH rules/{resource_id}/deployment`.
+   - **Example (Google Threat Intelligence):** Reconciles **Livehunt rulesets** in-place (`POST` / `PATCH /api/v3/intelligence/hunting_rulesets/{id}` with 1-to-1 `metadata.tags` sync and a hard `403 OwnershipGuardError` verifying `owner:self` before any mutation), while reconciling **Retrohunt jobs** non-destructively (`should_deploy_rule()` keeps `enabled: false` Retrohunt rules dormant in Git without consuming scan quota; setting `enabled: true` submits `POST /api/v3/intelligence/retrohunt_jobs`; updating or disabling a Retrohunt rule in Git never deletes or aborts running jobs or historical scan results).
 4. **Untracked Reporting:** Rules existing in the tenant that do not exist in Git are surfaced as `[?] Untracked custom rule on tenant: ...` for situational awareness without destructive auto-deletion.
 
 ---

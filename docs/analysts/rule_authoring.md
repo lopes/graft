@@ -22,9 +22,9 @@ Core identification, operational ownership, and threat taxonomy mapping. All 7 f
 - `id` *(UUID string, required)*: Globally unique identifier (v4 UUID format).
 - `name` *(string, required)*: Unique snake_case rule identifier (`^[a-z0-9]+(?:_[a-z0-9]+)*$`, max 64 chars, never starting or ending with `_`, `"index"` reserved) following the `<subject>_<fact>` convention.
 - `description` *(string, required)*: Plain-text explanation of the detection objective (non-blank, max 128 chars).
-- `owners` *(list of strings, required, min 1 unique item)*: Teams or individuals operationally accountable for maintaining and tuning the rule (e.g., `Cloud Security Operations`, `Detection Engineering <detection@company.com>`).
+- `owners` *(list of strings, required, min 1 unique item)*: Teams or individuals operationally accountable for maintaining and tuning the rule (e.g., `Cloud Security Operations`, `Detection Engineering <detection@example.com>`).
 - `mitre` *(mapping of tactic to techniques, required, min 1 tactic with min 1 unique technique)*: MITRE ATT&CK Enterprise taxonomy mapping. Must use MITRE's normalized tactic names (lowercase with spaces replaced by dashes, e.g., `initial-access`, `privilege-escalation`, `execution` — see [MITRE Enterprise Tactics](https://attack.mitre.org/tactics/enterprise/)) and real technique IDs (`T1566.002`, `T1098.001`). Validated against the pre-indexed matrix during linting and automatically exported to target SIEMs that index rule-level TTP metadata (for example, `meta.tactic` as `TAxxxx` IDs and `meta.technique` as `Txxxx` IDs in Google SecOps YARA-L 2.0, omitting the unmapped sentinel `none` / `T0000`).
-- `tags` *(list of strings, required, min 1 unique item, max 32)*: Lowercase categorical labels (`^[a-z0-9_/\\-]+$`). Prefer 2–3 broad, reusable platform or telemetry surface labels per rule (e.g., `gcp`, `iam`, `storage`, `workspace`, `email`, `whois`, `gcti`, `network`) so tags aggregate cleanly across the catalog. Avoid one-off rule keywords or duplicating fields already captured elsewhere (`engine`, `rule_type`, or MITRE tactics).
+- `tags` *(list of strings, required, min 1 unique item, max 32)*: Lowercase categorical labels (`^[a-z0-9_/:-]+$`, `1..32` characters per tag: lowercase ASCII letters, digits, hyphens `-`, underscores `_`, colons `:`, and forward slashes `/`). Prefer 2–3 broad, reusable platform, domain, or telemetry surface labels per rule (e.g., `gcp`, `iam`, `storage`, `workspace`, `email`, `whois`, `web`, `sso`, `phishing`, `windows`, `pe`, `network`) so tags aggregate cleanly across the catalog and sync 1-to-1 with engines that support rule tags (such as GTI Livehunt `attributes.tags`). Avoid one-off rule keywords or duplicating fields already captured elsewhere (`engine`, `deployment.type`, `deployment.subtype`, or MITRE tactics).
 - `references` *(list of strings, required, min 1 unique item)*: Non-blank strings citing threat research URLs, internal design docs, or external/community author attribution.
 
 #### Ownership (`metadata.owners`) vs. Authorship (`git log` & `metadata.references`)
@@ -54,14 +54,16 @@ In day-to-day SOC and detection engineering operations, the primary question whe
 
 ### Block 2: `logic`
 Engine-native detection query string. Each engine adapter compiles and validates this block according to its target query language.
-- **Example (Google SecOps):** Contains YARA-L 2.0 sections (`events:`, `match:`, `outcome:`, `condition:`). Graft automatically synthesizes the `rule <name> { meta: ... }` wrapper (`id`, `description`, `tactic`, and `technique`) when sending to Chronicle APIs.
+- **Example (Google SecOps — `secops`):** Contains YARA-L 2.0 sections (`events:`, `match:`, `outcome:`, `condition:`). Graft automatically synthesizes the `rule <name> { meta: ... }` wrapper (`id`, `description`, `owners`, `mitre_tactic`, `mitre_technique`, `tags`) when sending to Chronicle APIs.
+- **Example (Google Threat Intelligence — `gti`):** Contains native YARA-X top-level `import "<module>"` statements (`import "vt"`, `import "pe"`, etc.) followed by optional `strings:` and `condition:` without an outer `rule <name> { meta: ... }` wrapper. Graft partitions `import "..."` lines above `rule <name> { ... }` and injects `meta:` attribution (`graft_id`, `description`, `owners`, `mitre_tactic`, `mitre_technique`, `tags`) while preserving any custom analyst `meta:` key-values.
 
 ### Block 3: `deployment`
-Operational controls governing how the rule runs in the target engine.
+Engine-specific operational controls governing how the rule runs in the target detection engine.
 
-- `enabled` *(boolean, required)*: Whether the rule is actively executing against telemetry.
-- `alerting` *(boolean, required)*: Whether matches produce SOC alerts or silent detections.
-- Engine-specific deployment parameters (for example, `run_frequency: live | hourly | daily | unspecified` in Google SecOps) are validated by the engine's `custom.schema.json`.
+In Core ([`base_custom.schema.json`](../../src/graft/core/schemas/base_custom.schema.json) and [`BaseDeploymentConfig`](../../src/graft/core/models/rule.py)), `deployment` is an empty object container (`type: object`)—Core never centralizes or assumes engine-specific deployment parameters. Instead, each engine adapter defines and validates its own native `deployment` schema in `src/graft/engines/<engine>/schemas/custom.schema.json`:
+
+- **Google SecOps (`secops`):** Requires `enabled` (`boolean`), `alerting` (`boolean`), and `run_frequency` (`"live" | "hourly" | "daily" | "unspecified"`).
+- **Google Threat Intelligence (`gti`):** Requires `type` (`"livehunt" | "retrohunt"`) and `enabled` (`boolean`). For `type: "livehunt"`, requires `subtype` (`"file" | "url" | "domain" | "ip_address"`) and supports optional `daily_limit` (`1..10000`) and `notification_emails`. For `type: "retrohunt"`, requires `corpus` (`"main" | "goodware"`) and supports optional `start_time`, `end_time`, and `notification_emails`.
 
 
 ### Block 4: `runbook`
@@ -481,7 +483,7 @@ flowchart TD
   - `name` *(string, required)*: Snake_case dataset identifier (`^[a-z][a-z0-9]*(?:_[a-z0-9]+)*$`, `1..64` chars, `"index"` reserved). Must start with a lowercase letter (`[a-z]`) for compatibility with SIEM table resource identifiers and **must strictly match the YAML filename stem** (`datasets/<name>.yaml`).
   - `description` *(string, required)*: Plain-text explanation of what the dataset contains (`1..128` chars). Synced directly to the target SIEM table description.
   - `owners` *(list of strings, required, min 1 unique item)*: Teams or individuals accountable for maintaining the list.
-  - `tags` *(list of strings, required, 1..32 unique items)*: Lowercase categorical labels (`^[a-z0-9_/\\-]+$`).
+  - `tags` *(list of strings, required, 1..32 unique items)*: Lowercase categorical labels (`^[a-z0-9_/:-]+$`, `1..32` characters per tag).
   - `references` *(list of strings, required, 1..32 unique items)*: Non-blank strings citing ticket links, internal inventory docs, or runbooks.
 - **`values`**:
   - Required 1-D list of `0..1,000` unique, non-empty literal strings (`minLength: 1`, `maxLength: 256`, `uniqueItems: true`). Empty datasets (`values: []` or datasets where all entries have expired) remain provisioned on the SIEM with `0` rows so rules referencing `%<name>.value` never fail compilation.
@@ -566,6 +568,7 @@ During `graft lint`, Graft cross-validates custom rule logic against all active 
 - **Column Check:** If `<name>` exists in `datasets/<name>.yaml`, any `%<name>` reference in rule logic must access `.value` (`%<name>.value`). Bare `%<name>` or unknown columns (`%<name>.ip`) fail linting immediately.
 - **Operator Check:** Because Graft datasets are literal `STRING` lists, referencing a local Graft dataset with `in cidr %<name>...` or `in regex %<name>...` fails linting with a clear diagnostic.
 - **Additive Coexistence for Unmanaged or Archived Tables:** If a rule references `%external_cmdb_table.cidr_range` (or a dataset moved to `datasets/_archived/`) that is not an active file in `datasets/`, `graft lint` passes silently.
+- **Engines Without Dataset Support (`datasets: false`, e.g., `gti`):** Engines whose runtime lacks external lookup tables (such as Google Threat Intelligence's YARA-X engine) reject `%<dataset>` tokens during `graft lint` (`validate_gti_dataset_references`), ensuring rules remain 100% native YARA-X without preprocessor interpolation hacks.
 
 ---
 
