@@ -336,7 +336,7 @@ def test_pull_path_traversal_guard_and_pull_all_includes_datasets(
             tags=("net",),
             references=("https://example.com",),
         ),
-        values=("10.1.1.1",),
+        values=("192.0.2.1",),
     )
     good_rule = RuleEnvelope(
         metadata=RuleMetadata(

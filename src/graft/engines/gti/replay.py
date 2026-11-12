@@ -9,10 +9,11 @@ from typing import Any
 
 from graft.core.models.rule import RuleEnvelope, TestVector
 from graft.core.ports.replay import ReplayHarnessPort, ReplayResult
-from graft.engines.gti.client import GTIApiError, GTIClient
+from graft.engines.gti.client import GTIApiError, GTIClient, quote_path_segment
 from graft.engines.gti.compiler import (
+    _extract_meta_and_body,
     _partition_imports_and_body,
-    _strip_existing_graft_meta,
+    _unescape_yara_str,
     synthesize_yara_rule,
 )
 
@@ -28,7 +29,7 @@ def _extract_strings_and_condition(
     rule: RuleEnvelope,
 ) -> tuple[dict[str, tuple[str, bool]], str]:
     _, raw_body = _partition_imports_and_body(rule.logic)
-    _, cleaned_body = _strip_existing_graft_meta(raw_body)
+    _, _, cleaned_body = _extract_meta_and_body(raw_body)
 
     string_defs: dict[str, tuple[str, bool]] = {}
     cond_lines: list[str] = []
@@ -45,7 +46,7 @@ def _extract_strings_and_condition(
                 m = _STRING_DEF_RE.match(after)
                 if m:
                     string_defs[m.group(1)] = (
-                        m.group(2),
+                        _unescape_yara_str(m.group(2)),
                         "nocase" in m.group(3).lower(),
                     )
             continue
@@ -60,7 +61,7 @@ def _extract_strings_and_condition(
             m = _STRING_DEF_RE.match(stripped)
             if m:
                 string_defs[m.group(1)] = (
-                    m.group(2),
+                    _unescape_yara_str(m.group(2)),
                     "nocase" in m.group(3).lower(),
                 )
         elif section == "condition":
@@ -84,7 +85,7 @@ def _lookup_field(payload: Mapping[str, object], field_path: str) -> object:
 def _parse_literal(token: str, payload: Mapping[str, object]) -> object:
     tok = token.strip()
     if len(tok) >= 2 and tok.startswith('"') and tok.endswith('"'):
-        return tok[1:-1]
+        return _unescape_yara_str(tok[1:-1])
     if tok.lower() == "true":
         return True
     if tok.lower() == "false":
@@ -112,7 +113,6 @@ def _evaluate_condition_against_payload(
     sample_text = str(payload.get("sample_text", ""))
     expr = condition_expr
 
-    # 1. Evaluate $string references
     for var_name in sorted(string_defs.keys(), key=len, reverse=True):
         needle, nocase = string_defs[var_name]
         if var_name in payload:
@@ -127,7 +127,6 @@ def _evaluate_condition_against_payload(
             expr,
         )
 
-    # 2. Evaluate binary comparison operators (`icontains`, `contains`, `==`, `!=`, `<`, `>=`, etc.)
     def _eval_cmp(match: re.Match[str]) -> str:
         lhs_name = match.group(1)
         op = match.group(2)
@@ -168,7 +167,6 @@ def _evaluate_condition_against_payload(
 
     expr = _CMP_OP_RE.sub(_eval_cmp, expr)
 
-    # 3. Replace remaining dotted identifiers (`vt.net.url.new_url`) with boolean truthiness
     def _eval_ident(match: re.Match[str]) -> str:
         tok = match.group(0)
         if tok in ("and", "or", "not", "True", "False"):
@@ -261,23 +259,35 @@ class GTIReplayAdapter(ReplayHarnessPort):
 
             num_matches = 0
             status = "queued"
+            safe_job_id = quote_path_segment(job_id)
             for _ in range(self._max_poll_attempts):
-                poll_resp = self._client.get(f"/intelligence/retrohunt_jobs/{job_id}")
+                poll_resp = self._client.get(f"/intelligence/retrohunt_jobs/{safe_job_id}")
                 poll_data = poll_resp.get("data", {})
                 poll_attrs = poll_data.get("attributes", {}) if isinstance(poll_data, dict) else {}
                 if isinstance(poll_attrs, dict):
-                    status = str(poll_attrs.get("status", status))
-                    num_matches = int(poll_attrs.get("num_matches", 0))
+                    status = str(poll_attrs.get("status") or status)
+                    raw_matches = poll_attrs.get("num_matches")
+                    if not isinstance(raw_matches, bool) and isinstance(raw_matches, (int, float)):
+                        num_matches = int(raw_matches)
+                    elif isinstance(raw_matches, str) and raw_matches.strip().isdigit():
+                        num_matches = int(raw_matches.strip())
                 if status in ("finished", "aborted"):
                     break
                 if self._poll_interval_seconds > 0:
                     time.sleep(self._poll_interval_seconds)
 
-            passed = num_matches == vector.expect
-            msg = (
-                f"Retrohunt job '{job_id}' ({corpus}) finished with {num_matches} match(es) "
-                f"(expected {vector.expect})"
-            )
+            if status != "finished":
+                passed = False
+                msg = (
+                    f"Retrohunt job '{job_id}' ({corpus}) did not finish "
+                    f"(status: '{status}', matches: {num_matches}, expected: {vector.expect})"
+                )
+            else:
+                passed = num_matches == vector.expect
+                msg = (
+                    f"Retrohunt job '{job_id}' ({corpus}) finished with {num_matches} match(es) "
+                    f"(expected {vector.expect})"
+                )
             return ReplayResult(
                 test_id=vector.id,
                 passed=passed,
@@ -294,7 +304,8 @@ class GTIReplayAdapter(ReplayHarnessPort):
         finally:
             if job_id is not None and self._client is not None:
                 try:
-                    self._client.delete(f"/intelligence/retrohunt_jobs/{job_id}")
+                    safe_job_id = quote_path_segment(job_id)
+                    self._client.delete(f"/intelligence/retrohunt_jobs/{safe_job_id}")
                 except Exception as cleanup_exc:
                     logger.warning(
                         "Failed deleting transient Retrohunt job '%s': %s",
@@ -307,6 +318,7 @@ class GTIReplayAdapter(ReplayHarnessPort):
         rule: RuleEnvelope,
         vector: TestVector,
     ) -> ReplayResult:
+        self.unavailable_reason = None
         for ev in vector.events:
             if ev.payload.get("mode") == "retrohunt":
                 return self._run_retrohunt_vector(rule, vector, ev.payload)

@@ -25,7 +25,7 @@ def test_gti_config_from_env_single_key(monkeypatch: pytest.MonkeyPatch) -> None
     assert cfg.ruleset_filter == "owner:self"
 
 
-def test_gti_config_from_env_tiered_and_staging_fallback(
+def test_gti_config_from_env_tiered_isolates_staging_from_prod(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.delenv("GRAFT_GTI_API_KEY", raising=False)
@@ -34,14 +34,17 @@ def test_gti_config_from_env_tiered_and_staging_fallback(
     monkeypatch.setenv("GRAFT_GTI_FILTER", "tag:team-ti")
     monkeypatch.setenv("GRAFT_GTI_NOTIFICATION_EMAILS", "soc@example.com, alerts@example.com")
 
-    staging_cfg = GTIConfig.from_env("staging")
-    assert staging_cfg.api_key == "SYNTHETIC_TEST_PROD_KEY_000000"
-    assert staging_cfg.ruleset_filter == "tag:team-ti"
-    assert staging_cfg.notification_emails == ("soc@example.com", "alerts@example.com")
+    with pytest.raises(KeyError, match="GRAFT_GTI_STAGING_API_KEY"):
+        GTIConfig.from_env("staging")
+
+    prod_cfg = GTIConfig.from_env("prod")
+    assert prod_cfg.api_key == "SYNTHETIC_TEST_PROD_KEY_000000"
+    assert prod_cfg.ruleset_filter == "tag:team-ti"
+    assert prod_cfg.notification_emails == ("soc@example.com", "alerts@example.com")
 
     monkeypatch.setenv("GRAFT_GTI_STAGING_API_KEY", "SYNTHETIC_TEST_STAGING_KEY_000000")
-    staging_cfg_2 = GTIConfig.from_env("staging")
-    assert staging_cfg_2.api_key == "SYNTHETIC_TEST_STAGING_KEY_000000"
+    staging_cfg = GTIConfig.from_env("staging")
+    assert staging_cfg.api_key == "SYNTHETIC_TEST_STAGING_KEY_000000"
 
 
 def test_gti_config_missing_key_raises_key_error(
@@ -179,3 +182,18 @@ def test_gti_client_redacts_api_key_in_user_resolution_error_path() -> None:
 
     assert exc_info.value.path == "/users/<self>"
     assert "SYNTHETIC_TEST_KEY_000000" not in str(exc_info.value)
+
+
+def test_gti_config_and_client_reject_empty_netloc_cross_origin_and_unsafe_segments() -> None:
+    with pytest.raises(ValueError, match="HTTPS"):
+        GTIConfig(api_key="SYNTHETIC_TEST_KEY_000000", base_url="https:///api/v3")
+
+    cfg = GTIConfig(api_key="SYNTHETIC_TEST_KEY_000000")
+    client = GTIClient(cfg)
+
+    with pytest.raises(ValueError, match="Cross-origin"):
+        client.get("https://attacker.example.com/api/v3/intelligence/hunting_rulesets")
+
+    bad_key_client = GTIClient(GTIConfig(api_key="bad/../../segment"))
+    with pytest.raises(ValueError, match="Invalid GTI URL path segment"):
+        bad_key_client.get_current_user_id()

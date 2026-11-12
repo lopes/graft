@@ -139,6 +139,10 @@ class EngineAdapter(Protocol):
 
     def are_rules_equal(self, desired: RuleEnvelope, remote: RuleEnvelope) -> bool: ...
 
+    def are_deployments_equal(self, desired: RuleEnvelope, remote: RuleEnvelope) -> bool: ...
+
+    def should_deploy_rule(self, rule: RuleEnvelope) -> bool: ...
+
     def render_rule(self, rule: RuleEnvelope) -> str: ...
 
     def deconstruct_rule(self, remote_rule: RuleEnvelope) -> RuleEnvelope: ...
@@ -151,6 +155,10 @@ class EngineAdapter(Protocol):
 
     def get_default_rule_logic(self, rule_name: str) -> str: ...
 
+    def get_default_deployment_config(self) -> dict[str, object]: ...
+
+    def get_default_test_event_payload(self) -> dict[str, object]: ...
+
     def validate_rule_dataset_references(
         self,
         rule: RuleEnvelope,
@@ -161,12 +169,13 @@ class EngineAdapter(Protocol):
 The composite adapter acts as a capabilities factory and lifecycle hook provider:
 - **Port Factories (`get_compiler`, `get_deployer`, `get_managed`, `get_replay`, `get_dataset`):** Return the concrete port implementation or `None` when a capability is unsupported.
 - **`resolve_deployment_status(rule, managed_state)`:** Translates engine-specific deployment toggles into an engine-agnostic status (`enabled`, `silent`, `disabled`). For custom rules (`rule.is_managed == False`), it inspects `rule.deployment`; for registered managed rules (`rule.is_managed == True`), it resolves the live deployment status from `managed_state` (`rulesets/<engine>/managed/index.yaml`).
-- **`are_rules_equal(desired, remote)`:** Compares a desired Git `RuleEnvelope` against a remote tenant `RuleEnvelope` during `diff`/`apply` (defaults to trimmed `logic` comparison; engines that compile metadata into the query payload, such as `SecOpsAdapter`, override this to compare compiled payloads).
+- **`are_rules_equal(desired, remote)` / `are_deployments_equal(desired, remote)`:** Compares a desired Git `RuleEnvelope` against a remote tenant `RuleEnvelope` during `diff`/`apply` (defaults to trimmed `logic` and `deployment.to_dict()` comparison; engines can override these for normalized comparison).
+- **`should_deploy_rule(rule)`:** Determines whether an untracked local rule should be created on the remote engine during `diff`/`apply` (defaults to `True`; used by `GTIAdapter` to keep `type: "retrohunt"` rules with `enabled: false` dormant in Git).
 - **`render_rule(rule)`:** Synthesizes the engine-native query text from a `RuleEnvelope` offline for `graft <engine> render` (defaults to returning `rule.logic`).
 - **`deconstruct_rule(remote_rule)`:** Extracts embedded metadata from a raw remote rule during `pull` (defaults to returning `remote_rule` unchanged).
 - **`load_managed_manifest(path)` / `dump_managed_manifest(state, path)`:** Parses and serializes `rulesets/<engine>/managed/index.yaml` when `managed_rules: true` (defaults to `None`).
 - **`has_managed_rule_id(managed_id, state)`:** Verifies whether a registered managed rule's `managed.id` exists in the parsed `ManagedState` from `rulesets/<engine>/managed/index.yaml`. Used by `graft lint` to enforce referential integrity between `rulesets/<engine>/managed/<rule_name>.yaml` and `index.yaml`.
-- **`get_default_rule_logic(rule_name)`:** Returns the default query logic snippet injected when scaffolding a new custom rule via `graft <engine> new <name>` or `graft new rule <name> --engine <engine>`.
+- **`get_default_rule_logic(rule_name)` / `get_default_deployment_config()` / `get_default_test_event_payload()`:** Return the engine-native query logic stub, `deployment` block dictionary, and synthetic test event payload injected when scaffolding a new custom rule via `graft <engine> new <name>` or `graft new rule <name> --engine <engine>`.
 - **`validate_rule_dataset_references(rule, local_dataset_names)`:** Validates engine-specific dataset reference syntax inside `rule.logic` against active local dataset names (`local_dataset_names`) during `graft lint`, raising `RuleLoadError` if a local dataset reference violates engine column/operator rules (defaults to returning `None`).
 
 ---

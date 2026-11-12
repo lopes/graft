@@ -107,6 +107,16 @@ def test_deployer_list_rules_default_owner_self_and_skips_group_editable_colleag
     with patch.object(client, "request", side_effect=fake_request):
         rules = deployer.list_rules()
 
+        with pytest.raises(GTIApiError, match="owned by another user"):
+            deployer.delete_rule("rs_colleague_group_editable")
+
+        with pytest.raises(GTIApiError, match="owned by another user"):
+            deployer.set_rule_state(
+                "rs_colleague_group_editable",
+                enabled=False,
+                alerting=False,
+            )
+
     assert len(rules) == 1
     assert rules[0].metadata.name == "suspicious_brand_phishing_url"
     assert rules[0].metadata.tags == ("web", "sso", "phishing")
@@ -332,3 +342,52 @@ def test_deployer_retrohunt_job_lifecycle_and_dormant_check() -> None:
         (m, p) for m, p, _ in recorded if m == "POST" and p == "/intelligence/retrohunt_jobs"
     ]
     assert len(post_job_calls) == 2
+
+
+def test_deployer_handles_nullable_json_api_attributes_and_reraises_retrohunt_500() -> None:
+    cfg = GTIConfig(api_key="SYNTHETIC_TEST_KEY_000000")
+    client = GTIClient(cfg, base_delay_seconds=0.0)
+    deployer = GTIDeployerAdapter(client=client)
+    rule = _build_rule()
+    yara_text, _ = synthesize_yara_rule(rule)
+
+    def fake_request_null_attrs(
+        method: str,
+        path: str,
+        payload: dict[str, Any] | None = None,
+        params: dict[str, str] | None = None,
+    ) -> dict[str, Any]:
+        if path.startswith("/users/") and path.endswith("hunting_rulesets"):
+            return {
+                "data": [
+                    {
+                        "type": "hunting_ruleset",
+                        "id": "rs_nullable",
+                        "attributes": {
+                            "name": rule.metadata.name,
+                            "rules": yara_text,
+                            "enabled": True,
+                            "match_object_type": "url",
+                            "limit": None,
+                            "notification_emails": None,
+                            "tags": None,
+                        },
+                    }
+                ],
+                "meta": {"cursor": "same_cursor"},
+            }
+        if path.startswith("/users/") and path.endswith("retrohunt_jobs"):
+            raise GTIApiError(
+                message="Internal server error",
+                status_code=500,
+                error_code="ServerError",
+                method="GET",
+                path=path,
+            )
+        return {"data": {"type": "user", "id": "me_user"}}
+
+    with (
+        patch.object(client, "request", side_effect=fake_request_null_attrs),
+        pytest.raises(GTIApiError, match="Internal server error"),
+    ):
+        deployer.list_rules()

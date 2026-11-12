@@ -10,13 +10,14 @@ from graft.core.models.compiler import CompilationDiagnostic, CompilationResult
 from graft.core.models.rule import RuleEnvelope, RuleMetadata, Runbook
 from graft.core.ports.compiler import RuleCompilerPort
 from graft.core.validation.mitre_validator import get_default_mitre_validator
-from graft.engines.gti.client import GTIApiError, GTIClient
+from graft.engines.gti.client import GTIApiError, GTIClient, quote_path_segment
 
 logger = logging.getLogger("graft.gti.compiler")
 
 _YARA_IMPORT_LINE_RE = re.compile(r'^\s*import\s+"([a-zA-Z0-9_]+)"\s*$')
 _YARA_RULE_WRAPPER_RE = re.compile(
-    r"^\s*rule\s+([a-zA-Z0-9_]+)\s*\{\s*(.*?)\s*\}\s*$",
+    r"^\s*(?:(?:private|global)\s+)*rule\s+([a-zA-Z0-9_]+)"
+    r"(?:\s*:\s*[a-zA-Z0-9_\s]+)?\s*\{\s*(.*?)\s*\}\s*$",
     re.DOTALL,
 )
 _DATASET_TOKEN_RE = re.compile(
@@ -25,7 +26,7 @@ _DATASET_TOKEN_RE = re.compile(
 _YARA_STRING_OR_COMMENT_RE = re.compile(r'"(?:[^"\\]|\\.)*"|/\*[\s\S]*?\*/|//[^\r\n]*')
 _META_KEY_VAL_RE = re.compile(r'^\s*([a-zA-Z0-9_]+)\s*=\s*"((?:[^"\\]|\\.)*)"\s*$')
 _GTI_LINE_ERR_RE = re.compile(r"\bline\s+(\d+)\s*:", re.IGNORECASE)
-_SNAKE_CASE_NAME_RE = re.compile(r"^[a-z0-9]+(?:_[a-z0-9]+)*$")
+_SNAKE_CASE_NAME_RE = re.compile(r"^[a-z][a-z0-9]*(?:_[a-z0-9]+)*$")
 
 _VALID_SUBTYPES = frozenset({"file", "url", "domain", "ip_address"})
 
@@ -96,10 +97,15 @@ def _partition_imports_and_body(raw_logic: str) -> tuple[list[str], str]:
     lines = raw_logic.strip().splitlines()
     imports: list[str] = []
     seen_imports: set[str] = set()
+    body_lines: list[str] = []
     idx = 0
     while idx < len(lines):
         stripped = lines[idx].strip()
         if not stripped:
+            idx += 1
+            continue
+        if stripped.startswith("//"):
+            body_lines.append(lines[idx])
             idx += 1
             continue
         m = _YARA_IMPORT_LINE_RE.match(stripped)
@@ -113,15 +119,25 @@ def _partition_imports_and_body(raw_logic: str) -> tuple[list[str], str]:
             continue
         break
 
-    remainder = "\n".join(lines[idx:]).strip()
-    wrapper_match = _YARA_RULE_WRAPPER_RE.match(remainder)
+    remainder_lines = [*body_lines, *lines[idx:]]
+    uncommented_start = 0
+    while uncommented_start < len(remainder_lines):
+        st = remainder_lines[uncommented_start].strip()
+        if not st or st.startswith("//"):
+            uncommented_start += 1
+            continue
+        break
+    candidate = "\n".join(remainder_lines[uncommented_start:]).strip()
+    wrapper_match = _YARA_RULE_WRAPPER_RE.match(candidate)
     if wrapper_match:
         remainder = wrapper_match.group(2).strip()
+    else:
+        remainder = "\n".join(remainder_lines).strip()
 
     return imports, remainder
 
 
-def _strip_existing_graft_meta(body: str) -> tuple[dict[str, str], str]:
+def _extract_meta_and_body(body: str) -> tuple[dict[str, str], list[str], str]:
     extracted_meta: dict[str, str] = {}
     lines = body.splitlines()
     out_lines: list[str] = []
@@ -138,9 +154,6 @@ def _strip_existing_graft_meta(body: str) -> tuple[dict[str, str], str]:
                 r"^(strings|condition)\s*:", stripped
             ):
                 in_meta = False
-                if user_meta_lines:
-                    out_lines.append("  meta:")
-                    out_lines.extend(user_meta_lines)
                 out_lines.append(line)
                 continue
             if not stripped:
@@ -157,10 +170,6 @@ def _strip_existing_graft_meta(body: str) -> tuple[dict[str, str], str]:
         else:
             out_lines.append(line)
 
-    if in_meta and user_meta_lines:
-        out_lines.append("  meta:")
-        out_lines.extend(user_meta_lines)
-
     dedented: list[str] = []
     non_empty_indents = [len(ln) - len(ln.lstrip(" ")) for ln in out_lines if ln.strip()]
     min_indent = min(non_empty_indents) if non_empty_indents else 0
@@ -170,7 +179,16 @@ def _strip_existing_graft_meta(body: str) -> tuple[dict[str, str], str]:
         else:
             dedented.append(ln.strip())
 
-    return extracted_meta, "\n".join(dedented).strip()
+    return extracted_meta, user_meta_lines, "\n".join(dedented).strip()
+
+
+def _strip_existing_graft_meta(body: str) -> tuple[dict[str, str], str]:
+    extracted_meta, user_meta_lines, clean_body = _extract_meta_and_body(body)
+    if user_meta_lines:
+        user_meta_block = "\n".join(["meta:", *[f"  {ln.strip()}" for ln in user_meta_lines]])
+        combined = f"{user_meta_block}\n\n{clean_body}".strip() if clean_body else user_meta_block
+        return extracted_meta, combined
+    return extracted_meta, clean_body
 
 
 def resolve_gti_subtype(rule: RuleEnvelope) -> str:
@@ -193,7 +211,7 @@ def resolve_gti_subtype(rule: RuleEnvelope) -> str:
 
 def synthesize_yara_rule(rule: RuleEnvelope) -> tuple[str, int]:
     imports, raw_body = _partition_imports_and_body(rule.logic)
-    _, cleaned_body = _strip_existing_graft_meta(raw_body)
+    _, user_meta_lines, cleaned_body = _extract_meta_and_body(raw_body)
 
     meta_lines: list[str] = ["  meta:"]
     if rule.metadata.id:
@@ -217,6 +235,8 @@ def synthesize_yara_rule(rule: RuleEnvelope) -> tuple[str, int]:
     if rule.metadata.tags:
         tags_str = ", ".join(rule.metadata.tags)
         meta_lines.append(f'    tags = "{_escape_yara_str(tags_str)}"')
+    if user_meta_lines:
+        meta_lines.extend(user_meta_lines)
 
     prefix_lines: list[str] = []
     if imports:
@@ -237,9 +257,12 @@ def synthesize_yara_rule(rule: RuleEnvelope) -> tuple[str, int]:
 
 def _normalize_snake_case_name(raw_name: str, fallback: str = "imported_gti_rule") -> str:
     candidate = raw_name.strip()
-    if _SNAKE_CASE_NAME_RE.match(candidate):
-        return candidate
     cleaned = re.sub(r"[^a-z0-9]+", "_", candidate.lower()).strip("_")
+    if cleaned and cleaned[0].isdigit():
+        cleaned = f"rule_{cleaned}"
+    cleaned = cleaned[:64].rstrip("_")
+    if cleaned == "index":
+        cleaned = "index_rule"
     if cleaned and _SNAKE_CASE_NAME_RE.match(cleaned):
         return cleaned
     return fallback
@@ -258,7 +281,9 @@ def deconstruct_yara_rule(remote_rule: RuleEnvelope) -> RuleEnvelope:
         "\n".join(
             ln
             for ln in remote_rule.logic.strip().splitlines()
-            if not _YARA_IMPORT_LINE_RE.match(ln.strip())
+            if ln.strip()
+            and not ln.strip().startswith("//")
+            and not _YARA_IMPORT_LINE_RE.match(ln.strip())
         ).strip()
     )
     inferred_name = wrapper_match.group(1) if wrapper_match else remote_rule.metadata.name
@@ -274,6 +299,8 @@ def deconstruct_yara_rule(remote_rule: RuleEnvelope) -> RuleEnvelope:
     description = extracted_meta.get("description") or remote_rule.metadata.description
     if not description or len(description.strip()) < 10:
         description = f"Imported GTI detection rule for {final_name}."
+    if len(description) > 128:
+        description = description[:125].rstrip() + "..."
 
     owners: tuple[str, ...] = remote_rule.metadata.owners
     if "owners" in extracted_meta:
@@ -357,19 +384,20 @@ class GTICompilerAdapter(RuleCompilerPort):
                 column=1,
                 message="YARA rule logic cannot be empty",
             )
-        if "condition:" not in stripped:
+        code_only = _strip_quoted_strings_and_comments(stripped)
+        if "condition:" not in code_only:
             return CompilationDiagnostic(
                 line=1,
                 column=1,
                 message="YARA rule logic is missing a 'condition:' section",
             )
-        if stripped.count("{") != stripped.count("}"):
+        if code_only.count("{") != code_only.count("}"):
             return CompilationDiagnostic(
                 line=1,
                 column=1,
                 message="Unbalanced braces '{' / '}' in YARA rule logic",
             )
-        if stripped.count("(") != stripped.count(")"):
+        if code_only.count("(") != code_only.count(")"):
             return CompilationDiagnostic(
                 line=1,
                 column=1,
@@ -481,7 +509,8 @@ class GTICompilerAdapter(RuleCompilerPort):
         finally:
             if created_id is not None and self._client is not None:
                 try:
-                    self._client.delete(f"/intelligence/hunting_rulesets/{created_id}")
+                    safe_id = quote_path_segment(created_id)
+                    self._client.delete(f"/intelligence/hunting_rulesets/{safe_id}")
                 except Exception as cleanup_exc:
                     logger.warning(
                         "Failed cleaning up transient verification ruleset '%s': %s",

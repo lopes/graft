@@ -60,10 +60,13 @@ jobs:
         run: uv run mypy --strict src tests
 
       - name: Gate 4 - Unit and engine test suite (pytest)
-        run: uv run pytest
+        run: uv run pytest tests/unit tests/engines
 
       - name: Gate 5 - Rules & manifests linting (schema + MITRE)
         run: uv run graft lint
+
+      - name: Gate 5b - Offline GTI synthetic YARA-X test vectors
+        run: uv run graft gti test
 
       - name: MITRE ATT&CK upstream release check (advisory)
         run: uv run graft mitre update --check || true

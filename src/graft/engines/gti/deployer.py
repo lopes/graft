@@ -11,7 +11,7 @@ from graft.core.models.rule import (
     Runbook,
 )
 from graft.core.ports.deployer import RuleDeployerPort
-from graft.engines.gti.client import GTIApiError, GTIClient
+from graft.engines.gti.client import GTIApiError, GTIClient, quote_path_segment
 from graft.engines.gti.compiler import (
     deconstruct_yara_rule,
     resolve_gti_subtype,
@@ -22,6 +22,19 @@ logger = logging.getLogger("graft.gti.deployer")
 
 _VALID_DEPLOYMENT_TYPES = frozenset({"livehunt", "retrohunt"})
 _VALID_CORPORA = frozenset({"main", "goodware"})
+
+
+def _safe_int(value: object, default: int) -> int:
+    if isinstance(value, bool):
+        return default
+    if isinstance(value, (int, float)):
+        return int(value)
+    if isinstance(value, str):
+        try:
+            return int(value.strip())
+        except ValueError:
+            return default
+    return default
 
 
 def resolve_gti_deployment_type(rule: RuleEnvelope) -> str:
@@ -88,7 +101,7 @@ def normalize_gti_deployment(
         return norm
 
     raw_limit = rule.deployment.get("daily_limit", 100)
-    daily_limit = int(raw_limit) if isinstance(raw_limit, (int, str)) else 100
+    daily_limit = _safe_int(raw_limit, 100)
     norm_lh: dict[str, object] = {
         "type": "livehunt",
         "subtype": resolve_gti_subtype(rule),
@@ -111,13 +124,23 @@ class GTIDeployerAdapter(RuleDeployerPort):
         gti_resource_id: str,
         owner_id: str,
         dep_type: str = "livehunt",
+        current_user_id: str = "",
     ) -> None:
         entry = (gti_resource_id, owner_id, dep_type)
-        if rule.metadata.id:
-            self._remote_index[rule.metadata.id] = entry
-        if rule.metadata.name:
-            self._remote_index[rule.metadata.name] = entry
-        self._remote_index[gti_resource_id] = entry
+        if gti_resource_id:
+            self._remote_index[gti_resource_id] = entry
+        for key in (rule.metadata.id, rule.metadata.name):
+            if not key:
+                continue
+            existing = self._remote_index.get(key)
+            if (
+                existing is not None
+                and current_user_id
+                and existing[1] == current_user_id
+                and owner_id != current_user_id
+            ):
+                continue
+            self._remote_index[key] = entry
 
     def _resolve_owned_resource(
         self,
@@ -187,7 +210,8 @@ class GTIDeployerAdapter(RuleDeployerPort):
         ruleset_filter: str,
     ) -> list[RuleEnvelope]:
         if ruleset_filter == "owner:self":
-            base_path = f"/users/{current_user_id}/hunting_rulesets"
+            safe_uid = quote_path_segment(current_user_id)
+            base_path = f"/users/{safe_uid}/hunting_rulesets"
             base_params: dict[str, str] = {"limit": "40", "relationships": "owner"}
         elif ruleset_filter == "all":
             base_path = "/intelligence/hunting_rulesets"
@@ -202,6 +226,7 @@ class GTIDeployerAdapter(RuleDeployerPort):
 
         rules: list[RuleEnvelope] = []
         cursor: str | None = None
+        seen_cursors: set[str] = set()
         while True:
             params = dict(base_params)
             if cursor:
@@ -221,28 +246,22 @@ class GTIDeployerAdapter(RuleDeployerPort):
 
                 default_owner = current_user_id if ruleset_filter == "owner:self" else ""
                 owner_id = self._extract_owner_id(item, default_owner)
-                if ruleset_filter == "owner:self" and owner_id and owner_id != current_user_id:
-                    logger.debug(
-                        "Skipping group-editable Livehunt ruleset '%s' owned by '%s' "
-                        "(owner:self scope)",
-                        gti_id,
-                        owner_id,
-                    )
-                    continue
 
-                name = str(attrs.get("name", gti_id))
-                raw_yara = str(attrs.get("rules", ""))
+                name = str(attrs.get("name") or gti_id)
+                raw_yara = str(attrs.get("rules") or "")
                 enabled = bool(attrs.get("enabled", False))
-                subtype = str(attrs.get("match_object_type", "file"))
-                daily_limit = int(attrs.get("limit", 100))
+                subtype = str(attrs.get("match_object_type") or "file")
+                daily_limit = _safe_int(attrs.get("limit"), 100)
+                raw_notif = attrs.get("notification_emails")
                 notif_emails = [
                     str(e)
-                    for e in attrs.get("notification_emails", [])
+                    for e in (raw_notif if isinstance(raw_notif, list) else [])
                     if isinstance(e, str) and e.strip()
                 ]
+                raw_tags_attr = attrs.get("tags")
                 raw_tags = tuple(
                     str(t).strip()
-                    for t in attrs.get("tags", [])
+                    for t in (raw_tags_attr if isinstance(raw_tags_attr, list) else [])
                     if isinstance(t, str) and str(t).strip()
                 )
 
@@ -267,14 +286,30 @@ class GTIDeployerAdapter(RuleDeployerPort):
                     runbook=Runbook(),
                 )
                 deconstructed = deconstruct_yara_rule(raw_envelope)
-                self._record_remote_resource(deconstructed, gti_id, owner_id, "livehunt")
+                self._record_remote_resource(
+                    deconstructed,
+                    gti_id,
+                    owner_id,
+                    "livehunt",
+                    current_user_id=current_user_id,
+                )
+                if ruleset_filter == "owner:self" and owner_id and owner_id != current_user_id:
+                    logger.debug(
+                        "Skipping group-editable Livehunt ruleset '%s' owned by '%s' "
+                        "(owner:self scope)",
+                        gti_id,
+                        owner_id,
+                    )
+                    continue
                 rules.append(deconstructed)
 
             meta = payload.get("meta", {})
             next_cursor = meta.get("cursor") if isinstance(meta, dict) else None
-            if not next_cursor or not items:
+            next_cursor_str = str(next_cursor).strip() if next_cursor else ""
+            if not next_cursor_str or not items or next_cursor_str in seen_cursors:
                 break
-            cursor = str(next_cursor)
+            seen_cursors.add(next_cursor_str)
+            cursor = next_cursor_str
 
         return rules
 
@@ -284,7 +319,8 @@ class GTIDeployerAdapter(RuleDeployerPort):
         ruleset_filter: str,
     ) -> list[RuleEnvelope]:
         if ruleset_filter == "owner:self":
-            base_path = f"/users/{current_user_id}/retrohunt_jobs"
+            safe_uid = quote_path_segment(current_user_id)
+            base_path = f"/users/{safe_uid}/retrohunt_jobs"
             base_params: dict[str, str] = {"limit": "40", "relationships": "owner"}
         else:
             base_path = "/intelligence/retrohunt_jobs"
@@ -292,14 +328,24 @@ class GTIDeployerAdapter(RuleDeployerPort):
 
         rules: list[RuleEnvelope] = []
         cursor: str | None = None
+        seen_cursors: set[str] = set()
         while True:
             params = dict(base_params)
             if cursor:
                 params["cursor"] = cursor
             try:
                 payload = self._client.get(base_path, params=params)
-            except GTIApiError:
-                break
+            except GTIApiError as exc:
+                if exc.status_code in (403, 404, 501):
+                    logger.debug(
+                        "Retrohunt listing unavailable on %s (HTTP %d); "
+                        "skipping Retrohunt inventory",
+                        base_path,
+                        exc.status_code,
+                    )
+                    break
+                logger.warning("Failed listing GTI Retrohunt jobs on %s: %s", base_path, exc)
+                raise
             items = payload.get("data", [])
             if not isinstance(items, list):
                 break
@@ -314,20 +360,15 @@ class GTIDeployerAdapter(RuleDeployerPort):
 
                 default_owner = current_user_id if ruleset_filter == "owner:self" else ""
                 owner_id = self._extract_owner_id(item, default_owner)
-                if ruleset_filter == "owner:self" and owner_id and owner_id != current_user_id:
-                    logger.debug(
-                        "Skipping Retrohunt job '%s' owned by '%s' (owner:self scope)",
-                        gti_id,
-                        owner_id,
-                    )
-                    continue
 
-                raw_yara = str(attrs.get("rules", ""))
+                raw_yara = str(attrs.get("rules") or "")
                 if not raw_yara.strip():
+                    if gti_id:
+                        self._remote_index[gti_id] = (gti_id, owner_id, "retrohunt")
                     continue
-                status = str(attrs.get("status", "finished"))
+                status = str(attrs.get("status") or "finished")
                 enabled = status != "aborted"
-                corpus = str(attrs.get("corpus", "main"))
+                corpus = str(attrs.get("corpus") or "main")
 
                 dep_dict: dict[str, object] = {
                     "type": "retrohunt",
@@ -336,10 +377,12 @@ class GTIDeployerAdapter(RuleDeployerPort):
                 }
                 tr = attrs.get("time_range")
                 if isinstance(tr, dict):
-                    if isinstance(tr.get("start"), (int, float)):
-                        dep_dict["start_time"] = _unix_epoch_to_iso(int(tr["start"]))
-                    if isinstance(tr.get("end"), (int, float)):
-                        dep_dict["end_time"] = _unix_epoch_to_iso(int(tr["end"]))
+                    start_raw = tr.get("start")
+                    end_raw = tr.get("end")
+                    if not isinstance(start_raw, bool) and isinstance(start_raw, (int, float)):
+                        dep_dict["start_time"] = _unix_epoch_to_iso(int(start_raw))
+                    if not isinstance(end_raw, bool) and isinstance(end_raw, (int, float)):
+                        dep_dict["end_time"] = _unix_epoch_to_iso(int(end_raw))
 
                 notif_email = attrs.get("notification_email")
                 if isinstance(notif_email, str) and notif_email.strip():
@@ -359,18 +402,33 @@ class GTIDeployerAdapter(RuleDeployerPort):
                     runbook=Runbook(),
                 )
                 deconstructed = deconstruct_yara_rule(raw_envelope)
+                self._record_remote_resource(
+                    deconstructed,
+                    gti_id,
+                    owner_id,
+                    "retrohunt",
+                    current_user_id=current_user_id,
+                )
+                if ruleset_filter == "owner:self" and owner_id and owner_id != current_user_id:
+                    logger.debug(
+                        "Skipping Retrohunt job '%s' owned by '%s' (owner:self scope)",
+                        gti_id,
+                        owner_id,
+                    )
+                    continue
                 if ruleset_filter.startswith("tag:"):
                     required_tag = ruleset_filter[len("tag:") :].strip()
                     if required_tag and required_tag not in deconstructed.metadata.tags:
                         continue
-                self._record_remote_resource(deconstructed, gti_id, owner_id, "retrohunt")
                 rules.append(deconstructed)
 
             meta = payload.get("meta", {})
             next_cursor = meta.get("cursor") if isinstance(meta, dict) else None
-            if not next_cursor or not items:
+            next_cursor_str = str(next_cursor).strip() if next_cursor else ""
+            if not next_cursor_str or not items or next_cursor_str in seen_cursors:
                 break
-            cursor = str(next_cursor)
+            seen_cursors.add(next_cursor_str)
+            cursor = next_cursor_str
 
         return rules
 
@@ -392,7 +450,7 @@ class GTIDeployerAdapter(RuleDeployerPort):
         yara_text, _ = synthesize_yara_rule(rule)
         subtype = resolve_gti_subtype(rule)
         raw_limit = rule.deployment.get("daily_limit", 100)
-        daily_limit = int(raw_limit) if isinstance(raw_limit, (int, str)) else 100
+        daily_limit = _safe_int(raw_limit, 100)
         emails = self._resolve_notification_emails(rule)
         tags = list(dict.fromkeys(t for t in rule.metadata.tags if t))
 
@@ -494,7 +552,8 @@ class GTIDeployerAdapter(RuleDeployerPort):
                 rule.metadata.id,
             )
             if existing_type == "livehunt":
-                self._client.delete(f"/intelligence/hunting_rulesets/{gti_id}")
+                safe_id = quote_path_segment(gti_id)
+                self._client.delete(f"/intelligence/hunting_rulesets/{safe_id}")
             if dep_type == "livehunt" or (
                 dep_type == "retrohunt" and bool(rule.deployment.get("enabled", False))
             ):
@@ -506,6 +565,7 @@ class GTIDeployerAdapter(RuleDeployerPort):
             rule.metadata.name,
             rule.metadata.id,
         )
+        safe_id = quote_path_segment(gti_id)
         payload = {
             "data": {
                 "type": "hunting_ruleset",
@@ -513,16 +573,17 @@ class GTIDeployerAdapter(RuleDeployerPort):
                 "attributes": self._build_livehunt_attributes(rule),
             }
         }
-        self._client.patch(f"/intelligence/hunting_rulesets/{gti_id}", payload)
+        self._client.patch(f"/intelligence/hunting_rulesets/{safe_id}", payload)
 
     def delete_rule(self, rule_id: str) -> None:
         gti_id, dep_type = self._resolve_owned_resource(rule_id)
+        safe_id = quote_path_segment(gti_id)
         if dep_type == "retrohunt":
             logger.debug("Deleting GTI Retrohunt job '%s'", rule_id)
-            self._client.delete(f"/intelligence/retrohunt_jobs/{gti_id}")
+            self._client.delete(f"/intelligence/retrohunt_jobs/{safe_id}")
             return
         logger.debug("Deleting GTI Livehunt ruleset '%s'", rule_id)
-        self._client.delete(f"/intelligence/hunting_rulesets/{gti_id}")
+        self._client.delete(f"/intelligence/hunting_rulesets/{safe_id}")
 
     def set_rule_state(self, rule_id: str, enabled: bool, alerting: bool) -> None:
         gti_id, dep_type = self._resolve_owned_resource(rule_id)
@@ -544,6 +605,7 @@ class GTIDeployerAdapter(RuleDeployerPort):
             attrs["notification_emails"] = []
         elif self._client.config.notification_emails:
             attrs["notification_emails"] = list(self._client.config.notification_emails)
+        safe_id = quote_path_segment(gti_id)
         payload = {
             "data": {
                 "type": "hunting_ruleset",
@@ -551,4 +613,4 @@ class GTIDeployerAdapter(RuleDeployerPort):
                 "attributes": attrs,
             }
         }
-        self._client.patch(f"/intelligence/hunting_rulesets/{gti_id}", payload)
+        self._client.patch(f"/intelligence/hunting_rulesets/{safe_id}", payload)

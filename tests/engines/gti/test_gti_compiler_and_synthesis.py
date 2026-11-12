@@ -292,3 +292,42 @@ def test_compiler_verify_rule_maps_remote_line_offset_on_syntax_error() -> None:
     assert len(result.diagnostics) == 1
     assert result.diagnostics[0].line >= 1
     assert "syntax error" in result.diagnostics[0].message
+
+
+def test_synthesize_brownfield_rule_with_user_meta_emits_single_meta_section() -> None:
+    logic_with_user_meta = """import "vt"
+
+// Leading comment before rule wrapper
+rule 2026_Brownfield_Rule : phishing tag2 {
+  meta:
+    author = "analyst"
+    custom_note = "keep me"
+  strings:
+    $s1 = "func("
+  condition:
+    vt.net.url.new_url and $s1
+}"""
+    remote_env = RuleEnvelope(
+        metadata=RuleMetadata(
+            id="",
+            name="2026_" + ("a" * 80),
+            description="A" * 160,
+        ),
+        logic=logic_with_user_meta,
+        deployment=BaseDeploymentConfig.from_dict(
+            {"type": "livehunt", "subtype": "url", "enabled": True}
+        ),
+    )
+    deconstructed = deconstruct_yara_rule(remote_env)
+    assert deconstructed.metadata.name.startswith("rule_2026_")
+    assert len(deconstructed.metadata.name) <= 64
+    assert len(deconstructed.metadata.description) <= 128
+
+    synthesized, _ = synthesize_yara_rule(deconstructed)
+    assert synthesized.count("meta:") == 1
+    assert 'author = "analyst"' in synthesized
+    assert 'custom_note = "keep me"' in synthesized
+
+    compiler = GTICompilerAdapter(client=None)
+    verify_res = compiler.verify_rule(deconstructed)
+    assert verify_res.success is True

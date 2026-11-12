@@ -13,6 +13,34 @@ from graft.engines.gti.config import GTIConfig
 
 logger = logging.getLogger("graft.gti.client")
 
+_STDLIB_URLOPEN = urllib.request.urlopen
+
+
+def quote_path_segment(segment: str) -> str:
+    cleaned = segment.strip()
+    if not cleaned or cleaned in (".", "..") or "/" in cleaned or "\\" in cleaned:
+        raise ValueError(f"Invalid GTI URL path segment: {segment!r}")
+    return urllib.parse.quote(cleaned, safe="")
+
+
+class _SameOriginHTTPSRedirectHandler(urllib.request.HTTPRedirectHandler):
+    def redirect_request(
+        self,
+        req: urllib.request.Request,
+        fp: Any,
+        code: int,
+        msg: str,
+        headers: Any,
+        newurl: str,
+    ) -> urllib.request.Request | None:
+        orig_parsed = urllib.parse.urlsplit(req.full_url)
+        new_parsed = urllib.parse.urlsplit(newurl)
+        if new_parsed.scheme != "https" or new_parsed.netloc != orig_parsed.netloc:
+            raise urllib.error.URLError(
+                f"Blocked cross-origin or non-HTTPS redirect from {orig_parsed.netloc} to {newurl}"
+            )
+        return super().redirect_request(req, fp, code, msg, headers, newurl)
+
 
 class GTIApiError(RuntimeError):
     def __init__(
@@ -46,6 +74,7 @@ class GTIClient:
         self._base_delay_seconds = base_delay_seconds
         self._timeout_seconds = timeout_seconds
         self._cached_user_id: str | None = None
+        self._opener = urllib.request.build_opener(_SameOriginHTTPSRedirectHandler())
 
     @property
     def config(self) -> GTIConfig:
@@ -65,9 +94,14 @@ class GTIClient:
         else:
             url = f"{self._config.base_url}/{path}"
 
+        base_parsed = urllib.parse.urlsplit(self._config.base_url)
         parsed = urllib.parse.urlsplit(url)
-        if parsed.scheme != "https":
+        if parsed.scheme != "https" or not parsed.netloc:
             raise ValueError(f"Invalid URL scheme (HTTPS required): {url}")
+        if parsed.netloc != base_parsed.netloc:
+            raise ValueError(
+                f"Cross-origin GTI URL rejected (expected {base_parsed.netloc}): {url}"
+            )
 
         if params:
             query_string = urllib.parse.urlencode(params)
@@ -78,7 +112,8 @@ class GTIClient:
     def get_current_user_id(self) -> str:
         if self._cached_user_id is not None:
             return self._cached_user_id
-        payload = self.request("GET", f"/users/{self._config.api_key}")
+        encoded_key = quote_path_segment(self._config.api_key)
+        payload = self.request("GET", f"/users/{encoded_key}")
         data = payload.get("data", {})
         if isinstance(data, dict) and data.get("id"):
             self._cached_user_id = str(data["id"])
@@ -119,9 +154,12 @@ class GTIClient:
                 url, data=body_bytes, headers=headers, method=method
             )
             try:
-                with urllib.request.urlopen(  # noqa: S310
-                    req, timeout=self._timeout_seconds
-                ) as resp:
+                open_fn = (
+                    self._opener.open
+                    if urllib.request.urlopen is _STDLIB_URLOPEN
+                    else urllib.request.urlopen
+                )
+                with open_fn(req, timeout=self._timeout_seconds) as resp:
                     raw_body = resp.read().decode("utf-8")
                     if not raw_body.strip():
                         return {}

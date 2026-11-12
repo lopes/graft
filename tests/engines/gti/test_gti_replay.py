@@ -195,3 +195,68 @@ def test_gti_replay_retrohunt_job_submission_and_polling() -> None:
     assert ("POST", "/intelligence/retrohunt_jobs") in calls
     assert ("GET", "/intelligence/retrohunt_jobs/retro_job_1") in calls
     assert ("DELETE", "/intelligence/retrohunt_jobs/retro_job_1") in calls
+
+
+def test_gti_replay_retrohunt_fails_closed_when_job_not_finished_and_unescapes_strings() -> None:
+    cfg = GTIConfig(api_key="SYNTHETIC_TEST_KEY_000000")
+    client = GTIClient(cfg, base_delay_seconds=0.0)
+    replay = GTIReplayAdapter(client=client, poll_interval_seconds=0.0, max_poll_attempts=1)
+    rule = RuleEnvelope(
+        metadata=RuleMetadata(
+            id="8f14e45f-ceea-467a-a124-000000000004",
+            name="retro_timeout_check",
+            description="Retrohunt timeout must not pass expect=0",
+        ),
+        logic='strings:\n  $q = "say \\"hello\\""\ncondition:\n  $q',
+        deployment=BaseDeploymentConfig.from_dict({"enabled": True}),
+    )
+    retro_vec = TestVector(
+        id="retrohunt_timeout_expect_zero",
+        description="Timed-out running job must fail even when expect is 0",
+        expect=0,
+        events=(
+            TestEvent(
+                timestamp="2026-10-15T12:00:00Z",
+                payload={"mode": "retrohunt", "corpus": "goodware"},
+            ),
+        ),
+    )
+
+    def fake_request(
+        method: str,
+        path: str,
+        payload: dict[str, Any] | None = None,
+        params: dict[str, str] | None = None,
+    ) -> dict[str, Any]:
+        if method == "POST" and path == "/intelligence/retrohunt_jobs":
+            return {"data": {"type": "retrohunt_job", "id": "retro_job_timeout"}}
+        if method == "GET" and path == "/intelligence/retrohunt_jobs/retro_job_timeout":
+            return {
+                "data": {
+                    "type": "retrohunt_job",
+                    "id": "retro_job_timeout",
+                    "attributes": {"status": "running", "num_matches": None},
+                }
+            }
+        if method == "DELETE" and path == "/intelligence/retrohunt_jobs/retro_job_timeout":
+            return {}
+        raise AssertionError(f"Unexpected call: {method} {path}")
+
+    with patch.object(client, "request", side_effect=fake_request):
+        res_retro = replay.run_test_vector(rule, retro_vec)
+    assert res_retro.passed is False
+    assert "did not finish" in res_retro.message
+
+    unit_vec = TestVector(
+        id="match_escaped_quotes",
+        description="Matches unescaped double quotes in sample_text",
+        expect=1,
+        events=(
+            TestEvent(
+                timestamp="2026-10-15T12:00:00Z",
+                payload={"sample_text": 'prefix say "hello" suffix'},
+            ),
+        ),
+    )
+    res_unit = replay.run_test_vector(rule, unit_vec)
+    assert res_unit.passed is True

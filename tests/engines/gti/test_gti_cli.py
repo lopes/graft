@@ -308,3 +308,63 @@ tests:
     assert rc_req == 1
     out_req = json.loads(capsys.readouterr().out)
     assert out_req["success"] is False
+
+
+def test_gti_cli_mixed_failing_unit_vector_and_unauthenticated_retrohunt_fails(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    monkeypatch.delenv("GRAFT_GTI_API_KEY", raising=False)
+    monkeypatch.delenv("GRAFT_GTI_STAGING_API_KEY", raising=False)
+    monkeypatch.delenv("GRAFT_GTI_PROD_API_KEY", raising=False)
+
+    mixed_rule = tmp_path / "rulesets" / "gti" / "custom" / "mixed_vectors_probe.yaml"
+    mixed_rule.parent.mkdir(parents=True)
+    mixed_rule.write_text(
+        """metadata:
+  id: "8f14e45f-ceea-467a-a124-000000000094"
+  name: "mixed_vectors_probe"
+  description: "Rule mixing offline unit vectors and retrohunt vector"
+  owners: ["SOC"]
+  mitre:
+    initial-access: ["T1566.002"]
+  tags: ["windows", "pe"]
+  references: ["https://example.com"]
+logic: |
+  import "vt"
+  condition:
+    vt.metadata.new_file
+deployment:
+  type: "retrohunt"
+  enabled: false
+  corpus: "goodware"
+runbook:
+  context: "ctx"
+  triage: "tri"
+  response: "resp"
+tests:
+  - id: "failing_offline_unit_vector"
+    description: "Intentionally failing offline vector"
+    expect: 1
+    events:
+      - timestamp: "2026-10-15T12:00:00Z"
+        payload:
+          vt.metadata.new_file: false
+  - id: "retrohunt_goodware_zero_fp"
+    description: "Skipped retrohunt vector without credentials"
+    expect: 0
+    events:
+      - timestamp: "2026-10-15T12:00:00Z"
+        payload:
+          mode: "retrohunt"
+          corpus: "goodware"
+""",
+        encoding="utf-8",
+    )
+
+    rc = main(["--json", "gti", "test", str(mixed_rule)])
+    assert rc == 1
+    out = json.loads(capsys.readouterr().out)
+    assert out["success"] is False
+    assert out["failed"] == 1

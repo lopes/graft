@@ -17,7 +17,6 @@ name: Deploy Production & Publish Catalogs
 
 permissions:
   contents: read
-  id-token: write
 
 concurrency:
   group: deploy-production
@@ -28,6 +27,9 @@ jobs:
     name: Deploy to SecOps & Publish Value Artifacts
     runs-on: ubuntu-latest
     if: vars.GRAFT_SECOPS_PROD_PROJECT != ''
+    permissions:
+      contents: read
+      id-token: write
     env:
       GRAFT_SECOPS_PROD_PROJECT: ${{ vars.GRAFT_SECOPS_PROD_PROJECT }}
       GRAFT_SECOPS_PROD_LOCATION: ${{ vars.GRAFT_SECOPS_PROD_LOCATION }}

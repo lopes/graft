@@ -36,7 +36,7 @@ flowchart TD
 
 1. Read the target YAML file.
 2. **Reject Registered Managed Rules:** If the file contains a `managed:` block instead of `logic:`, stop and inform the analyst that vendor-managed rules do not expose query logic locally for predicate-driven vector generation.
-3. **Reject Untouched Stub Logic:** If `logic` still contains the default `graft new rule` placeholder (`$e.metadata.event_type = "USER_LOGIN"` with no additional predicates), stop and instruct the analyst to author the detection query in `logic` first.
+3. **Reject Untouched Stub Logic:** If `logic` still contains the default `graft new rule` placeholder (`$e.metadata.event_type = "USER_LOGIN"` for `secops` or bare `vt.net.url.new_url` for `gti` with no additional predicates), stop and instruct the analyst to author the detection query in `logic` first.
 
 ---
 
@@ -58,7 +58,7 @@ Every item in `tests` must satisfy:
 - `expect` *(integer, required)*: `1` (or exact expected match count) for positive vectors; `0` for negative vectors.
 - `events` *(non-empty list of objects, required)*:
   - `timestamp` *(string, required)*: Valid ISO-8601 UTC timestamp (`^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:\d{2})$`, e.g., `"2026-09-17T15:00:00Z"`).
-  - `payload` *(non-empty object, required)*: Nested dictionary mirroring the target engine's native event schema (e.g., Chronicle UDM field hierarchy for `secops`).
+  - `payload` *(non-empty object, required)*: Dictionary mirroring the target engine's native event schema (Chronicle UDM field hierarchy for `secops`; `vt.*` entity attributes, `filesize`, `sample_text`, or `mode: "retrohunt"` + `corpus` for `gti`).
 
 ### Predicate & Join Fidelity
 1. **Positive Vector (`id: "match_<scenario>"`, `expect: 1`):**

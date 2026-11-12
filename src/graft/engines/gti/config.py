@@ -18,7 +18,7 @@ class GTIConfig:
 
     def __post_init__(self) -> None:
         parsed = urllib.parse.urlsplit(self.base_url)
-        if parsed.scheme != "https":
+        if parsed.scheme != "https" or not parsed.netloc:
             raise ValueError(
                 f"Insecure or invalid GTI base URL rejected (HTTPS required): {self.base_url}"
             )
@@ -26,11 +26,7 @@ class GTIConfig:
     @classmethod
     def from_env(cls, target: Literal["staging", "prod"] = "staging") -> Self:
         tgt = target.upper()
-        api_key = (
-            os.environ.get(f"GRAFT_GTI_{tgt}_API_KEY")
-            or os.environ.get("GRAFT_GTI_API_KEY")
-            or (os.environ.get("GRAFT_GTI_PROD_API_KEY") if target == "staging" else None)
-        )
+        api_key = os.environ.get(f"GRAFT_GTI_{tgt}_API_KEY") or os.environ.get("GRAFT_GTI_API_KEY")
         if not api_key:
             raise KeyError(
                 f"Missing required GTI environment variable for target '{target}': "

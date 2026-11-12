@@ -381,9 +381,9 @@ class SentinelAdapter(EngineAdapter):
     ) -> str:
         if rule.is_managed:
             return "disabled"
-        if not rule.deployment.enabled:
+        if not bool(rule.deployment.get("enabled", True)):
             return "disabled"
-        return "enabled" if rule.deployment.alerting else "silent"
+        return "enabled" if bool(rule.deployment.get("alerting", True)) else "silent"
 ```
 
 ---
@@ -422,9 +422,11 @@ def resolve_deployment_status(
                     return "silent"
                 return "disabled"
         return "disabled"
-    if not rule.deployment.enabled:
+    if not bool(rule.deployment.get("enabled", True)):
         return "disabled"
-    return "enabled" if rule.deployment.alerting else "silent"
+    if rule.deployment.get("alerting") is False:
+        return "silent"
+    return "enabled"
 ```
 
 ---
