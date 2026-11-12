@@ -17,8 +17,6 @@ metadata:
     - "web"
   references:
     - "https://gtidocs.virustotal.com/docs/url-hunting"
-    - "https://attack.mitre.org/techniques/T1566/002/"
-    - "https://attack.mitre.org/techniques/T1585/002/"
 
 logic: |
   import "vt"
@@ -60,7 +58,7 @@ logic: |
 deployment:
   type: "livehunt"
   subtype: "url"
-  enabled: true
+  enabled: false
   daily_limit: 100
 
 runbook:

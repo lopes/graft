@@ -17,8 +17,6 @@ metadata:
     - "phishing"
   references:
     - "https://gtidocs.virustotal.com/docs/url-object"
-    - "https://attack.mitre.org/techniques/T1566/002/"
-    - "https://attack.mitre.org/techniques/T1036/005/"
 
 logic: |
   import "vt"
@@ -38,7 +36,7 @@ logic: |
 deployment:
   type: "livehunt"
   subtype: "url"
-  enabled: true
+  enabled: false
   daily_limit: 100
 
 runbook:

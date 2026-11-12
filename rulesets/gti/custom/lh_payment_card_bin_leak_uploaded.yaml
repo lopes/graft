@@ -17,8 +17,6 @@ metadata:
     - "financial"
   references:
     - "https://gtidocs.virustotal.com/docs/file-hunting"
-    - "https://attack.mitre.org/techniques/T1005/"
-    - "https://attack.mitre.org/techniques/T1567/002/"
 
 logic: |
   import "vt"
@@ -56,7 +54,7 @@ logic: |
 deployment:
   type: "livehunt"
   subtype: "file"
-  enabled: true
+  enabled: false
   daily_limit: 100
 
 runbook:

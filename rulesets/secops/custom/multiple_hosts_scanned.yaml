@@ -14,8 +14,6 @@ metadata:
     - "netscan"
   references:
     - "https://lopes.id/log/detection-rules-netscan-portscan/"
-    - "https://attack.mitre.org/techniques/T1018/"
-    - "https://attack.mitre.org/techniques/T1595/001/"
 
 logic: |
   events:

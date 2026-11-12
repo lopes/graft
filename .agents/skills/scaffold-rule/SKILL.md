@@ -104,7 +104,7 @@ flowchart TD
 
 ### `metadata.references`
 - Required list of `1..32` unique non-blank strings (`maxLength: 2048`).
-- Include the canonical MITRE ATT&CK URL for each mapped technique (note that sub-techniques use `/` in URLs, e.g., `https://attack.mitre.org/techniques/T1566/002/`) plus any vendor documentation URLs, blog posts, or community rule attributions provided by the analyst.
+- Include vendor documentation URLs, threat intelligence blog posts, or community rule attributions provided by the analyst. **Never include MITRE ATT&CK technique URLs (`https://attack.mitre.org/techniques/...`)**, as `metadata.mitre` already records the taxonomy mapping.
 
 ### `runbook.context`
 - Required string (`1..2048` characters).

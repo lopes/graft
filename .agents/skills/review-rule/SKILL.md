@@ -72,7 +72,7 @@ Evaluate each rule across all blocks and classify every check as `PASS`, `WARN`,
   - Does `metadata.tags` contain 2–3 broad, reusable lowercase platform/surface labels matching `^[a-z0-9_/:-]{1,32}$` (e.g., `gcp`, `iam`, `workspace`, `email`, `whois`, `web`, `sso`, `phishing`, `windows`, `pe`, `network`)?
   - Flag tags that duplicate the engine name (`secops`, `gti`), rule/deployment type or subtype (`custom`, `managed`, `livehunt`, `retrohunt`, `url`, `file`), or MITRE tactic names (`initial-access`, `persistence`, `reconnaissance`).
 - **References:**
-  - Do `metadata.references` cite the matching MITRE technique URLs and/or relevant vendor docs or threat research (flagging leftover `T1059/001` stub URLs)?
+  - Do `metadata.references` cite relevant vendor docs, threat research, or community rule attributions (flagging any redundant MITRE ATT&CK technique URLs like `https://attack.mitre.org/techniques/...`, since `metadata.mitre` already maps techniques)?
 
 ### Block 2: `logic` *(Custom Rules Only)*
 - **Stub Detection:** Flag immediately (`FAIL`) if `logic` still contains the default `USER_LOGIN` (`secops`) or bare `vt.net.url.new_url` (`gti`) stub from `graft new rule`.

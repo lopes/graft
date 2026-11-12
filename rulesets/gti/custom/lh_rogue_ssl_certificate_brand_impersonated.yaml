@@ -17,8 +17,6 @@ metadata:
     - "x509"
   references:
     - "https://gtidocs.virustotal.com/docs/domain-object"
-    - "https://attack.mitre.org/techniques/T1587/003/"
-    - "https://attack.mitre.org/techniques/T1036/005/"
 
 logic: |
   import "vt"
@@ -42,7 +40,7 @@ logic: |
 deployment:
   type: "livehunt"
   subtype: "domain"
-  enabled: true
+  enabled: false
   daily_limit: 100
 
 runbook:
