@@ -634,3 +634,93 @@ values: ["192.0.2.1", "val # ttl:2020-01-01"]
 """
     ds_flow_loaded = load_dataset_from_str(ds_flow_yaml)
     assert ds_flow_loaded.values == ("192.0.2.1", "val # ttl:2020-01-01")
+
+
+def test_tag_schema_format_and_standalone_lint_and_managed_scaffold_guard(
+    tmp_path: Path,
+) -> None:
+    from graft.cli.scaffold import ScaffoldError, scaffold_rule
+    from graft.core.loader import DatasetLoadError, load_dataset_from_str
+
+    valid_rule_yaml = """metadata:
+  id: "11111111-2222-3333-4444-555555555555"
+  name: "valid_tag_rule"
+  description: "Rule testing valid tag characters"
+  owners: ["SOC"]
+  mitre:
+    execution: ["T1059"]
+  tags: ["team:cti", "cloud/gcp", "sub-tag_1", "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"]
+  references: ["https://example.com"]
+logic: "condition: true"
+deployment:
+  enabled: true
+runbook:
+  context: "c"
+  triage: "t"
+  response: "r"
+tests: []
+"""
+    loaded = load_rule_from_str(valid_rule_yaml)
+    assert "team:cti" in loaded.metadata.tags
+    assert "cloud/gcp" in loaded.metadata.tags
+
+    for bad_tag in (
+        "Uppercase",
+        "Team:CTI",
+        "has space",
+        "bad@char",
+        "a" * 33,
+    ):
+        bad_yaml = valid_rule_yaml.replace('"team:cti"', f'"{bad_tag}"')
+        with pytest.raises(RuleLoadError, match="Schema validation failed"):
+            load_rule_from_str(bad_yaml)
+
+        bad_ds_yaml = f"""metadata:
+  name: "bad_tag_dataset"
+  description: "Dataset with invalid tag"
+  owners: ["SOC"]
+  tags: ["{bad_tag}"]
+  references: ["https://example.com"]
+values: ["192.0.2.1"]
+"""
+        with pytest.raises(DatasetLoadError, match="Schema validation failed"):
+            load_dataset_from_str(bad_ds_yaml)
+
+    # Standalone custom rule file outside any engine directory must not infer a random engine
+    standalone_rule = tmp_path / "standalone_custom_rule.yaml"
+    standalone_rule.write_text(
+        valid_rule_yaml.replace(
+            'logic: "condition: true"',
+            'logic: "events: $e.ip in %known_scanner_ips.value condition: $e"',
+        ),
+        encoding="utf-8",
+    )
+    assert execute_lint(paths=[str(standalone_rule)], json_output=True) == 0
+
+    # Engine with managed_rules: false must reject managed rule scaffolding
+    eng_dir = tmp_path / "src" / "graft" / "engines" / "no_managed_eng"
+    eng_dir.mkdir(parents=True)
+    (eng_dir / "engine.yaml").write_text(
+        """name: no_managed_eng
+display_name: No Managed Engine
+description: Test engine without managed rules
+adapter_class: mock:Adapter
+capabilities:
+  custom_rules: true
+  managed_rules: false
+environments:
+  - production
+env_vars:
+  required: []
+  optional: []
+""",
+        encoding="utf-8",
+    )
+    with pytest.raises(ScaffoldError, match="does not support vendor-managed rules"):
+        scaffold_rule(
+            "no_managed_eng",
+            "test_managed_rule",
+            project_root=tmp_path,
+            managed=True,
+            managed_id="id_123",
+        )

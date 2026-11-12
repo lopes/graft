@@ -20,7 +20,6 @@ from graft.engines.gti.compiler import (
 
 logger = logging.getLogger("graft.gti.deployer")
 
-GRAFT_MANAGED_TAG = "graft"
 _VALID_DEPLOYMENT_TYPES = frozenset({"livehunt", "retrohunt"})
 _VALID_CORPORA = frozenset({"main", "goodware"})
 
@@ -189,7 +188,7 @@ class GTIDeployerAdapter(RuleDeployerPort):
     ) -> list[RuleEnvelope]:
         if ruleset_filter == "owner:self":
             base_path = f"/users/{current_user_id}/hunting_rulesets"
-            base_params: dict[str, str] = {"limit": "40"}
+            base_params: dict[str, str] = {"limit": "40", "relationships": "owner"}
         elif ruleset_filter == "all":
             base_path = "/intelligence/hunting_rulesets"
             base_params = {"limit": "40", "relationships": "owner"}
@@ -222,6 +221,14 @@ class GTIDeployerAdapter(RuleDeployerPort):
 
                 default_owner = current_user_id if ruleset_filter == "owner:self" else ""
                 owner_id = self._extract_owner_id(item, default_owner)
+                if ruleset_filter == "owner:self" and owner_id and owner_id != current_user_id:
+                    logger.debug(
+                        "Skipping group-editable Livehunt ruleset '%s' owned by '%s' "
+                        "(owner:self scope)",
+                        gti_id,
+                        owner_id,
+                    )
+                    continue
 
                 name = str(attrs.get("name", gti_id))
                 raw_yara = str(attrs.get("rules", ""))
@@ -234,9 +241,9 @@ class GTIDeployerAdapter(RuleDeployerPort):
                     if isinstance(e, str) and e.strip()
                 ]
                 raw_tags = tuple(
-                    str(t)
+                    str(t).strip()
                     for t in attrs.get("tags", [])
-                    if isinstance(t, str) and t != GRAFT_MANAGED_TAG
+                    if isinstance(t, str) and str(t).strip()
                 )
 
                 dep_dict: dict[str, object] = {
@@ -278,10 +285,10 @@ class GTIDeployerAdapter(RuleDeployerPort):
     ) -> list[RuleEnvelope]:
         if ruleset_filter == "owner:self":
             base_path = f"/users/{current_user_id}/retrohunt_jobs"
-            base_params: dict[str, str] = {"limit": "40"}
+            base_params: dict[str, str] = {"limit": "40", "relationships": "owner"}
         else:
             base_path = "/intelligence/retrohunt_jobs"
-            base_params = {"limit": "40"}
+            base_params = {"limit": "40", "relationships": "owner"}
 
         rules: list[RuleEnvelope] = []
         cursor: str | None = None
@@ -307,11 +314,16 @@ class GTIDeployerAdapter(RuleDeployerPort):
 
                 default_owner = current_user_id if ruleset_filter == "owner:self" else ""
                 owner_id = self._extract_owner_id(item, default_owner)
+                if ruleset_filter == "owner:self" and owner_id and owner_id != current_user_id:
+                    logger.debug(
+                        "Skipping Retrohunt job '%s' owned by '%s' (owner:self scope)",
+                        gti_id,
+                        owner_id,
+                    )
+                    continue
 
                 raw_yara = str(attrs.get("rules", ""))
                 if not raw_yara.strip():
-                    continue
-                if ruleset_filter.startswith("tag:") and "graft_id" not in raw_yara:
                     continue
                 status = str(attrs.get("status", "finished"))
                 enabled = status != "aborted"
@@ -340,13 +352,17 @@ class GTIDeployerAdapter(RuleDeployerPort):
                         id="",
                         name="",
                         description="",
-                        tags=("gti", "retrohunt"),
+                        tags=(),
                     ),
                     logic=raw_yara,
                     deployment=BaseDeploymentConfig.from_dict(dep_dict),
                     runbook=Runbook(),
                 )
                 deconstructed = deconstruct_yara_rule(raw_envelope)
+                if ruleset_filter.startswith("tag:"):
+                    required_tag = ruleset_filter[len("tag:") :].strip()
+                    if required_tag and required_tag not in deconstructed.metadata.tags:
+                        continue
                 self._record_remote_resource(deconstructed, gti_id, owner_id, "retrohunt")
                 rules.append(deconstructed)
 
@@ -378,11 +394,7 @@ class GTIDeployerAdapter(RuleDeployerPort):
         raw_limit = rule.deployment.get("daily_limit", 100)
         daily_limit = int(raw_limit) if isinstance(raw_limit, (int, str)) else 100
         emails = self._resolve_notification_emails(rule)
-
-        tags = [GRAFT_MANAGED_TAG]
-        for t in rule.metadata.tags:
-            if t not in tags:
-                tags.append(t)
+        tags = list(dict.fromkeys(t for t in rule.metadata.tags if t))
 
         return {
             "name": rule.metadata.name,
@@ -477,13 +489,11 @@ class GTIDeployerAdapter(RuleDeployerPort):
 
         if existing_type == "retrohunt" or dep_type == "retrohunt":
             logger.debug(
-                "Updating GTI Retrohunt job '%s' (%s)",
+                "Updating GTI Retrohunt rule '%s' (%s) without deleting existing job results",
                 rule.metadata.name,
                 rule.metadata.id,
             )
-            if existing_type == "retrohunt":
-                self._client.delete(f"/intelligence/retrohunt_jobs/{gti_id}")
-            else:
+            if existing_type == "livehunt":
                 self._client.delete(f"/intelligence/hunting_rulesets/{gti_id}")
             if dep_type == "livehunt" or (
                 dep_type == "retrohunt" and bool(rule.deployment.get("enabled", False))
@@ -517,8 +527,11 @@ class GTIDeployerAdapter(RuleDeployerPort):
     def set_rule_state(self, rule_id: str, enabled: bool, alerting: bool) -> None:
         gti_id, dep_type = self._resolve_owned_resource(rule_id)
         if dep_type == "retrohunt":
-            if not enabled:
-                self._client.post(f"/intelligence/retrohunt_jobs/{gti_id}/abort", {})
+            logger.debug(
+                "Preserving existing GTI Retrohunt job '%s' state "
+                "(running tasks and results are not aborted)",
+                rule_id,
+            )
             return
         logger.debug(
             "Setting GTI Livehunt ruleset '%s' state (enabled=%s, alerting=%s)",

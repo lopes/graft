@@ -439,6 +439,10 @@ class CustomRuleReconciler:
                 continue
 
             matched_current_indices.add(curr_idx)
+            if should_create_filter is not None:
+                flt_res = should_create_filter(des_rule)
+                if isinstance(flt_res, bool) and not flt_res:
+                    continue
 
             if content_comparator is not None:
                 content_equal = content_comparator(des_rule, curr_rule)

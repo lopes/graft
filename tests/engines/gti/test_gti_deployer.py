@@ -25,7 +25,7 @@ def _build_rule() -> RuleEnvelope:
             description="Detects brand phishing URLs",
             owners=("secops-team",),
             mitre={"initial-access": ("T1566.002",)},
-            tags=("gti", "phishing"),
+            tags=("web", "sso", "phishing"),
             references=("https://example.com",),
         ),
         logic='import "vt"\n\ncondition:\n  vt.net.url.new_url',
@@ -42,9 +42,9 @@ def _build_rule() -> RuleEnvelope:
     )
 
 
-def test_deployer_list_rules_default_tag_graft_and_owner_self_scope() -> None:
+def test_deployer_list_rules_default_owner_self_and_skips_group_editable_colleague_rules() -> None:
     cfg = GTIConfig(api_key="SYNTHETIC_TEST_KEY_000000")
-    assert cfg.ruleset_filter == "tag:graft"
+    assert cfg.ruleset_filter == "owner:self"
     client = GTIClient(cfg, base_delay_seconds=0.0)
     deployer = GTIDeployerAdapter(client=client)
     rule = _build_rule()
@@ -56,11 +56,11 @@ def test_deployer_list_rules_default_tag_graft_and_owner_self_scope() -> None:
         payload: dict[str, Any] | None = None,
         params: dict[str, str] | None = None,
     ) -> dict[str, Any]:
-        if path.startswith("/users/"):
-            return {"data": {"type": "user", "id": "me_user"}}
-        if path == "/intelligence/hunting_rulesets":
+        if path == f"/users/{cfg.api_key}":
+            return {"data": {"type": "user", "id": "graft_bot_user"}}
+        if path == "/users/graft_bot_user/hunting_rulesets":
             assert params is not None
-            assert params.get("filter") == "tag:graft"
+            assert params.get("relationships") == "owner"
             return {
                 "data": [
                     {
@@ -73,14 +73,34 @@ def test_deployer_list_rules_default_tag_graft_and_owner_self_scope() -> None:
                             "match_object_type": "url",
                             "limit": 200,
                             "notification_emails": ["soc@example.com"],
-                            "tags": ["graft", "gti", "phishing"],
+                            "tags": ["web", "sso", "phishing"],
                         },
-                        "relationships": {"owner": {"data": {"type": "user", "id": "me_user"}}},
-                    }
+                        "relationships": {
+                            "owner": {"data": {"type": "user", "id": "graft_bot_user"}}
+                        },
+                    },
+                    {
+                        "type": "hunting_ruleset",
+                        "id": "rs_colleague_group_editable",
+                        "attributes": {
+                            "name": "colleague_shared_rule",
+                            "rules": yara_text,
+                            "enabled": True,
+                            "match_object_type": "url",
+                            "limit": 100,
+                            "notification_emails": [],
+                            "tags": ["shared"],
+                        },
+                        "relationships": {
+                            "owner": {"data": {"type": "user", "id": "colleague_alice"}}
+                        },
+                    },
                 ],
                 "meta": {},
             }
-        if path == "/intelligence/retrohunt_jobs":
+        if path == "/users/graft_bot_user/retrohunt_jobs":
+            assert params is not None
+            assert params.get("relationships") == "owner"
             return {"data": [], "meta": {}}
         raise AssertionError(f"Unexpected path: {path}")
 
@@ -89,7 +109,7 @@ def test_deployer_list_rules_default_tag_graft_and_owner_self_scope() -> None:
 
     assert len(rules) == 1
     assert rules[0].metadata.name == "suspicious_brand_phishing_url"
-    assert rules[0].metadata.tags == ("gti", "phishing")
+    assert rules[0].metadata.tags == ("web", "sso", "phishing")
     assert rules[0].deployment.to_dict() == {
         "type": "livehunt",
         "subtype": "url",
@@ -177,6 +197,8 @@ def test_deployer_create_update_and_delete_owned_ruleset() -> None:
         if path.startswith("/users/"):
             return {"data": {"type": "user", "id": "me_user"}}
         if method == "POST" and path == "/intelligence/hunting_rulesets":
+            assert payload is not None
+            assert payload["data"]["attributes"]["tags"] == ["web", "sso", "phishing"]
             return {
                 "data": {
                     "type": "hunting_ruleset",
@@ -213,7 +235,7 @@ def test_deployer_retrohunt_job_lifecycle_and_dormant_check() -> None:
             description="Retrohunt rule for credential dumpers",
             owners=("Threat Intelligence",),
             mitre={"credential-access": ("T1003.001",)},
-            tags=("gti", "retrohunt"),
+            tags=("windows", "pe", "lsass"),
             references=("https://example.com",),
         ),
         logic='import "pe"\ncondition:\n  filesize < 5000000',
@@ -257,11 +279,11 @@ def test_deployer_retrohunt_job_lifecycle_and_dormant_check() -> None:
         params: dict[str, str] | None = None,
     ) -> dict[str, Any]:
         recorded.append((method, path, payload))
-        if path.startswith("/users/"):
+        if path == f"/users/{cfg.api_key}":
             return {"data": {"type": "user", "id": "me_user"}}
-        if path == "/intelligence/hunting_rulesets":
+        if path == "/users/me_user/hunting_rulesets":
             return {"data": [], "meta": {}}
-        if path == "/intelligence/retrohunt_jobs" and method == "GET":
+        if path == "/users/me_user/retrohunt_jobs" and method == "GET":
             return {
                 "data": [
                     {
@@ -286,8 +308,6 @@ def test_deployer_retrohunt_job_lifecycle_and_dormant_check() -> None:
             assert attrs["time_range"] == {"start": 1767225600, "end": 1769904000}
             assert attrs["notification_email"] == "retro@example.com"
             return {"data": {"type": "retrohunt_job", "id": "rh_job_777"}}
-        if method == "DELETE" and path == "/intelligence/retrohunt_jobs/rh_job_777":
-            return {}
         raise AssertionError(f"Unexpected call: {method} {path}")
 
     with patch.object(client, "request", side_effect=fake_request):
@@ -296,5 +316,19 @@ def test_deployer_retrohunt_job_lifecycle_and_dormant_check() -> None:
         listed = deployer.list_rules()
         assert len(listed) == 1
         assert listed[0].deployment.get("type") == "retrohunt"
+        assert listed[0].metadata.tags == ("windows", "pe", "lsass")
         assert deployer.are_deployments_equal(active_retro, listed[0]) is True
-        deployer.delete_rule(active_retro.metadata.id)
+
+        # Updating a Retrohunt rule or disabling it must NEVER delete or abort existing jobs/results
+        deployer.update_rule(dormant_retro)
+        deployer.set_rule_state(active_retro.metadata.id, enabled=False, alerting=False)
+        deployer.update_rule(active_retro)
+
+    delete_or_abort_calls = [
+        (m, p) for m, p, _ in recorded if m == "DELETE" or p.endswith("/abort")
+    ]
+    assert delete_or_abort_calls == []
+    post_job_calls = [
+        (m, p) for m, p, _ in recorded if m == "POST" and p == "/intelligence/retrohunt_jobs"
+    ]
+    assert len(post_job_calls) == 2

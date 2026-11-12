@@ -48,8 +48,10 @@ class GTIAdapter(EngineAdapter):
 
     def get_deployer(self) -> RuleDeployerPort | None:
         if self._deployer is None:
-            fallback_cfg = GTIConfig(api_key="unconfigured")
-            self._deployer = GTIDeployerAdapter(client=GTIClient(fallback_cfg))
+            raise RuntimeError(
+                "Missing required GTI credentials: set GRAFT_GTI_API_KEY "
+                "(or GRAFT_GTI_STAGING_API_KEY / GRAFT_GTI_PROD_API_KEY)"
+            )
         return self._deployer
 
     def get_managed(self) -> ManagedEnginePort | None:

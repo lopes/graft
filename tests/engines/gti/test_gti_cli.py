@@ -238,3 +238,73 @@ tests: []
     missing_corpus_out = json.loads(capsys.readouterr().out)
     assert missing_corpus_out["success"] is False
     assert "corpus" in missing_corpus_out["results"][0]["errors"][0]
+
+
+def test_gti_adapter_get_deployer_raises_without_credentials(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("GRAFT_GTI_API_KEY", raising=False)
+    monkeypatch.delenv("GRAFT_GTI_STAGING_API_KEY", raising=False)
+    monkeypatch.delenv("GRAFT_GTI_PROD_API_KEY", raising=False)
+
+    adapter = GTIAdapter(env="production")
+    with pytest.raises(RuntimeError, match="GRAFT_GTI"):
+        adapter.get_deployer()
+
+
+def test_gti_cli_retrohunt_test_vector_skips_cleanly_without_credentials(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    monkeypatch.delenv("GRAFT_GTI_API_KEY", raising=False)
+    monkeypatch.delenv("GRAFT_GTI_STAGING_API_KEY", raising=False)
+    monkeypatch.delenv("GRAFT_GTI_PROD_API_KEY", raising=False)
+
+    retro_rule_file = tmp_path / "rulesets" / "gti" / "custom" / "retro_corpus_probe.yaml"
+    retro_rule_file.parent.mkdir(parents=True)
+    retro_rule_file.write_text(
+        """metadata:
+  id: "8f14e45f-ceea-467a-a124-000000000095"
+  name: "retro_corpus_probe"
+  description: "Retrohunt corpus probe rule"
+  owners: ["SOC"]
+  mitre:
+    initial-access: ["T1566.002"]
+  tags: ["windows", "pe"]
+  references: ["https://example.com"]
+logic: |
+  import "vt"
+  condition:
+    vt.metadata.new_file
+deployment:
+  type: "retrohunt"
+  enabled: false
+  corpus: "goodware"
+runbook:
+  context: "ctx"
+  triage: "tri"
+  response: "resp"
+tests:
+  - id: "retrohunt_goodware_zero_fp"
+    description: "Check zero matches on goodware corpus"
+    expect: 0
+    events:
+      - timestamp: "2026-10-15T12:00:00Z"
+        payload:
+          mode: "retrohunt"
+          corpus: "goodware"
+""",
+        encoding="utf-8",
+    )
+
+    rc_test = main(["--json", "gti", "test", str(retro_rule_file)])
+    assert rc_test == 0
+    out_test = json.loads(capsys.readouterr().out)
+    assert out_test["success"] is True
+    assert out_test["skipped"] is True
+
+    rc_req = main(["--json", "gti", "test", "--require-staging", str(retro_rule_file)])
+    assert rc_req == 1
+    out_req = json.loads(capsys.readouterr().out)
+    assert out_req["success"] is False

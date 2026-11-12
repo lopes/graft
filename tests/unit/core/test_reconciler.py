@@ -762,17 +762,17 @@ def test_gitops_reconciler_no_double_match_exclusion_and_removed_deployments(
     assert any("3 actions executed." in r.message for r in caplog.records)
 
 
-def test_custom_rule_reconciler_detects_run_frequency_drift() -> None:
+def test_custom_rule_reconciler_detects_deployment_schedule_drift() -> None:
     curr = RuleEnvelope(
         metadata=RuleMetadata(id="uuid-freq", name="freq_rule", description="desc"),
         logic="events: $e condition: $e",
-        deployment=BaseDeploymentConfig(enabled=True, alerting=True, run_frequency="daily"),
+        deployment=BaseDeploymentConfig(enabled=True, schedule="daily"),
         runbook=Runbook(),
     )
     des = RuleEnvelope(
         metadata=RuleMetadata(id="uuid-freq", name="freq_rule", description="desc"),
         logic="events: $e condition: $e",
-        deployment=BaseDeploymentConfig(enabled=True, alerting=True, run_frequency="live"),
+        deployment=BaseDeploymentConfig(enabled=True, schedule="hourly"),
         runbook=Runbook(),
     )
     diff = CustomRuleReconciler().diff(current=(curr,), desired=(des,))
@@ -785,7 +785,7 @@ def test_custom_rule_reconciler_detects_engine_specific_deployment_drift() -> No
         metadata=RuleMetadata(id="uuid-eng", name="eng_rule", description="desc"),
         logic="condition: true",
         deployment=BaseDeploymentConfig.from_dict(
-            {"enabled": True, "match_object_type": "file", "daily_limit": 100}
+            {"enabled": True, "custom_mode": "batch", "threshold": 100}
         ),
         runbook=Runbook(),
     )
@@ -793,10 +793,34 @@ def test_custom_rule_reconciler_detects_engine_specific_deployment_drift() -> No
         metadata=RuleMetadata(id="uuid-eng", name="eng_rule", description="desc"),
         logic="condition: true",
         deployment=BaseDeploymentConfig.from_dict(
-            {"enabled": True, "match_object_type": "url", "daily_limit": 250}
+            {"enabled": True, "custom_mode": "stream", "threshold": 250}
         ),
         runbook=Runbook(),
     )
     diff = CustomRuleReconciler().diff(current=(curr,), desired=(des,))
     assert diff.has_changes is True
     assert len(diff.rules_to_update) == 1
+
+
+def test_custom_rule_reconciler_dormant_rule_preserves_existing_remote_resource() -> None:
+    curr = RuleEnvelope(
+        metadata=RuleMetadata(id="uuid-dormant", name="dormant_rule", description="desc"),
+        logic="condition: true",
+        deployment=BaseDeploymentConfig.from_dict({"enabled": True, "mode": "historical"}),
+        runbook=Runbook(),
+    )
+    des = RuleEnvelope(
+        metadata=RuleMetadata(id="uuid-dormant", name="dormant_rule", description="desc"),
+        logic="condition: true",
+        deployment=BaseDeploymentConfig.from_dict({"enabled": False, "mode": "historical"}),
+        runbook=Runbook(),
+    )
+    diff = CustomRuleReconciler().diff(
+        current=(curr,),
+        desired=(des,),
+        should_create_filter=lambda r: bool(r.deployment.get("enabled", False)),
+    )
+    assert diff.rules_to_create == ()
+    assert diff.rules_to_update == ()
+    assert diff.untracked_rules == ()
+    assert diff.has_changes is False

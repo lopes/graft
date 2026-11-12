@@ -189,3 +189,5 @@ def test_engine_adapter_default_rule_logic_and_dataset_validation() -> None:
         tests=(),
     )
     adapter.validate_rule_dataset_references(envelope, {"known_scanner_ips"})
+    assert adapter.are_deployments_equal(envelope, envelope) is True
+    assert adapter.should_deploy_rule(envelope) is True

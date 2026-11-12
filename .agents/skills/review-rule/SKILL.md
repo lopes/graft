@@ -69,8 +69,8 @@ Evaluate each rule across all blocks and classify every check as `PASS`, `WARN`,
   - Verify tactics and techniques are active (flagging any revoked or deprecated IDs) and use the **most specific sub-technique** (`TXXXX.XXX`) that reflects the telemetry in `logic` so downstream foreign-key joins (`Gxxxx`, `DETxxxx`, `ANxxxx`, `DCxxxx`, `Mxxxx`) remain accurate.
   - Flag leftover `graft new rule` stub mappings (`execution: ["T1059.001"]`) when the rule is unrelated to PowerShell.
 - **Tags:**
-  - Does `metadata.tags` contain 2–3 broad, reusable lowercase platform/surface labels (e.g., `gcp`, `iam`, `workspace`, `email`, `whois`, `gcti`, `network`)?
-  - Flag tags that duplicate the engine name (`secops`), rule type (`custom`, `managed`), or MITRE tactic names (`initial-access`, `persistence`).
+  - Does `metadata.tags` contain 2–3 broad, reusable lowercase platform/surface labels matching `^[a-z0-9_/:-]{1,32}$` (e.g., `gcp`, `iam`, `workspace`, `email`, `whois`, `web`, `sso`, `phishing`, `windows`, `pe`, `network`)?
+  - Flag tags that duplicate the engine name (`secops`, `gti`), rule/deployment type or subtype (`custom`, `managed`, `livehunt`, `retrohunt`, `url`, `file`), or MITRE tactic names (`initial-access`, `persistence`, `reconnaissance`).
 - **References:**
   - Do `metadata.references` cite the matching MITRE technique URLs and/or relevant vendor docs or threat research (flagging leftover `T1059/001` stub URLs)?
 

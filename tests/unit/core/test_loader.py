@@ -368,9 +368,9 @@ logic: |
     true
 deployment:
   enabled: true
-  match_object_type: "url"
-  daily_limit: 250
-  notification_emails:
+  custom_mode: "stream"
+  custom_limit: 250
+  custom_targets:
     - "alerts@example.com"
 runbook:
   context: "Context text"
@@ -382,18 +382,18 @@ tests: []
     assert envelope.deployment.enabled is True
     assert envelope.deployment.to_dict() == {
         "enabled": True,
-        "match_object_type": "url",
-        "daily_limit": 250,
-        "notification_emails": ["alerts@example.com"],
+        "custom_mode": "stream",
+        "custom_limit": 250,
+        "custom_targets": ["alerts@example.com"],
     }
 
     dumped_dict = rule_to_dict(envelope)
-    assert "run_frequency" not in dumped_dict["deployment"]
+    assert "unconfigured_param" not in dumped_dict["deployment"]
     assert dumped_dict["deployment"] == {
         "enabled": True,
-        "match_object_type": "url",
-        "daily_limit": 250,
-        "notification_emails": ["alerts@example.com"],
+        "custom_mode": "stream",
+        "custom_limit": 250,
+        "custom_targets": ["alerts@example.com"],
     }
 
     out_file = tmp_path / "custom_engine_rule.yaml"

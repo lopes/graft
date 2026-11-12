@@ -206,7 +206,7 @@ def test_schema_and_dataclass_completeness() -> None:
             references=("https://example.com",),
         ),
         logic="condition: true",
-        deployment=BaseDeploymentConfig(enabled=True, alerting=True, run_frequency="live"),
+        deployment=BaseDeploymentConfig(enabled=True),
         runbook=Runbook(context="ctx", triage="tri", response="resp"),
         tests=(
             TestVector(

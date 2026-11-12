@@ -12,7 +12,6 @@ metadata:
   tags:
     - "network"
     - "netscan"
-    - "reconnaissance"
   references:
     - "https://lopes.id/log/detection-rules-netscan-portscan/"
     - "https://attack.mitre.org/techniques/T1018/"

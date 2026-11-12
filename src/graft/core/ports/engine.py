@@ -53,6 +53,12 @@ class EngineAdapter(Protocol):
     def are_rules_equal(self, desired: RuleEnvelope, remote: RuleEnvelope) -> bool:
         return desired.logic.strip() == remote.logic.strip()
 
+    def are_deployments_equal(self, desired: RuleEnvelope, remote: RuleEnvelope) -> bool:
+        return desired.deployment == remote.deployment
+
+    def should_deploy_rule(self, rule: RuleEnvelope) -> bool:
+        return True
+
     def render_rule(self, rule: RuleEnvelope) -> str:
         return rule.logic
 

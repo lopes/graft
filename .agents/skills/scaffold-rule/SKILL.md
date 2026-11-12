@@ -98,9 +98,9 @@ flowchart TD
 - Verify the technique is `"active"` (not revoked or deprecated) and belongs to the mapped tactic shortnames (e.g., `initial-access: ["T1566.002"]`, `stealth`, `defense-impairment`).
 
 ### `metadata.tags`
-- Required list of `1..32` unique lowercase strings matching `^[a-z0-9_/\\-]+$`.
-- Replace the default `[<engine>, "custom"]` or `[<engine>, "managed"]` stub with **2–3 broad, reusable platform or telemetry surface labels** (e.g., `["workspace", "email", "whois"]`, `["gcp", "iam"]`, `["gcti", "network"]`).
-- **Never duplicate** the engine name (`secops`), rule type (`custom`, `managed`), or MITRE tactic names in `tags`.
+- Required list of `1..32` unique lowercase strings matching `^[a-z0-9_/:-]+$` (`1..32` characters per tag).
+- Replace the default `[<engine>, "custom"]` or `[<engine>, "managed"]` stub with **2–3 broad, reusable platform or telemetry surface labels** (e.g., `["workspace", "email", "whois"]`, `["gcp", "iam"]`, `["web", "sso", "phishing"]`, `["windows", "pe", "lsass"]`).
+- **Never duplicate** the engine name (`secops`, `gti`), rule/deployment type or subtype (`custom`, `managed`, `livehunt`, `retrohunt`, `url`, `file`), or MITRE tactic names in `tags`.
 
 ### `metadata.references`
 - Required list of `1..32` unique non-blank strings (`maxLength: 2048`).

@@ -15,38 +15,40 @@ flowchart TD
 
     COMPILER --> DEP_TYPE{"deployment.type<br/>(required)"}
     DEP_TYPE -- "livehunt" --> LH["GTI Livehunt API<br/>POST / PATCH / DELETE<br/>/api/v3/intelligence/hunting_rulesets<br/>subtype (required): file | url | domain | ip_address"]
-    DEP_TYPE -- "retrohunt (enabled: true)" --> RH["GTI Retrohunt API<br/>POST / DELETE / abort<br/>/api/v3/intelligence/retrohunt_jobs<br/>corpus: main | goodware"]
+    DEP_TYPE -- "retrohunt (enabled: true)" --> RH["GTI Retrohunt API<br/>POST / GET<br/>/api/v3/intelligence/retrohunt_jobs<br/>corpus: main | goodware"]
 ```
 
 | Artifact / Capability | Supported in `gti`? | How Graft Handles It |
 | :--- | :---: | :--- |
-| **Livehunt Rulesets** (`deployment.type: "livehunt"`) | **Yes** (`custom_rules: true`) | Synchronized via `graft gti diff`, `apply`, and `pull` against `/api/v3/intelligence/hunting_rulesets`. Continuously evaluates incoming GTI submissions in real time across 4 explicit entity subtypes (`deployment.subtype`: `"file"`, `"url"`, `"domain"`, `"ip_address"`). |
-| **Retrohunt Jobs** (`deployment.type: "retrohunt"`) | **Yes** (`custom_rules: true`, `replay_testing: true`) | Configured declaratively under `deployment` (`type: "retrohunt"`, `corpus: "main" \| "goodware"`, optional `start_time`, `end_time`). Kept dormant in Git while `enabled: false` (still linted, syntax-verified, unit-tested, and cataloged) and submitted to `/api/v3/intelligence/retrohunt_jobs` when `enabled: true` is applied. Also runnable on-demand via `graft gti test`. |
+| **Livehunt Rulesets** (`deployment.type: "livehunt"`) | **Yes** (`custom_rules: true`) | Synchronized via `graft gti diff`, `apply`, and `pull` against `/api/v3/intelligence/hunting_rulesets`. Continuously evaluates incoming GTI submissions in real time across 4 explicit entity subtypes (`deployment.subtype`: `"file"`, `"url"`, `"domain"`, `"ip_address"`). Syncs `metadata.tags` 1-to-1 with GTI's `attributes.tags`. |
+| **Retrohunt Jobs** (`deployment.type: "retrohunt"`) | **Yes** (`custom_rules: true`, `replay_testing: true`) | Configured declaratively under `deployment` (`type: "retrohunt"`, `corpus: "main" \| "goodware"`, optional `start_time`, `end_time`). Kept dormant in Git while `enabled: false` (still linted, syntax-verified, unit-tested, and cataloged) and submitted to `/api/v3/intelligence/retrohunt_jobs` when `enabled: true` is applied. Updating or disabling a Retrohunt rule in Git never deletes or aborts running tasks or historical scan results. Also runnable on-demand via `graft gti test`. |
 | **Reusable String Datasets** (`datasets/<name>.yaml`) | **No** (`datasets: false`) | GTI's YARA-X engine does not provide a server-side lookup table or reference list resource (`DatasetPort` is disabled). GTI rules use 100% native YARA-X without Graft preprocessor hacks; `graft lint` rejects `%<dataset>` tokens in `rulesets/gti/`. |
 | **Vendor-Managed Rules** (`rulesets/gti/managed/`) | **No** (`managed_rules: false`) | GTI does not expose vendor-managed curated rulesets on `/intelligence/hunting_rulesets` (`ManagedEnginePort` is disabled). All rulesets visible in a shared GTI organization are user-created (`owner.type == "user"`). |
 
 ---
 
-## 2. Environment Configuration & Shared Organization Safety
+## 2. Environment Configuration, Least-Privilege Account & GTI Permissions
 
 Copy [`.env.example`](../.env.example) to `src/graft/engines/gti/.env` (automatically loaded by Graft at startup and excluded from Git via `.gitignore`):
 
 ```bash
-export GRAFT_GTI_API_KEY="your-gti-api-key"
-# Optional discovery scope: "tag:graft" (default), "owner:self", or "all"
-export GRAFT_GTI_FILTER="tag:graft"
+export GRAFT_GTI_API_KEY="your-dedicated-graft-user-gti-api-key"
+# Optional discovery scope: "owner:self" (default), "tag:<tag>", or "all"
+export GRAFT_GTI_FILTER="owner:self"
 # Optional default notification recipients for Livehunt / Retrohunt matches
 export GRAFT_GTI_NOTIFICATION_EMAILS="soc-alerts@example.com"
 ```
 
-### Shared GTI Organization Scoping, Team Sync & Migrating Existing Rules
-In GTI, Livehunt rulesets are created at the user level (`owner.type == "user"`), while everyone in the same organization can see all rulesets across the org. To keep team GitOps clean without touching unrelated rulesets in a shared organization:
+### GTI Permissions & Least-Privilege Crash Course (Dedicated Non-Admin User Account)
+Unlike Google SecOps (which authenticates via a GCP IAM Service Account), every Google Threat Intelligence API key (`x-apikey`) belongs to a specific **GTI User Account** inside an Organization / Group. In a shared GTI Group, all members can view Livehunt rulesets created by colleagues, while Retrohunt jobs are strictly scoped to the user account that submitted them (`/api/v3/users/{user_id}/retrohunt_jobs`). Additionally, GTI allows individual rule owners to grant **Group Edit** access (`relationships.editors` on a Livehunt ruleset), which makes a colleague's ruleset editable by every member of the Group—and causes GTI's `GET /api/v3/users/{user_id}/hunting_rulesets` endpoint to return both `{user_id}`'s own rulesets and any group-editable colleague rulesets. For production GitOps, **provision a dedicated GTI user account exclusively for Graft** (for example, `graft-automation@example.com`) within your GTI Group and use its API key in CI/CD so human analysts' personal rulesets and Retrohunt jobs never collide with Graft's state.
 
-- **Automatic `graft` Tagging (`GRAFT_GTI_FILTER="tag:graft"`, Default):** Every rule created or updated by Graft is automatically tagged with `graft` in GTI (and stamped with `graft_id` in YARA `meta:`). During `diff`, `apply`, and `pull`, Graft queries `/api/v3/intelligence/hunting_rulesets?filter=tag:graft`.
-  - **Team Collaboration:** If you add 1 rule and a colleague adds 1 rule to the repo, GTI holds those 2 `graft`-tagged rules. When anyone pulls the repo and runs `graft gti diff --all`, Graft sees both rules (`0` drift) and ignores all other non-Graft rulesets in the organization.
-  - **Migrating Existing GTI Rules:** To bring an existing GTI ruleset under Graft management, simply add the `graft` tag to it in GTI and run `uv run graft gti pull`. Graft will pull and deconstruct it into `rulesets/gti/custom/<name>.yaml`.
-- **Personal Sandbox Scope (`owner:self`):** Set `GRAFT_GTI_FILTER="owner:self"` to scope discovery strictly to rulesets owned by your API key (`/api/v3/users/{user_id}/hunting_rulesets`), or `"all"` for read-only org-wide inspection.
-- **Hard Read-Only Ownership Guard:** [`GTIDeployerAdapter`](../deployer.py) checks `owner_id == current_user_id` before any `PATCH` or `DELETE` request and raises a `403 OwnershipGuardError` if a mutation targets another user's ruleset. For shared production repos where any teammate can update any rule via PRs, run `graft gti apply` with a single shared service/automation GTI API key so all Graft rules share one owner.
+> [!CAUTION]
+> **Never grant Group Administrator privileges to the Graft GTI user account.** A GTI Group Administrator can modify or delete any member's Livehunt rulesets across the entire organization and carries broad administrative privileges that violate least privilege if the API key is ever exposed. Running Graft as a standard (non-admin) dedicated Group member provides two defense-in-depth guarantees: (1) [`GTIDeployerAdapter`](../deployer.py) defaults to `GRAFT_GTI_FILTER="owner:self"`, requests `relationships=owner`, and explicitly filters out any ruleset where `relationships.owner.data.id != current_user_id` (even if a colleague enabled Group Edit access on their rule), plus enforces a hard `403 OwnershipGuardError` before any `PATCH` or `DELETE`; and (2) the GTI API itself blocks a non-admin account from mutating non-shared colleague rulesets. The only limitation of a dedicated non-admin account is that it cannot directly take over or overwrite an existing brownfield ruleset owned by a colleague unless that colleague either enables Group Edit / transfers ownership or you import the rule into Git (`GRAFT_GTI_FILTER="all" uv run graft gti pull`), deploy it under the dedicated Graft account, and retire the legacy copy.
+
+### 1-to-1 `metadata.tags` Synchronization
+Graft does **not** inject a hidden `"graft"` tag into your GTI rulesets. Because ownership isolation is handled cleanly by the dedicated Graft user account (`GRAFT_GTI_FILTER="owner:self"`), `metadata.tags` in your rule YAML is synchronized **1-to-1** with GTI's Livehunt `attributes.tags` (and embedded as `tags = "..."` in YARA `meta:` for lossless round-tripping across both Livehunt and Retrohunt):
+- All tags across Graft (`metadata.tags` in custom rules, managed rules, and datasets) must match `^[a-z0-9_/:-]{1,32}$` (lowercase letters, digits, hyphens `-`, underscores `_`, colons `:`, and forward slashes `/`, up to 32 characters per tag).
+- Avoid repeating attributes already captured in dedicated envelope fields (`engine`, `deployment.type`, `deployment.subtype`, or `metadata.mitre` tactics). Use `metadata.tags` for organizational, domain, threat-family, or telemetry grouping (e.g., `["web", "sso", "phishing"]` or `["windows", "pe", "lsass"]`).
 
 ---
 
@@ -98,7 +100,7 @@ deployment:
 | :--- | :--- | :--- |
 | `type` | `"retrohunt"` (**required**) | Selects GTI Retrohunt (`/api/v3/intelligence/retrohunt_jobs`). |
 | `corpus` | `"main" \| "goodware"` (**required**) | `"main"` scans GTI's historical file submissions (~3–12 months); `"goodware"` scans ~1M NSRL known-good files for false-positive benchmarking. |
-| `enabled` | `boolean` (**required**) | Controls job submission. When `false`, the rule remains dormant in Git (linted, syntax-verified, unit-tested, and cataloged without consuming Retrohunt job quota). Setting `enabled: true` and running `graft gti apply` submits the batch scan job to GTI. |
+| `enabled` | `boolean` (**required**) | Controls job submission. When `false`, the rule remains dormant in Git (linted, syntax-verified, unit-tested, and cataloged without consuming Retrohunt job quota). Setting `enabled: true` and running `graft gti apply` submits the batch scan job to GTI. Setting `enabled: false` after a job runs disables future schedule submissions while **preserving all running tasks and historical scan results** in GTI. |
 | `start_time` | ISO-8601 UTC string (optional) | Lower bound for file submission timestamp (`YYYY-MM-DDTHH:MM:SSZ`), converted to Unix epoch seconds in GTI's `attributes.time_range.start`. |
 | `end_time` | ISO-8601 UTC string (optional, requires `start_time`) | Upper bound for file submission timestamp (`YYYY-MM-DDTHH:MM:SSZ`), converted to Unix epoch seconds in GTI's `attributes.time_range.end`. |
 | `notification_emails` | `array[string]` (optional) | Email addresses notified when the Retrohunt job finishes (`attributes.notification_email`). |
@@ -142,6 +144,7 @@ rule sso_login_portal_impersonated {
     owners = "Threat Intelligence, Detection Engineering"
     mitre_tactic = "initial-access"
     mitre_technique = "T1566.002"
+    tags = "web, sso, phishing"
 
   condition:
     vt.net.url.new_url and
@@ -241,10 +244,10 @@ uv run graft --json gti verify --all
 # 5. Execute unit test vectors (and any retrohunt test vectors)
 uv run graft --json gti test
 
-# 6. Diff and apply Livehunt rulesets and enabled Retrohunt jobs (scoped to tag:graft)
+# 6. Diff and apply Livehunt rulesets and enabled Retrohunt jobs (scoped to owner:self)
 uv run graft --json gti diff --all
 uv run graft --json gti apply --all
 
-# 7. Pull existing Graft-tagged Livehunt rulesets & Retrohunt jobs into 5-block YAML envelopes
+# 7. Pull existing Livehunt rulesets & Retrohunt jobs owned by the Graft user into 5-block YAML envelopes
 uv run graft --json gti pull
 ```

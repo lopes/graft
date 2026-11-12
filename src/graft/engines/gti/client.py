@@ -99,7 +99,11 @@ class GTIClient:
         params: Mapping[str, str] | None = None,
     ) -> dict[str, Any]:
         url = self._resolve_url(path, params=params)
-        safe_path = "/users/<self>" if path.startswith("/users/") and len(path) > 40 else path
+        safe_path = (
+            "/users/<self>"
+            if path.startswith("/users/") and "/" not in path[len("/users/") :]
+            else path.replace(self._config.api_key, "<self>")
+        )
         headers: dict[str, str] = {
             "x-apikey": self._config.api_key,
             "Accept": "application/json",

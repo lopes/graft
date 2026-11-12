@@ -22,7 +22,7 @@ def test_gti_config_from_env_single_key(monkeypatch: pytest.MonkeyPatch) -> None
     cfg = GTIConfig.from_env("prod")
     assert cfg.api_key == "SYNTHETIC_TEST_KEY_000000"
     assert cfg.base_url == "https://www.virustotal.com/api/v3"
-    assert cfg.ruleset_filter == "tag:graft"
+    assert cfg.ruleset_filter == "owner:self"
 
 
 def test_gti_config_from_env_tiered_and_staging_fallback(
@@ -31,12 +31,12 @@ def test_gti_config_from_env_tiered_and_staging_fallback(
     monkeypatch.delenv("GRAFT_GTI_API_KEY", raising=False)
     monkeypatch.delenv("GRAFT_GTI_STAGING_API_KEY", raising=False)
     monkeypatch.setenv("GRAFT_GTI_PROD_API_KEY", "SYNTHETIC_TEST_PROD_KEY_000000")
-    monkeypatch.setenv("GRAFT_GTI_FILTER", "owner:self")
+    monkeypatch.setenv("GRAFT_GTI_FILTER", "tag:team-ti")
     monkeypatch.setenv("GRAFT_GTI_NOTIFICATION_EMAILS", "soc@example.com, alerts@example.com")
 
     staging_cfg = GTIConfig.from_env("staging")
     assert staging_cfg.api_key == "SYNTHETIC_TEST_PROD_KEY_000000"
-    assert staging_cfg.ruleset_filter == "owner:self"
+    assert staging_cfg.ruleset_filter == "tag:team-ti"
     assert staging_cfg.notification_emails == ("soc@example.com", "alerts@example.com")
 
     monkeypatch.setenv("GRAFT_GTI_STAGING_API_KEY", "SYNTHETIC_TEST_STAGING_KEY_000000")
@@ -157,3 +157,25 @@ def test_gti_client_raises_gti_api_error_on_400() -> None:
     assert exc_info.value.status_code == 400
     assert exc_info.value.error_code == "InvalidArgumentError"
     assert "line 8: syntax error" in str(exc_info.value)
+
+
+def test_gti_client_redacts_api_key_in_user_resolution_error_path() -> None:
+    cfg = GTIConfig(api_key="SYNTHETIC_TEST_KEY_000000")
+    client = GTIClient(cfg, max_retries=0, base_delay_seconds=0.0)
+
+    def fake_urlopen(req: Any, timeout: float = 30.0) -> _FakeResponse:
+        err_body = json.dumps(
+            {"error": {"code": "NotAllowedError", "message": "Invalid API key"}}
+        ).encode("utf-8")
+        raise urllib.error.HTTPError(
+            req.full_url, 401, "Unauthorized", Message(), io.BytesIO(err_body)
+        )
+
+    with (
+        patch("urllib.request.urlopen", side_effect=fake_urlopen),
+        pytest.raises(GTIApiError) as exc_info,
+    ):
+        client.get_current_user_id()
+
+    assert exc_info.value.path == "/users/<self>"
+    assert "SYNTHETIC_TEST_KEY_000000" not in str(exc_info.value)

@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from typing import Literal, Self
 
 DEFAULT_GTI_BASE_URL = "https://www.virustotal.com/api/v3"
-DEFAULT_GTI_FILTER = "tag:graft"
+DEFAULT_GTI_FILTER = "owner:self"
 
 
 @dataclass(frozen=True)

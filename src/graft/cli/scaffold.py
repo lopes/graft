@@ -526,6 +526,10 @@ def scaffold_rule(
     default_owner = _resolve_default_owner(cwd=root)
 
     if managed:
+        engines_root = root / "src" / "graft" / "engines"
+        registry = EngineRegistry(engines_root) if engines_root.is_dir() else EngineRegistry()
+        if registry.has(engine) and not registry.get(engine).capabilities.managed_rules:
+            raise ScaffoldError(f"Engine '{engine}' does not support vendor-managed rules")
         if not managed_id or not managed_id.strip():
             raise ScaffoldError(
                 "Scaffolding a managed rule requires a non-empty managed rule ID (--managed <id>)"

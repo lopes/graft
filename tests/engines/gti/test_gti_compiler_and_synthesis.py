@@ -52,7 +52,7 @@ condition:
             description="Detects brand phishing URLs outside corporate root domains",
             owners=("secops-team", "threat-intel"),
             mitre={"initial-access": ("T1566.002",)},
-            tags=("gti", "phishing"),
+            tags=("web", "sso", "phishing"),
             references=("https://attack.mitre.org/techniques/T1566/002/",),
         ),
         logic=logic if logic is not None else default_logic,
@@ -73,6 +73,7 @@ def test_synthesize_yara_rule_partitions_imports_and_injects_meta() -> None:
     assert 'graft_id = "8f14e45f-ceea-467a-a124-000000000001"' in yara_text
     assert 'mitre_tactic = "initial-access"' in yara_text
     assert 'mitre_technique = "T1566.002"' in yara_text
+    assert 'tags = "web, sso, phishing"' in yara_text
     assert 'vt.net.domain.root == "example.com"' in yara_text
     assert header_offset > 0
 
@@ -101,7 +102,43 @@ condition:
     assert deconstructed.metadata.description == rule.metadata.description
     assert deconstructed.metadata.owners == rule.metadata.owners
     assert deconstructed.metadata.mitre == rule.metadata.mitre
+    assert deconstructed.metadata.tags == rule.metadata.tags
     assert deconstructed.logic.strip() == rule.logic.strip()
+
+
+def test_deconstruct_brownfield_yara_rule_populates_lint_valid_defaults() -> None:
+    brownfield_yara = """import "vt"
+
+rule APT_Phishing_Rule {
+  meta:
+    author = "analyst"
+  condition:
+    vt.net.url.new_url
+}"""
+    remote_envelope = RuleEnvelope(
+        metadata=RuleMetadata(
+            id="",
+            name="APT Phishing - Livehunt",
+            description="",
+            tags=("Phishing Campaign", "APT:29/URL"),
+        ),
+        logic=brownfield_yara,
+        deployment=BaseDeploymentConfig.from_dict(
+            {"type": "livehunt", "subtype": "url", "enabled": True, "daily_limit": 100}
+        ),
+    )
+    deconstructed = deconstruct_yara_rule(remote_envelope)
+
+    assert deconstructed.metadata.name == "apt_phishing_livehunt"
+    assert len(deconstructed.metadata.id) == 36
+    assert len(deconstructed.metadata.description) >= 10
+    assert deconstructed.metadata.owners == ("Detection Engineering",)
+    assert deconstructed.metadata.mitre == {"none": ("T0000",)}
+    assert deconstructed.metadata.tags == ("phishing-campaign", "apt:29/url")
+    assert deconstructed.metadata.references == ("https://gtidocs.virustotal.com/",)
+    assert deconstructed.runbook.context
+    assert deconstructed.runbook.triage
+    assert deconstructed.runbook.response
 
 
 def test_resolve_gti_subtype_requires_explicit_subtype_without_guessing() -> None:
@@ -136,6 +173,59 @@ def test_validate_gti_dataset_references_rejects_dataset_tokens() -> None:
         validate_gti_dataset_references(
             rule_with_dataset, local_dataset_names={"corporate_domains"}
         )
+
+    rule_with_comment_quote_and_dataset = _sample_phishing_rule(
+        logic=(
+            'import "vt"\n'
+            '// comment with "unmatched quote\n'
+            "condition:\n"
+            '  vt.net.domain.root in (%corporate_domains.value) // trailing " quote\n'
+        )
+    )
+    with pytest.raises(ValueError, match="does not support dataset lookup tables"):
+        validate_gti_dataset_references(
+            rule_with_comment_quote_and_dataset,
+            local_dataset_names={"corporate_domains"},
+        )
+
+    rule_with_unqualified_unknown_dataset = _sample_phishing_rule(
+        logic='import "vt"\ncondition:\n  vt.net.domain.root in (%unknown_lookup_table)'
+    )
+    with pytest.raises(ValueError, match="does not support dataset lookup tables"):
+        validate_gti_dataset_references(
+            rule_with_unqualified_unknown_dataset,
+            local_dataset_names=set(),
+        )
+
+
+def test_compiler_verify_rule_rejects_invalid_retrohunt_time_range() -> None:
+    compiler = GTICompilerAdapter(client=None)
+
+    bad_date_rule = _sample_phishing_rule(
+        deployment={
+            "type": "retrohunt",
+            "enabled": False,
+            "corpus": "main",
+            "start_time": "2026-02-30T00:00:00Z",
+            "end_time": "2026-03-31T23:59:59Z",
+        }
+    )
+    res_bad_date = compiler.verify_rule(bad_date_rule)
+    assert res_bad_date.success is False
+    assert len(res_bad_date.diagnostics) == 1
+
+    inverted_window_rule = _sample_phishing_rule(
+        deployment={
+            "type": "retrohunt",
+            "enabled": False,
+            "corpus": "main",
+            "start_time": "2026-04-01T00:00:00Z",
+            "end_time": "2026-03-01T00:00:00Z",
+        }
+    )
+    res_inverted = compiler.verify_rule(inverted_window_rule)
+    assert res_inverted.success is False
+    assert "start_time" in res_inverted.diagnostics[0].message
 
 
 def test_compiler_verify_rule_transient_disabled_ruleset_and_cleanup() -> None:

@@ -9,8 +9,8 @@ metadata:
     initial-access:
       - "T1566.002"
   tags:
-    - "gti"
-    - "url"
+    - "web"
+    - "sso"
     - "phishing"
   references:
     - "https://gtidocs.virustotal.com/docs/url-hunting"

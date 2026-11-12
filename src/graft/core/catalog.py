@@ -65,6 +65,15 @@ def resolve_rule_deployment_status(
     adapter: EngineAdapter | None = None,
     managed_state: ManagedState | None = None,
 ) -> str:
+    if adapter is None and engine and engine != "custom":
+        from graft.core.engine_registry import EngineRegistry
+
+        reg = EngineRegistry()
+        if reg.has(engine):
+            try:
+                adapter = reg.load_adapter(engine)
+            except Exception:
+                adapter = None
     if adapter is not None and hasattr(adapter, "resolve_deployment_status"):
         return adapter.resolve_deployment_status(rule, managed_state=managed_state)
     if rule.is_managed or not bool(rule.deployment.get("enabled", True)):

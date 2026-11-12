@@ -118,22 +118,22 @@ def calculate_mitre_coverage(
         if explicit_status is not None:
             status = explicit_status
         else:
+            from graft.core.catalog import resolve_rule_deployment_status
+
             adapter = None
             if engine != "custom":
                 if engine not in adapter_cache:
                     from graft.core.engine_registry import EngineRegistry
 
                     reg = EngineRegistry()
-                    adapter_cache[engine] = reg.load_adapter(engine) if reg.has(engine) else None
+                    try:
+                        adapter_cache[engine] = (
+                            reg.load_adapter(engine) if reg.has(engine) else None
+                        )
+                    except Exception:
+                        adapter_cache[engine] = None
                 adapter = adapter_cache[engine]
-            if adapter is not None:
-                status = adapter.resolve_deployment_status(rule)
-            elif rule.is_managed or not bool(rule.deployment.get("enabled", True)):
-                status = "disabled"
-            elif rule.deployment.get("alerting") is False:
-                status = "silent"
-            else:
-                status = "enabled"
+            status = resolve_rule_deployment_status(rule, engine=engine, adapter=adapter)
 
         for tactic, tech_list in rule.metadata.mitre.items():
             for tech_id in tech_list:

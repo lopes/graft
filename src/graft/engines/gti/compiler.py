@@ -3,10 +3,11 @@ from __future__ import annotations
 import logging
 import re
 import uuid
+from datetime import UTC, datetime
 from typing import Any
 
 from graft.core.models.compiler import CompilationDiagnostic, CompilationResult
-from graft.core.models.rule import RuleEnvelope, RuleMetadata
+from graft.core.models.rule import RuleEnvelope, RuleMetadata, Runbook
 from graft.core.ports.compiler import RuleCompilerPort
 from graft.core.validation.mitre_validator import get_default_mitre_validator
 from graft.engines.gti.client import GTIApiError, GTIClient
@@ -18,9 +19,13 @@ _YARA_RULE_WRAPPER_RE = re.compile(
     r"^\s*rule\s+([a-zA-Z0-9_]+)\s*\{\s*(.*?)\s*\}\s*$",
     re.DOTALL,
 )
-_DATASET_TOKEN_RE = re.compile(r"%([a-zA-Z_][a-zA-Z0-9_]*)(?:\.([a-zA-Z_][a-zA-Z0-9_]*))?")
+_DATASET_TOKEN_RE = re.compile(
+    r"(?<![a-zA-Z0-9_$])%([a-zA-Z_][a-zA-Z0-9_]*)(?:\.([a-zA-Z_][a-zA-Z0-9_]*))?"
+)
+_YARA_STRING_OR_COMMENT_RE = re.compile(r'"(?:[^"\\]|\\.)*"|/\*[\s\S]*?\*/|//[^\r\n]*')
 _META_KEY_VAL_RE = re.compile(r'^\s*([a-zA-Z0-9_]+)\s*=\s*"((?:[^"\\]|\\.)*)"\s*$')
 _GTI_LINE_ERR_RE = re.compile(r"\bline\s+(\d+)\s*:", re.IGNORECASE)
+_SNAKE_CASE_NAME_RE = re.compile(r"^[a-z0-9]+(?:_[a-z0-9]+)*$")
 
 _VALID_SUBTYPES = frozenset({"file", "url", "domain", "ip_address"})
 
@@ -31,6 +36,7 @@ _GRAFT_MANAGED_META_KEYS = frozenset(
         "owners",
         "mitre_tactic",
         "mitre_technique",
+        "tags",
     }
 )
 
@@ -63,27 +69,27 @@ def _unescape_yara_str(val: str) -> str:
 
 
 def _strip_quoted_strings_and_comments(text: str) -> str:
-    cleaned = re.sub(r'"(?:[^"\\]|\\.)*"', '""', text)
-    cleaned = re.sub(r"/\*.*?\*/", "", cleaned, flags=re.DOTALL)
-    cleaned = re.sub(r"//[^\n]*", "", cleaned)
-    return cleaned
+    return _YARA_STRING_OR_COMMENT_RE.sub(
+        lambda m: '""' if m.group(0).startswith('"') else " ",
+        text,
+    )
 
 
 def validate_gti_dataset_references(
     rule: RuleEnvelope,
     local_dataset_names: set[str],
 ) -> None:
+    _ = local_dataset_names
     stripped = _strip_quoted_strings_and_comments(rule.logic)
     for match in _DATASET_TOKEN_RE.finditer(stripped):
         ds_name = match.group(1)
         col_name = match.group(2)
-        if col_name is not None or ds_name in local_dataset_names or ds_name == "index":
-            ref_str = f"%{ds_name}.{col_name}" if col_name else f"%{ds_name}"
-            raise ValueError(
-                f"Rule '{rule.metadata.name}' references dataset '{ref_str}': "
-                "Google Threat Intelligence (gti) does not support dataset lookup tables; "
-                "write native YARA-X conditions directly"
-            )
+        ref_str = f"%{ds_name}.{col_name}" if col_name else f"%{ds_name}"
+        raise ValueError(
+            f"Rule '{rule.metadata.name}' references dataset '{ref_str}': "
+            "Google Threat Intelligence (gti) does not support dataset lookup tables; "
+            "write native YARA-X conditions directly"
+        )
 
 
 def _partition_imports_and_body(raw_logic: str) -> tuple[list[str], str]:
@@ -208,6 +214,9 @@ def synthesize_yara_rule(rule: RuleEnvelope) -> tuple[str, int]:
             meta_lines.append(f'    mitre_tactic = "{_escape_yara_str(", ".join(tactics))}"')
         if techniques:
             meta_lines.append(f'    mitre_technique = "{_escape_yara_str(", ".join(techniques))}"')
+    if rule.metadata.tags:
+        tags_str = ", ".join(rule.metadata.tags)
+        meta_lines.append(f'    tags = "{_escape_yara_str(tags_str)}"')
 
     prefix_lines: list[str] = []
     if imports:
@@ -226,6 +235,21 @@ def synthesize_yara_rule(rule: RuleEnvelope) -> tuple[str, int]:
     return "\n".join(full_lines), max(0, header_offset)
 
 
+def _normalize_snake_case_name(raw_name: str, fallback: str = "imported_gti_rule") -> str:
+    candidate = raw_name.strip()
+    if _SNAKE_CASE_NAME_RE.match(candidate):
+        return candidate
+    cleaned = re.sub(r"[^a-z0-9]+", "_", candidate.lower()).strip("_")
+    if cleaned and _SNAKE_CASE_NAME_RE.match(cleaned):
+        return cleaned
+    return fallback
+
+
+def _normalize_tag(raw_tag: str) -> str:
+    cleaned = re.sub(r"[^a-z0-9_/:-]+", "-", raw_tag.strip().lower()).strip("-")
+    return cleaned[:32]
+
+
 def deconstruct_yara_rule(remote_rule: RuleEnvelope) -> RuleEnvelope:
     imports, raw_body = _partition_imports_and_body(remote_rule.logic)
     extracted_meta, cleaned_body = _strip_existing_graft_meta(raw_body)
@@ -238,12 +262,24 @@ def deconstruct_yara_rule(remote_rule: RuleEnvelope) -> RuleEnvelope:
         ).strip()
     )
     inferred_name = wrapper_match.group(1) if wrapper_match else remote_rule.metadata.name
+    final_name = _normalize_snake_case_name(
+        remote_rule.metadata.name or inferred_name,
+        fallback=_normalize_snake_case_name(inferred_name),
+    )
 
     rule_id = extracted_meta.get("graft_id") or remote_rule.metadata.id
+    if not rule_id:
+        rule_id = str(uuid.uuid5(uuid.NAMESPACE_DNS, f"graft.gti.{final_name}"))
+
     description = extracted_meta.get("description") or remote_rule.metadata.description
+    if not description or len(description.strip()) < 10:
+        description = f"Imported GTI detection rule for {final_name}."
+
     owners: tuple[str, ...] = remote_rule.metadata.owners
     if "owners" in extracted_meta:
         owners = tuple(o.strip() for o in extracted_meta["owners"].split(",") if o.strip())
+    if not owners:
+        owners = ("Detection Engineering",)
 
     mitre_map = dict(remote_rule.metadata.mitre)
     raw_tactics = [
@@ -259,6 +295,30 @@ def deconstruct_yara_rule(remote_rule: RuleEnvelope) -> RuleEnvelope:
         )
         if reconstructed:
             mitre_map = reconstructed
+    if not mitre_map:
+        mitre_map = {"none": ("T0000",)}
+
+    raw_tags: tuple[str, ...] = remote_rule.metadata.tags
+    if not raw_tags and "tags" in extracted_meta:
+        raw_tags = tuple(t.strip() for t in extracted_meta["tags"].split(",") if t.strip())
+    normalized_tags = tuple(dict.fromkeys(norm for t in raw_tags if (norm := _normalize_tag(t))))
+    if not normalized_tags:
+        normalized_tags = ("hunting",)
+
+    references = remote_rule.metadata.references or ("https://gtidocs.virustotal.com/",)
+
+    rb = remote_rule.runbook
+    runbook = Runbook(
+        context=rb.context
+        if rb.context.strip()
+        else f"Imported from Google Threat Intelligence for detection {final_name}.",
+        triage=rb.triage
+        if rb.triage.strip()
+        else "1. Inspect matched GTI entity attributes and pivot on related indicators.",
+        response=rb.response
+        if rb.response.strip()
+        else "1. Follow organizational threat hunting and incident response playbooks.",
+    )
 
     recombined_parts: list[str] = []
     if imports:
@@ -270,16 +330,16 @@ def deconstruct_yara_rule(remote_rule: RuleEnvelope) -> RuleEnvelope:
     return RuleEnvelope(
         metadata=RuleMetadata(
             id=rule_id,
-            name=remote_rule.metadata.name or inferred_name,
+            name=final_name,
             description=description,
             owners=owners,
             mitre=mitre_map,
-            tags=remote_rule.metadata.tags,
-            references=remote_rule.metadata.references,
+            tags=normalized_tags,
+            references=references,
         ),
         logic=clean_logic,
         deployment=remote_rule.deployment,
-        runbook=remote_rule.runbook,
+        runbook=runbook,
         tests=remote_rule.tests,
         managed=remote_rule.managed,
     )
@@ -333,6 +393,35 @@ class GTICompilerAdapter(RuleCompilerPort):
         )
         return self.verify_rule(temp_rule)
 
+    def _validate_retrohunt_time_range(self, rule: RuleEnvelope) -> None:
+        if rule.deployment.get("type") != "retrohunt":
+            return
+        start_val = rule.deployment.get("start_time")
+        end_val = rule.deployment.get("end_time")
+        start_ts: int | None = None
+        end_ts: int | None = None
+        if isinstance(start_val, str) and start_val.strip():
+            norm = start_val.strip()
+            if norm.endswith("Z"):
+                norm = norm[:-1] + "+00:00"
+            dt = datetime.fromisoformat(norm)
+            if dt.tzinfo is None:
+                dt = dt.replace(tzinfo=UTC)
+            start_ts = int(dt.timestamp())
+        if isinstance(end_val, str) and end_val.strip():
+            norm = end_val.strip()
+            if norm.endswith("Z"):
+                norm = norm[:-1] + "+00:00"
+            dt = datetime.fromisoformat(norm)
+            if dt.tzinfo is None:
+                dt = dt.replace(tzinfo=UTC)
+            end_ts = int(dt.timestamp())
+        if start_ts is not None and end_ts is not None and start_ts >= end_ts:
+            raise ValueError(
+                f"Rule '{rule.metadata.name}' has invalid Retrohunt time range: "
+                "deployment.start_time must be earlier than deployment.end_time"
+            )
+
     def verify_rule(self, rule: RuleEnvelope) -> CompilationResult:
         diag = self._local_syntax_check(rule.logic)
         if diag is not None:
@@ -340,6 +429,7 @@ class GTICompilerAdapter(RuleCompilerPort):
 
         try:
             match_type = resolve_gti_subtype(rule)
+            self._validate_retrohunt_time_range(rule)
         except ValueError as exc:
             return CompilationResult(
                 success=False,

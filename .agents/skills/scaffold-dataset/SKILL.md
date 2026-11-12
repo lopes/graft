@@ -68,7 +68,7 @@ flowchart TD
 - **Preserve the existing `metadata.owners` value** unless the analyst explicitly specifies a different owner or team.
 
 ### `metadata.tags`
-- Required list of `1..32` unique lowercase strings matching `^[a-z0-9_/\\-]+$`.
+- Required list of `1..32` unique lowercase strings matching `^[a-z0-9_/:-]+$` (`1..32` characters per tag).
 - Replace the default `["dataset"]` stub with **2–3 broad, reusable domain or entity labels** (e.g., `["network", "scanners"]`, `["network", "pentest"]`, `["identity", "privileged"]`).
 
 ### `metadata.references`

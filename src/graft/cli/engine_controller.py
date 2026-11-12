@@ -568,6 +568,33 @@ class EngineCommandController:
             for vec in rule.tests:
                 total_vectors += 1
                 res = replay.run_test_vector(rule, vec)
+                unavail = getattr(replay, "unavailable_reason", None)
+                if not res.passed and isinstance(unavail, str) and unavail:
+                    if require_staging:
+                        err_msg = f"--require-staging was specified but {unavail}"
+                        if json_output:
+                            sys.stdout.write(
+                                json.dumps({"success": False, "error": err_msg}) + "\n"
+                            )
+                        else:
+                            sys.stderr.write(f"Error: {err_msg}.\n")
+                        return 1
+                    if json_output:
+                        sys.stdout.write(
+                            json.dumps(
+                                {
+                                    "success": True,
+                                    "skipped": True,
+                                    "reason": unavail,
+                                    "total": 0,
+                                    "results": [],
+                                }
+                            )
+                            + "\n"
+                        )
+                    else:
+                        sys.stdout.write(f"[WARNING] Skipping replay tests: {unavail}\n")
+                    return 0
                 if not res.passed:
                     failed += 1
                 results_list.append(
@@ -1160,12 +1187,13 @@ def register_engine_commands(
         )
         new_p.add_argument("rule_name", help="Technical rule name (lowercase slug)")
         new_p.add_argument("--out", help="Custom target path for rule YAML")
-        new_p.add_argument(
-            "--managed",
-            default=None,
-            metavar="MANAGED_ID",
-            help="Scaffold a registered managed rule in rulesets/<engine>/managed/",
-        )
+        if caps.managed_rules:
+            new_p.add_argument(
+                "--managed",
+                default=None,
+                metavar="MANAGED_ID",
+                help="Scaffold a registered managed rule in rulesets/<engine>/managed/",
+            )
 
         targets: list[str] = ["custom"]
         if caps.datasets:

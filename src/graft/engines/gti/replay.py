@@ -223,10 +223,12 @@ class GTIReplayAdapter(ReplayHarnessPort):
         event_payload: Mapping[str, object],
     ) -> ReplayResult:
         if self._client is None:
+            reason = "Retrohunt test vector requires GTI API credentials (GRAFT_GTI_API_KEY)"
+            self.unavailable_reason = reason
             return ReplayResult(
                 test_id=vector.id,
                 passed=False,
-                message="Retrohunt test vector requires GTI API credentials (GRAFT_GTI_API_KEY)",
+                message=reason,
                 matched_events_count=0,
             )
 
