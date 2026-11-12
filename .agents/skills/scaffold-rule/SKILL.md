@@ -14,6 +14,8 @@ You are a Senior Threat Detection Engineer operating inside the **Graft** Detect
 
 Before generating any fields, ground your decisions in:
 - [Rule Authoring Guide](../../../docs/analysts/rule_authoring.md)
+- [Google SecOps Engine Guide](../../../src/graft/engines/secops/docs/README.md)
+- [Google Threat Intelligence (GTI) Engine Guide](../../../src/graft/engines/gti/docs/README.md)
 - [Base Custom Rule Schema](../../../src/graft/core/schemas/base_custom.schema.json)
 - [Base Managed Rule Schema](../../../src/graft/core/schemas/base_managed.schema.json)
 - [Base Dataset Schema](../../../src/graft/core/schemas/base_dataset.schema.json)
@@ -41,14 +43,14 @@ flowchart TD
 ### Step 1: Determine Input Mode & Bootstrap (If New)
 
 1. **Mode A — New Custom Rule (Default when given a concept prompt):**
-   - Identify the target engine from the prompt (e.g., `secops`). If omitted and only one engine exists under `rulesets/`, use that engine; if multiple engines exist and the prompt is ambiguous, ask the analyst.
-   - Derive a canonical `<subject>_<fact>` snake_case rule name (`1..64` chars).
+   - Identify the target engine from the prompt (`secops` for Google SecOps YARA-L 2.0 or `gti` for Google Threat Intelligence YARA-X Livehunt/Retrohunt). If multiple engines exist under `rulesets/` and the prompt is ambiguous, ask the analyst.
+   - Derive a canonical `<subject>_<fact>` snake_case rule name (`1..64` chars). For `gti` rules, prefix Livehunt rules with `lh_` (`lh_<subject>_<fact>`) and Retrohunt rules with `rh_` (`rh_<subject>_<fact>`).
    - Execute:
      ```bash
      uv run graft new rule <name> --engine <engine>
      ```
-2. **Mode B — New Registered Managed Rule (When referencing a vendor-managed/curated rule):**
-   - Search `rulesets/<engine>/managed/index.yaml` for the matching vendor rule/ruleset entry and extract its `id`.
+2. **Mode B — New Registered Managed Rule (When referencing a vendor-managed/curated rule on an engine with `managed_rules: true`, such as `secops`):**
+   - Search `rulesets/<engine>/managed/index.yaml` for the matching vendor rule/ruleset entry and extract its `id` (note: `gti` sets `managed_rules: false` and only supports custom rules).
    - Derive a canonical `<subject>_<fact>` snake_case rule name (`1..64` chars).
    - Execute:
      ```bash
@@ -73,15 +75,16 @@ flowchart TD
 
 ### `metadata.name` (`<subject>_<fact>`)
 - Must match `^[a-z0-9]+(?:_[a-z0-9]+)*$` (`1..64` characters, `"index"` reserved).
-- **`<subject>`**: The concrete entity, resource, or artifact acted upon (e.g., `workspace_nrd_email`, `gcp_service_account_key`, `gcp_storage_bucket`, `gcti_breach_network_indicator`).
-- **`<fact>`**: The empirical state change or action that occurred, ending in a **past-tense verb** (e.g., `opened`, `created`, `public_access_granted`, `matched`).
+- **`<subject>`**: The concrete entity, resource, or artifact acted upon (e.g., `workspace_nrd_email`, `gcp_service_account_key`, `gcp_storage_bucket`, `gcti_breach_network_indicator`, `lh_rogue_ssl_certificate_brand`, `rh_corporate_secret_key_leak`).
+- **`<fact>`**: The empirical state change or action that occurred, ending in a **past-tense verb** (e.g., `opened`, `created`, `public_access_granted`, `matched`, `impersonated`, `swept`, `uploaded`).
+- **GTI Prefix Convention (`gti`):** For `rulesets/gti/custom/*.yaml`, prefix Livehunt rules with `lh_` (e.g., `lh_rogue_ssl_certificate_brand_impersonated`) and Retrohunt corpus rules with `rh_` (e.g., `rh_corporate_secret_key_leak_swept`).
 - **Banned tokens:**
   - Strip prepositions and connectors (`_to_`, `_of_`, `_or_`, `_in_`, `_with_`, `_for_`, `_at_`, `_by_`, `_via_`, `_from_`).
   - Strip speculative or filler words (`possible`, `suspicious`, `potential`, `activity`, `detected`, `attempt`, `success`, `alert`).
 
 ### `metadata.description`
 - Required string, `1..128` characters.
-- Write a single, factual sentence stating the empirical detection objective (e.g., `"Google Workspace email opened from a newly registered domain."`).
+- Write a single, factual sentence stating the empirical detection objective (e.g., `"Google Workspace email opened from a newly registered domain."` for `secops`, or `"External domain presenting an X.509 SSL/TLS certificate spoofing ACME Financial in Subject or SAN."` for `gti`).
 - Avoid conversational prefixes (`"This rule detects..."`).
 
 ### `metadata.owners`
@@ -90,17 +93,17 @@ flowchart TD
 
 ### `metadata.mitre`
 - Required mapping of normalized MITRE Enterprise tactic shortnames (`^[a-z0-9-]+$`) to lists of valid technique or sub-technique IDs (`^T\d{4}(\.\d{3})?$`).
-- Always prefer the **most specific sub-technique** (e.g., `T1566.002` Spearphishing Link or `T1566.001` Spearphishing Attachment rather than parent `T1566` when telemetry specifies the vector).
+- Always prefer the **most specific sub-technique** (e.g., `T1566.002` Spearphishing Link, `T1587.003` Digital Certificates, or `T1552.001` Credentials In Files rather than parent techniques when telemetry specifies the vector).
 - Before finalizing `metadata.mitre` and `runbook`, inspect the candidate technique via the CLI (never read `src/graft/data/mitre_*.json` directly into context):
   ```bash
   uv run graft --json mitre inspect <Txxxx.xxx> --analytics
   ```
-- Verify the technique is `"active"` (not revoked or deprecated) and belongs to the mapped tactic shortnames (e.g., `initial-access: ["T1566.002"]`, `stealth`, `defense-impairment`).
+- Verify the technique is `"active"` (not revoked or deprecated) and belongs to the mapped tactic shortnames (e.g., `initial-access: ["T1566.002"]`, `resource-development: ["T1587.003"]`, `stealth`, `defense-impairment`).
 
 ### `metadata.tags`
 - Required list of `1..32` unique lowercase strings matching `^[a-z0-9_/:-]+$` (`1..32` characters per tag).
-- Replace the default `[<engine>, "custom"]` or `[<engine>, "managed"]` stub with **2–3 broad, reusable platform or telemetry surface labels** (e.g., `["workspace", "email", "whois"]`, `["gcp", "iam"]`, `["web", "sso", "phishing"]`, `["windows", "pe", "lsass"]`).
-- **Never duplicate** the engine name (`secops`, `gti`), rule/deployment type or subtype (`custom`, `managed`, `livehunt`, `retrohunt`, `url`, `file`), or MITRE tactic names in `tags`.
+- Replace the default `[<engine>, "custom"]` or `[<engine>, "managed"]` stub with **2–3 broad, reusable platform, domain, or telemetry surface labels** (e.g., `["workspace", "email", "whois"]`, `["gcp", "iam"]`, `["acme", "phishing", "tls", "x509"]`, `["americas", "banking-trojan", "financial"]`). In `gti`, `metadata.tags` synchronizes 1-to-1 with GTI Livehunt `attributes.tags` and YARA `meta: tags`.
+- **Never duplicate** the engine name (`secops`, `gti`), rule/deployment type or subtype (`custom`, `managed`, `livehunt`, `retrohunt`, `file`, `url`, `domain`, `ip_address`), or MITRE tactic names in `tags`.
 
 ### `metadata.references`
 - Required list of `1..32` unique non-blank strings (`maxLength: 2048`).

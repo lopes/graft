@@ -19,6 +19,8 @@ You are a Principal Threat Detection Engineer conducting a rigorous, high-signal
 
 Ground every review finding in:
 - [Rule Authoring Guide](../../../docs/analysts/rule_authoring.md)
+- [Google SecOps Engine Guide](../../../src/graft/engines/secops/docs/README.md)
+- [Google Threat Intelligence (GTI) Engine Guide](../../../src/graft/engines/gti/docs/README.md)
 - [Synthetic Replay Testing Guide](../../../docs/analysts/replay_testing.md)
 - [Base Custom Rule Schema](../../../src/graft/core/schemas/base_custom.schema.json)
 - [Base Managed Rule Schema](../../../src/graft/core/schemas/base_managed.schema.json)
@@ -33,7 +35,7 @@ flowchart TD
     IN["Analyst Input: /review-rule [path_or_dir]"] --> TARGET{"Target Specified?"}
     TARGET -->|"Explicit file or directory"| USE["Use provided rule path(s)"]
     TARGET -->|"No path provided"| GIT["Find modified/untracked YAML files<br/>under rulesets/ via git status/diff"]
-    USE --> LINT["Run: uv run graft lint &lt;target&gt;"]
+    USE --> LINT["Run: uv run graft lint &lt;target&gt;<br/>(+ uv run graft gti test &lt;target&gt; for gti rules)"]
     GIT --> LINT
     LINT --> MITRE["Inspect mapped techniques via CLI:<br/>uv run graft --json mitre inspect &lt;Txxxx&gt; --analytics"]
     MITRE --> AUDIT["Audit all blocks against Graft standards:<br/>1. metadata  2. logic  3. deployment/managed  4. runbook  5. tests"]
@@ -43,11 +45,13 @@ flowchart TD
 ### Step 1: Resolve Target Rule(s) & Run Deterministic Linter
 
 1. If the analyst specifies a file path or directory, review that target. If no path is provided, inspect modified and untracked rule files under `rulesets/` (excluding `_archived/` and `managed/index.yaml`).
-2. Execute the offline linter:
+2. Execute the offline linter (and for `gti` rules, also run the offline synthetic YARA-X replay harness):
    ```bash
    uv run graft lint <target>
+   # For GTI rules under rulesets/gti/custom/:
+   uv run graft gti test <target>
    ```
-3. Record all schema, MITRE ATT&CK STIX taxonomy, and repository-wide uniqueness findings.
+3. Record all schema, MITRE ATT&CK STIX taxonomy, replay test, and repository-wide uniqueness findings.
 
 ---
 
@@ -57,7 +61,8 @@ Evaluate each rule across all blocks and classify every check as `PASS`, `WARN`,
 
 ### Block 1: `metadata`
 - **Naming (`<subject>_<fact>`):**
-  - Does `metadata.name` (and filename stem) follow `<subject>_<fact>` ending in a past-tense verb (`created`, `opened`, `granted`, `matched`, `flushed`)?
+  - Does `metadata.name` (and filename stem) follow `<subject>_<fact>` ending in a past-tense verb (`created`, `opened`, `granted`, `matched`, `flushed`, `impersonated`, `swept`, `uploaded`)?
+  - For Google Threat Intelligence (`rulesets/gti/custom/*.yaml`), does the name follow the `lh_<subject>_<fact>` prefix convention for `livehunt` rules and `rh_<subject>_<fact>` for `retrohunt` rules?
   - Flag any filler prepositions (`_to_`, `_of_`, `_or_`, `_in_`, `_with_`, `_for_`, `_at_`, `_by_`, `_via_`, `_from_`) or speculative words (`possible`, `suspicious`, `potential`, `activity`, `detected`, `attempt`, `success`, `alert`).
 - **Description:**
   - Is `metadata.description` $\le 128$ characters, non-conversational, and accurately aligned with what `logic` actually detects?
@@ -69,8 +74,8 @@ Evaluate each rule across all blocks and classify every check as `PASS`, `WARN`,
   - Verify tactics and techniques are active (flagging any revoked or deprecated IDs) and use the **most specific sub-technique** (`TXXXX.XXX`) that reflects the telemetry in `logic` so downstream foreign-key joins (`Gxxxx`, `DETxxxx`, `ANxxxx`, `DCxxxx`, `Mxxxx`) remain accurate.
   - Flag leftover `graft new rule` stub mappings (`execution: ["T1059.001"]`) when the rule is unrelated to PowerShell.
 - **Tags:**
-  - Does `metadata.tags` contain 2–3 broad, reusable lowercase platform/surface labels matching `^[a-z0-9_/:-]{1,32}$` (e.g., `gcp`, `iam`, `workspace`, `email`, `whois`, `web`, `sso`, `phishing`, `windows`, `pe`, `network`)?
-  - Flag tags that duplicate the engine name (`secops`, `gti`), rule/deployment type or subtype (`custom`, `managed`, `livehunt`, `retrohunt`, `url`, `file`), or MITRE tactic names (`initial-access`, `persistence`, `reconnaissance`).
+  - Does `metadata.tags` contain 2–3 broad, reusable lowercase platform/surface labels matching `^[a-z0-9_/:-]{1,32}$` (e.g., `gcp`, `iam`, `workspace`, `email`, `whois`, `acme`, `phishing`, `tls`, `x509`, `americas`, `banking-trojan`, `financial`)? In `gti`, `metadata.tags` syncs 1-to-1 with GTI Livehunt `attributes.tags`.
+  - Flag tags that duplicate the engine name (`secops`, `gti`), rule/deployment type or subtype (`custom`, `managed`, `livehunt`, `retrohunt`, `file`, `url`, `domain`, `ip_address`), or MITRE tactic names (`initial-access`, `persistence`, `reconnaissance`, `resource-development`).
 - **References:**
   - Do `metadata.references` cite relevant vendor docs, threat research, or community rule attributions (flagging any redundant MITRE ATT&CK technique URLs like `https://attack.mitre.org/techniques/...`, since `metadata.mitre` already maps techniques)?
 
@@ -78,17 +83,17 @@ Evaluate each rule across all blocks and classify every check as `PASS`, `WARN`,
 - **Stub Detection:** Flag immediately (`FAIL`) if `logic` still contains the default `USER_LOGIN` (`secops`) or bare `vt.net.url.new_url` (`gti`) stub from `graft new rule`.
 - **Semantic Alignment & Procedural Depth:** Does the query actually detect the behavior claimed in `metadata.description`, `runbook.context`, and the technique's MITRE `DETxxxx` / `ANxxxx` analytics (`log_sources` and `mutable_elements`)? Flag if the query is brittle (e.g., matching a single tool filename when the underlying `DCxxxx` data component supports a broader behavioral predicate, or hardcoding thresholds/allowlists that belong in a dataset).
 - **Query Hygiene & Performance:**
-  - Are event/string variable names descriptive (`$mail`, `$whois`, `$iam`, `$str_minidump` rather than `$e1`, `$e2`)?
-  - Are multi-event joins selective and bounded by an explicit, justified `match:` time window?
-  - Are magic numbers (such as `604800` seconds or numeric `product_event_type` codes) explained with inline comments?
+  - Are event/string variable names descriptive (`$mail`, `$whois`, `$iam`, `$str_minidump`, `$key_pem` rather than `$e1`, `$e2`, `$s1`)?
+  - For `secops` (YARA-L 2.0): Are multi-event joins selective and bounded by an explicit, justified `match:` time window? If `logic` references a local dataset in `datasets/<name>.yaml`, verify it uses `%<name>.value` and literal string membership (`in %<name>.value`, never `in cidr` or `in regex`).
+  - For `gti` (YARA-X): Verify top-level `import "<module>"` declarations (`import "vt"`, `import "pe"`, `import "elf"`, `import "math"`) match the identifiers used in `condition:`, verify `vt.net.*` entity paths match `deployment.subtype` (`file`, `url`, `domain`, `ip_address`) for `livehunt` rules (or file/corpus attributes and `strings:` / `filesize` bounds for `retrohunt` rules), and verify zero `%<dataset>` references (`datasets: false`).
+  - Are magic numbers (such as `604800` seconds, favicon MurmurHash3 hashes, or numeric `product_event_type` codes) explained with inline comments?
   - Are unanchored regexes or overly broad predicates likely to cause high false-positive volume?
-  - If `logic` references a local dataset in `datasets/<name>.yaml` (`secops`), verify it uses `%<name>.value` and literal string membership (`in %<name>.value`, never `in cidr` or `in regex`); for `gti`, verify `logic` contains zero `%<dataset>` references (`datasets: false`).
-  - Verify `logic` does **not** include an outer `rule <name> { meta: ... }` wrapper (Graft synthesizes the wrapper automatically for `secops` and `gti`).
+  - Verify `logic` does **not** include an outer `rule <name> { meta: ... }` wrapper (Graft synthesizes the wrapper automatically for `secops` and `gti` via `graft <engine> render`).
 
 ### Block 3: `deployment` / `managed`
 - **Custom Rules (`deployment`):**
   - For `secops`, check `enabled`, `alerting`, and `run_frequency` (emit a `WARN` if a newly scaffolded or high-noise rule sets `alerting: true` without tuned exclusions).
-  - For `gti`, check `type` (`"livehunt"` or `"retrohunt"`) and `enabled`: verify `subtype` (`"file" | "url" | "domain" | "ip_address"`) and `daily_limit` on `livehunt` rules, or `corpus` (`"main" | "goodware"`) and optional `start_time`/`end_time` on `retrohunt` rules (emit a `WARN` if a `retrohunt` rule is committed with `enabled: true` when intended to remain dormant in Git).
+  - For `gti`, check `type` (`"livehunt"` or `"retrohunt"`) and `enabled`: verify `subtype` (`"file" | "url" | "domain" | "ip_address"`) and `daily_limit` on `livehunt` rules, or `corpus` (`"main" | "goodware"`) and optional `start_time`/`end_time` on `retrohunt` rules (emit a `WARN` if a `retrohunt` rule is committed with `enabled: true` when intended to remain dormant in Git without consuming Retrohunt job quota).
 - **Registered Managed Rules (`managed`):**
   - Verify `managed.id` exists in `rulesets/<engine>/managed/index.yaml` and that `metadata.name` / `runbook` accurately describe that specific vendor ruleset.
 
@@ -102,9 +107,9 @@ Evaluate each rule across all blocks and classify every check as `PASS`, `WARN`,
 ### Block 5: `tests` *(Custom Rules)*
 - **Coverage:** Does `tests` include at least one positive vector (`id: "match_*"`, `expect: 1`) and one negative vector (`id: "ignore_*"`, `expect: 0`)?
 - **Predicate Verification:**
-  - Trace every event in the positive vector against `logic`: do all field paths, values, regexes, join keys, and timestamps within the `match:` window actually satisfy `condition:`?
+  - Trace every event in the positive vector against `logic`: do all field paths, values, regexes, join keys, and timestamps within the `match:` window (for `secops`), or `vt.*` attributes, `filesize`, and `sample_text` strings (for `gti`), actually satisfy `condition:`?
   - Trace the negative vector against `logic`: does it falsify a specific condition while remaining realistic?
-  - Flag (`FAIL`) if `tests` still contains the default `test_basic_detection` (`USER_LOGIN`) stub after `logic` has been customized.
+  - Flag (`FAIL`) if `tests` still contains the default `test_basic_detection` stub (`USER_LOGIN` for `secops` or `vt.net.url.new_url` for `gti`) after `logic` has been customized.
 
 ---
 

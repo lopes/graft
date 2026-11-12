@@ -70,17 +70,17 @@
   <rect x="56" y="222" width="212" height="80" rx="6" class="bg-secops" />
   <text x="162" y="244" class="card-title" fill="#3fb950">Google SecOps</text>
   <text x="162" y="260" class="card-sub">Chronicle SIEM · YARA-L 2.0</text>
-  <text x="162" y="274" class="card-sub">Curated Rulesets · UDM Ingestion</text>
+  <text x="162" y="274" class="card-sub">Data Tables · Curated Rulesets</text>
   <rect x="96" y="282" width="132" height="14" rx="3" fill="#238636" />
   <text x="162" y="293" class="card-badge" fill="#ffffff">Active Production Engine</text>
 
-  <!-- Card 2: Google Cloud SCC - Extensible -->
-  <rect x="284" y="222" width="212" height="80" rx="6" class="bg-plug" />
-  <text x="390" y="244" class="card-title" fill="#58a6ff">Google Cloud SCC</text>
-  <text x="390" y="260" class="card-sub">Security Command Center</text>
-  <text x="390" y="274" class="card-sub">Posture Policies · Cloud Findings</text>
-  <rect x="324" y="282" width="132" height="14" rx="3" fill="#388bfd1a" stroke="#388bfd44" stroke-width="1" />
-  <text x="390" y="293" class="card-badge" fill="#58a6ff">Pluggable Engine Port</text>
+  <!-- Card 2: Google Threat Intelligence (GTI) - Active -->
+  <rect x="284" y="222" width="212" height="80" rx="6" class="bg-secops" />
+  <text x="390" y="244" class="card-title" fill="#3fb950">Google Threat Intelligence</text>
+  <text x="390" y="260" class="card-sub">VirusTotal v3 · Native YARA-X</text>
+  <text x="390" y="274" class="card-sub">Livehunt Rulesets · Retrohunt Jobs</text>
+  <rect x="324" y="282" width="132" height="14" rx="3" fill="#238636" />
+  <text x="390" y="293" class="card-badge" fill="#ffffff">Active Production Engine</text>
 
   <!-- Card 3: Wiz - Extensible -->
   <rect x="512" y="222" width="212" height="80" rx="6" class="bg-plug" />

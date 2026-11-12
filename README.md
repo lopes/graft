@@ -5,8 +5,8 @@
 <h1 align="center">graft</h1>
 
 <p align="center">
-  <strong>Write Once, Defend Everywhere.</strong><br>
-  <em>An extensible, vendor-agnostic Detection-as-Code (DaC) platform engineered for Google SecOps, Google Threat Intelligence, and modern enterprise security operations.</em>
+  <strong>Unified Detection-as-Code engine for Google Security and beyond.</strong><br>
+  <em>Write once, defend everywhere — author, verify, test, and reconcile threat detections across Google SecOps, Google Threat Intelligence (GTI), and modern enterprise security platforms.</em>
 </p>
 
 <p align="center">
@@ -20,11 +20,8 @@
 </p>
 
 > [!WARNING]
-> **Public Repository Notice & Operational Boundaries:**
-> - **Public Lab Environment:** This public repository (`lopes/graft`) is strictly connected to an isolated lab/demo environment for open-source development and experimentation. It is never connected to production tenants.
-> - **Production Repositories Must Be Private:** Any detection engineering team or operator adopting or forking Graft for production use **must maintain their repository in private version control** under strict organizational access controls. While the Graft engine is open-source, version-controlling live production deployment states (`enabled`, `alerting`) or operational exclusions (e.g., `findingsRefinements` in Google SecOps) in a public repository will leak defensive postures, monitoring coverage blind spots, and internal entity identities (hostnames, IP ranges, usernames, service accounts).
-> - **Curated Content Is Public:** The vendor-managed detection catalog metadata tracked in `rulesets/secops/managed/index.yaml` (category names, ruleset titles, descriptions, and catalog UUIDs) represents standard vendor content that is **publicly published** in official Google Cloud documentation. See [Google SecOps Curated Detections](https://docs.cloud.google.com/chronicle/docs/detection/curated-detections) and [Review Curated Detection Categories](https://docs.cloud.google.com/chronicle/docs/detection/cloud-threats-category).
-> - **Specification & Architecture:** Complete architectural foundations, component specifications, and engineering directives are documented in [docs/README.md](docs/README.md) and [AGENTS.md](AGENTS.md).
+> - **Keep Your Production Fork Private:** If you clone or fork Graft for operational use, keep your repository **private** to your organization. Never commit live production rule states, tuning exclusions, or internal indicator datasets to a public repository.
+> - **Disclaimer:** Graft is personal research and not an officially supported Google product. All code and configurations are provided as-is under the [Apache 2.0 License](LICENSE) without warranty or official SLA.
 
 ---
 
@@ -37,9 +34,9 @@ In horticulture, **grafting** joins a shoot from one plant onto the rootstock of
 Graft acts as the unified trunk:
 
 - **Standardized Core:** Author, document, and test detection rules (`metadata`, `logic`, `deployment`, `runbook`, `tests`) alongside reusable, engine-agnostic contextual datasets (`datasets/<name>.yaml`) in a unified, version-controlled repository.
-- **Resilient Branches (Ports & Adapters):** Seamlessly "graft" rules and datasets into production **Detection Engines**—defined in Graft as *any system that processes raw telemetry and generates security alerts from it* (spanning SIEM, CTI hunting platforms, EDR/XDR, CNAPP, NDR, and identity security platforms). Deploy natively into **Google SecOps** (YARA-L 2.0 & Data Tables) and **Google Threat Intelligence** (VirusTotal v3 YARA-X Livehunt & Retrohunt) today, and branch into auxiliary SIEMs, EDRs, or cloud runtime engines tomorrow without refactoring engineering workflows.
+- **Resilient Branches (Ports & Adapters):** Seamlessly "graft" rules and datasets into production **Detection Engines**—defined in Graft as *any system that processes raw telemetry and generates security alerts from it* (spanning SIEM, CTI hunting platforms, EDR/XDR, CNAPP, NDR, and identity security platforms). Deploy natively into **Google SecOps** (YARA-L 2.0, Data Tables & Curated Rule Sets) and **Google Threat Intelligence** (VirusTotal v3 YARA-X Livehunt & Retrohunt) today, and branch into auxiliary cloud, endpoint, or SIEM engines tomorrow without refactoring engineering workflows.
 - **Multi-Track Governance:** Manage reusable string datasets (`datasets/<name>.yaml`), bespoke organizational detections (`rulesets/<engine>/custom/`), and vendor-managed detections (`rulesets/<engine>/managed/index.yaml` and optional registered rule envelopes `rulesets/<engine>/managed/<rule_name>.yaml`) under GitOps plan/apply reconciliation.
-- **Frictionless CI/CD:** Decouple detection authoring from manual UI workflows with automated schema validation, dataset cross-reference checks, pre-merge API syntax dry runs (e.g., `verifyRuleText` in Google SecOps), and synthetic replay testing against dedicated staging infrastructure.
+- **Frictionless CI/CD:** Decouple detection authoring from manual UI workflows with automated schema validation, dataset cross-reference checks, pre-merge server-side syntax verification (`graft secops verify` & `graft gti verify`), and deterministic synthetic replay testing (`graft secops test` & `graft gti test`).
 
 ---
 
@@ -56,23 +53,23 @@ Graft follows strict **Hexagonal Architecture (Ports & Adapters)** structured in
 ## Key Features
 
 ### 1. Modular Engine Architecture & Pluggable Adapters
-Graft strictly decouples detection engineering logic from downstream SIEM and telemetry platforms using **Hexagonal Architecture (Ports & Adapters)**:
+Graft strictly decouples detection engineering logic from downstream Google Security and enterprise detection platforms using **Hexagonal Architecture (Ports & Adapters)**:
 - **Self-Contained Engine Packages:** Every detection engine lives in an isolated directory under `src/graft/engines/<engine>/` housing its concrete API client, deployment adapter, engine-specific Draft 2020-12 schemas, and documentation.
 - **Strict Protocol Boundaries:** Engines implement explicit standard library `typing.Protocol` ports (`DatasetPort`, `RuleDeployerPort`, `ManagedEnginePort`, `RuleCompilerPort`, `ReplayHarnessPort`). Core never adapts to an engine; engines adapt to Core.
 - **Zero Core Cloud Dependencies:** The core substrate imports zero third-party SIEM SDKs or cloud libraries. It relies strictly on Python standard library modules (`urllib.request`, `dataclasses`, `argparse`, `subprocess`), guaranteeing fast, lightweight, and auditable execution.
-- **Engine Scaffolding in Seconds:** Adding a new SIEM target (e.g. Microsoft Sentinel, Splunk ES, Elastic) requires no core refactoring. Running `graft new engine <name>` generates the complete directory structure, schema definitions, unit test scaffolds, and documentation templates instantly.
+- **Engine Scaffolding in Seconds:** Adding a new detection engine (e.g. Wiz, Google Cloud SCC, Microsoft Sentinel, CrowdStrike) requires no core refactoring. Running `graft new engine <name>` generates the complete directory structure, schema definitions, unit test scaffolds, and documentation templates instantly.
 
 ### 2. Actionable Detection Envelopes & Factual Lifecycle
 Detection logic is only as effective as the context and operational response it enables:
 - **Normalized 5-Block Rule Envelope:** Detections are authored in a standardized YAML envelope separating `metadata`, `logic`, `deployment`, `runbook`, and `tests`.
-- **Embedded Operational Runbooks:** Every rule embeds mandatory, actionable triage playbooks directly alongside the detection logic (`context`, `triage`, and `response`), eliminating tribal knowledge and context switching for SOC analysts during live incident response.
-- **Factual Lifecycle vs. "Maturity Score" Theater:** Graft rejects arbitrary 0–100 maturity guesses and manual status tags that rapidly become stale. Instead, Graft empirically computes factual lifecycle indicators directly from Git version history (first committer `author`, UTC `YYYY-MM-DD` `created_at` and `last_modified_at`, `review_count`, and unique `contributor_count`) combined with accountable rule ownership (`owners`, `owner_count`) and active SIEM deployment health.
+- **Embedded Operational Runbooks:** Every rule embeds mandatory, actionable triage playbooks directly alongside the detection logic (`context`, `triage`, and `response`), eliminating tribal knowledge and context switching for SOC and CTI analysts during live investigations.
+- **Factual Lifecycle vs. "Maturity Score" Theater:** Graft rejects arbitrary 0–100 maturity guesses and manual status tags that rapidly become stale. Instead, Graft empirically computes factual lifecycle indicators directly from Git version history (first committer `author`, UTC `YYYY-MM-DD` `created_at` and `last_modified_at`, `review_count`, and unique `contributor_count`) combined with accountable rule ownership (`owners`, `owner_count`) and active engine deployment health (`enabled | silent | disabled`).
 
 ### 3. Reusable Datasets & Self-Expiring Suppressions (`ttl:YYYY-MM-DD`)
 Contextual allowlists and temporary suppressions are notoriously hard to keep clean—a two-week penetration test IP added to a lookup table often stays there for a year because everyone forgets to remove it after the engagement ends:
-- **Engine-Agnostic Datasets (`datasets/<name>.yaml`):** Track scanner IPs, assessment ranges, and privileged principals in a 2-block string-only YAML envelope (`metadata`, `values` of `0..1,000` literal strings) synchronized to SIEM lookup tables (e.g., Google SecOps Data Tables with a canonical `.value` column) via additive coexistence.
-- **Inline Auto-Expiration (`ttl:YYYY-MM-DD`):** Append `ttl:YYYY-MM-DD` inside any value's inline `#` comment. The entry stays active through `YYYY-MM-DD` (UTC); starting the next UTC day, Graft omits it and the daily scheduled deployment removes it from the SIEM automatically—while preserving the line in Git as an audit trail.
-- **Safe Deprecation (`datasets/_archived/`):** Moving a retired dataset to `datasets/_archived/` never breaks active rules referencing `%<name>.value`. Instead, Graft zeroes its rows on the SIEM and sets its remote description to `"Deprecated on Graft"` until you remove the rule references and delete the table remotely.
+- **Engine-Agnostic Datasets (`datasets/<name>.yaml`):** Track scanner IPs, assessment ranges, and privileged principals in a 2-block string-only YAML envelope (`metadata`, `values` of `0..1,000` literal strings) synchronized to engine lookup tables (e.g., Google SecOps Data Tables with a canonical `.value` column) via additive coexistence.
+- **Inline Auto-Expiration (`ttl:YYYY-MM-DD`):** Append `ttl:YYYY-MM-DD` inside any value's inline `#` comment. The entry stays active through `YYYY-MM-DD` (UTC); starting the next UTC day, Graft omits it and the daily scheduled deployment removes it from the target engine automatically—while preserving the line in Git as an audit trail.
+- **Safe Deprecation (`datasets/_archived/`):** Moving a retired dataset to `datasets/_archived/` never breaks active rules referencing `%<name>.value`. Instead, Graft zeroes its remote rows and sets its description to `"Deprecated on Graft"` until you remove the rule references and delete the table remotely.
 
 ```yaml
 # datasets/security_assessment_ips.yaml
@@ -82,14 +79,14 @@ values:
 ```
 
 ### 4. Multi-Track GitOps Drift Reconciliation
-Modern SIEMs run a combination of contextual lookup tables, bespoke custom rules, and vendor-managed curated detections. Graft manages all three in strict dependency order (**1. Datasets $\rightarrow$ 2. Custom Rules $\rightarrow$ 3. Managed Content**) under unified version control:
-- **Additive Dataset Synchronization:** Graft synchronizes `datasets/<name>.yaml` before rules are deployed, recreating active datasets if accidentally deleted in the SIEM console while never flagging or deleting unmanaged external SIEM tables.
-- **Custom Rule Synchronization:** Authors maintain declarative custom rules in Git (`rulesets/<engine>/custom/`). Graft calculates precise diffs between local state and live tenant APIs, automating safe creates and updates.
-- **Vendor-Managed Curated Content Control & Registration:** Manage vendor curated rule sets (`rulesets/<engine>/managed/index.yaml`) directly in code. Operators can declare deployment tiers (e.g., `PRECISE` vs `BROAD` in Google SecOps), toggle alerting states, commit declarative rule exclusions (e.g., `findingsRefinements`), and optionally register managed rules (`rulesets/<engine>/managed/<rule_name>.yaml`) to map vendor coverage into MITRE ATT&CK matrices and catalogs.
+Modern security operations combine internal SIEM detections, external CTI horizon hunting, contextual lookup tables, and vendor-managed curated rulesets. Graft reconciles all three tracks in strict dependency order (**1. Datasets $\rightarrow$ 2. Custom Rules $\rightarrow$ 3. Managed Content**) under unified version control:
+- **Additive Dataset Synchronization:** For engines supporting `DatasetPort` (such as `secops`), Graft synchronizes `datasets/<name>.yaml` before rules are deployed, recreating active datasets if accidentally deleted while never flagging or deleting unmanaged external tables.
+- **Custom Rule & Hunting Synchronization:** Authors maintain declarative custom rules in Git (`rulesets/<engine>/custom/`). Graft calculates precise diffs between local state and live tenant APIs—reconciling **Google SecOps** YARA-L 2.0 rules in-place without resetting detection history, and synchronizing **Google Threat Intelligence** YARA-X Livehunt rulesets (with 1-to-1 `metadata.tags` sync) and non-destructive Retrohunt historical corpus jobs scoped via `owner:self`.
+- **Vendor-Managed Curated Content Control & Registration:** Manage vendor curated rule sets (`rulesets/<engine>/managed/index.yaml`) directly in code (e.g., `PRECISE` vs `BROAD` deployment tiers and `findingsRefinements` exclusions in Google SecOps), and optionally register managed rules (`rulesets/<engine>/managed/<rule_name>.yaml`) to map vendor coverage into MITRE ATT&CK matrices and catalogs.
 - **Dual-Mode Drift Reconciliation:**
   - **Scoped PR Reconciliation (Default):** Evaluates only files modified in the active Git branch against tenant state, enabling lightning-fast pull request validations in CI/CD.
   - **Full Catalog Convergence (`--all`):** Scans the entire tenant catalog (on merge to `main` and daily at `00:00` UTC) to purge expired `ttl:YYYY-MM-DD` dataset entries and heal out-of-band console drift.
-- **Day 0 Brownfield Ingestion:** Teams can adopt Graft on existing SIEM instances in minutes without disruption. Running `graft <engine> pull` reverse-synchronizes live tenant custom rules and curated content into clean Git-managed envelopes (and `graft <engine> pull --target datasets` imports compatible 1-column `STRING` tables on demand).
+- **Day 0 Brownfield Ingestion:** Teams can adopt Graft on existing Google SecOps and Google Threat Intelligence tenants in minutes without disruption. Running `graft <engine> pull` reverse-synchronizes live custom rules, Livehunt/Retrohunt rulesets, and curated content into clean Git-managed envelopes.
 
 ```bash
 $ graft secops diff --env production
@@ -100,30 +97,35 @@ $ graft secops diff --env production
 === Custom Rules Diff ===
 [+] Custom rule to create: multiple_hosts_scanned
 [~] Custom rule to update: workspace_nrd_email_opened (ID: ru_12345678-abcd-ef01-2345-6789abcdef01)
-[?] Untracked custom rule on tenant: legacy_unmanaged_alert (ID: ru_98765432-feee-dcba-0000-111122223333)
 
 === Google SecOps Managed Content Diff ===
 [~] Deployment: ur_cloud_threats (PRECISE) | enabled: False -> True, alerting: False -> True
 [+] Exclusion to create: excl_cloud_functions_pipeline_sa
-[-] Exclusion to delete: excl_temp_maintenance_window
+
+$ graft gti diff --env production
+=== Custom Rules Diff ===
+[+] Custom rule to create: lh_americas_financial_malware_family_uploaded
+[~] Custom rule to update: lh_rogue_ssl_certificate_brand_impersonated (ID: 1859374620192837465)
 ```
 
 ### 5. Threat Visibility, Audit-Ready Catalogs & ATT&CK v20.0 Intelligence
 Bridge the gap between detection engineering code, CTI analysis, SOC operations, and leadership reporting:
-- **Multi-Format Detection Catalogs:** Export unified catalogs in interactive terminal tables, CSV spreadsheets, Markdown documentation (`docs/RULE_CATALOG.md`), or JSON for ingestion into security data lakes, BigQuery, Polars, or BI dashboards.
+- **Multi-Format Detection Catalogs:** Export unified catalogs across all engines in interactive terminal tables, CSV spreadsheets, Markdown documentation (`docs/RULE_CATALOG.md`), or JSON for ingestion into security data lakes, BigQuery, Polars, or BI dashboards.
 - **MITRE ATT&CK Enterprise v20.0 Matrix & CTI Intelligence (`graft mitre`):** Offline evaluation of tactics, sub-techniques (`TAxxxx:Tyyyy.zzz`), Detection Strategies (`DETxxxx`), Analytics (`ANxxxx`), Data Components (`DCxxxx`), Threat Groups (`Gxxxx`), and Mitigations (`Mxxxx`), plus 3-state gap analysis (`covered`, `partial`, `uncovered`) and one-command taxonomy upgrades (`graft mitre update`).
-- **Official Navigator Layer Generation:** Generate color-graded MITRE ATT&CK Navigator v4.5/v5.2 layer files (`exports/secops_coverage.json`) with embedded rule metadata, deployment status, optional STIX enrichments (`--enrich`), uncovered gap overlays (`--include-gaps`), and direct source links for interactive heatmap visualization in the official ATT&CK Navigator.
+- **Official Navigator Layer Generation:** Generate color-graded MITRE ATT&CK Navigator v4.5/v5.2 layer files (`exports/graft_coverage.json` or per-engine layers) with embedded rule metadata, deployment status, optional STIX enrichments (`--enrich`), uncovered gap overlays (`--include-gaps`), and direct source links for interactive heatmap visualization in the official ATT&CK Navigator.
 
 ```bash
 $ graft export catalog
-Rule Name                                 Engine  Type     Status   MITRE ATT&CK                        Owners     Reviews  Updated   
-----------------------------------------  ------  -------  -------  ----------------------------------  ---------  -------  ----------
-gcp_service_account_key_created           secops  custom   enabled  TA0003:T1098.001, TA0004:T1098.001  Joe Lopes  13       2026-10-01
-gcp_storage_bucket_public_access_granted  secops  custom   enabled  TA0001:T1078.004, TA0112:T1685      Joe Lopes  11       2026-10-01
-workspace_nrd_email_opened                secops  custom   enabled  TA0001:T1566.002                    Joe Lopes  9        2026-10-01
-gcti_breach_network_indicator_matched     secops  managed  silent   TA0011:T1071.001                    Joe Lopes  2        2026-10-01
-multiple_hosts_scanned                    secops  custom   enabled  TA0007:T1046                        Joe Lopes  1        2026-10-01
-multiple_ports_scanned                    secops  custom   enabled  TA0007:T1046                        Joe Lopes  1        2026-10-01
+Rule Name                                      Engine  Type     Status    MITRE ATT&CK                        Owners     Reviews  Updated   
+---------------------------------------------  ------  -------  --------  ----------------------------------  ---------  -------  ----------
+lh_americas_financial_malware_family_uploaded  gti     custom   enabled   TA0002:T1204.002, TA0006:T1555.003  Joe Lopes  4        2026-11-12
+lh_rogue_ssl_certificate_brand_impersonated    gti     custom   disabled  TA0005:T1036.005, TA0042:T1587.003  Joe Lopes  3        2026-11-12
+rh_corporate_secret_key_leak_swept             gti     custom   disabled  TA0006:T1552.001, TA0010:T1567.002  Joe Lopes  3        2026-11-12
+gcp_service_account_key_created                secops  custom   enabled   TA0003:T1098.001, TA0004:T1098.001  Joe Lopes  13       2026-10-01
+gcp_storage_bucket_public_access_granted       secops  custom   enabled   TA0001:T1078.004, TA0112:T1685      Joe Lopes  11       2026-10-01
+multiple_hosts_scanned                         secops  custom   enabled   TA0007:T1018, TA0043:T1595.001      Joe Lopes  3        2026-11-12
+workspace_nrd_email_opened                     secops  custom   enabled   TA0001:T1566.002                    Joe Lopes  9        2026-10-01
+gcti_breach_network_indicator_matched          secops  managed  silent    TA0011:T1071.001                    Joe Lopes  2        2026-10-01
 ```
 
 <p align="center">
@@ -139,7 +141,7 @@ Graft's documentation is organized around **three core engineering personas**:
 | Persona | Focus & Deliverables | Primary Guide |
 | :--- | :--- | :--- |
 | 🎯 **Detection Engineer / Analyst** | Authors, modifies, lints, tests, and diffs detection rules on a daily basis. Previews pull requests and consults operational runbooks. | **[Analyst Guide](docs/analysts/README.md)**<br/>📖 **[Detection Recipes Cookbook](docs/analysts/recipes.md)** |
-| 🛠️ **Platform & SecOps Engineer** | Bootstraps Graft into existing SIEM tenants, configures CI/CD pipelines, handles authentication (WIF/OIDC), and maintains production sync. | **[Operator Guide](docs/operators/README.md)**<br/>🔄 **[Day 0 Ingestion & Reverse Sync](docs/operators/adoption.md)** |
+| 🛠️ **Platform & Security Engineer** | Bootstraps Graft into existing Google Security tenants, configures CI/CD pipelines, handles authentication (WIF/OIDC & API keys), and maintains production sync. | **[Operator Guide](docs/operators/README.md)**<br/>🔄 **[Day 0 Ingestion & Reverse Sync](docs/operators/adoption.md)** |
 | 💻 **Core Developer** | Fixes bugs in core services, extends port protocols, builds new engine adapters, and enforces software architecture quality gates. | **[Developer Guide](docs/developers/README.md)**<br/>🔌 **[Pluggable Adapter Framework](docs/developers/framework.md)** |
 
 For the complete architectural overview and philosophy, visit the **[Graft Documentation Hub (docs/README.md)](docs/README.md)**.
@@ -181,18 +183,19 @@ git config core.hooksPath .githooks
 
 ### Brownfield Adoption: Fastest Path (Day 0 Ingestion)
 
-When adopting Graft on an existing SIEM instance, follow the 3-step bootstrap workflow (see [docs/operators/adoption.md](docs/operators/adoption.md) for full architectural specification):
+When adopting Graft on existing Google SecOps or Google Threat Intelligence tenants, follow the 3-step bootstrap workflow (see [docs/operators/adoption.md](docs/operators/adoption.md) for full architectural specification):
 
 ```bash
-# 1. Reverse sync existing custom rules & curated content from live tenant
+# 1. Reverse-sync existing detections from live Google Security tenants
 uv run graft secops pull --env production
+uv run graft gti pull --env production
 
-# 2. Validate all imported envelopes against schemas & MITRE matrix
+# 2. Validate all imported envelopes against schemas & MITRE ATT&CK matrix
 uv run graft lint
 
 # 3. Commit baseline and declare Git as authoritative Source of Truth
 git add rulesets/
-git commit -m "secops: import production detection baseline"
+git commit -m "rulesets: import secops and gti detection baselines"
 git push origin main
 ```
 
@@ -205,6 +208,7 @@ graft lint
 
 # Lint a specific rule or dataset file
 graft lint rulesets/secops/custom/workspace_nrd_email_opened.yaml
+graft lint rulesets/gti/custom/lh_rogue_ssl_certificate_brand_impersonated.yaml
 graft lint datasets/known_scanner_ips.yaml
 
 # Output structured JSON diagnostics for CI/CD pipelines
@@ -215,8 +219,9 @@ graft --json lint
 ```bash
 # Bootstrap a new custom detection rule (creates 5-block envelope with schema defaults)
 graft secops new powershell_payload_downloaded
+graft gti new lh_brand_sso_portal_impersonated
 # or using the engine-agnostic router:
-graft new rule powershell_payload_downloaded --engine secops
+graft new rule rh_leaked_cloud_credentials_swept --engine gti
 
 # Bootstrap a new reusable string dataset (creates 2-block envelope in datasets/<name>.yaml)
 graft new dataset known_scanner_ips
@@ -225,15 +230,15 @@ graft new dataset known_scanner_ips
 graft secops new gcti_breach_network_indicator_matched --managed 433faf9e-4d51-f284-c35b-009528ecff05
 
 # Bootstrap an entirely new detection engine adapter (code, schema, rules, tests)
-graft new engine sentinel
+graft new engine wiz
 ```
 
-Graft also includes repository-native AI agent skills under [`.agents/skills/`](.agents/skills/) for composable rule, dataset, and CTI coverage engineering (see [Rule Authoring Guide](docs/analysts/rule_authoring.md)):
+Graft also includes repository-native AI agent skills under [`.agents/skills/`](.agents/skills/) for composable rule, dataset, and CTI coverage engineering across `secops` and `gti` (see [Rule Authoring Guide](docs/analysts/rule_authoring.md)):
 - `/scaffold-dataset <context_or_path>`: Runs `graft new dataset` and populates `metadata` and `values` for a reusable string dataset.
-- `/scaffold-rule <context_or_path>`: Runs `graft new rule`, inspects MITRE analytics via `graft --json mitre inspect`, and populates `metadata` and `runbook` while leaving `logic`, `deployment`, and `tests` untouched.
-- `/scaffold-tests <rule_path>`: Parses authored `logic` predicates to generate positive (`match_*`) and negative (`ignore_*`) synthetic event vectors in `tests`.
-- `/review-rule [path_or_dir]`: Runs `graft lint` and performs a read-only 5-block engineering audit (including `%<dataset>.value` cross-checks and MITRE analytic alignment).
-- `/analyze-coverage [scope_or_question]`: Chains `graft --json mitre coverage`, `gaps`, and `inspect` to audit procedural depth (TT vs. TTP), surface cross-perimeter blind spots, and produce prioritized detection blueprints.
+- `/scaffold-rule <context_or_path>`: Runs `graft new rule` (`--engine secops` or `--engine gti`), inspects MITRE analytics via `graft --json mitre inspect`, and populates `metadata` and `runbook` while leaving `logic`, `deployment`, and `tests` untouched.
+- `/scaffold-tests <rule_path>`: Parses authored `logic` predicates (YARA-L 2.0 or YARA-X) to generate positive (`match_*`) and negative (`ignore_*`) synthetic event vectors in `tests`.
+- `/review-rule [path_or_dir]`: Runs `graft lint` and performs a read-only 5-block engineering audit across `secops` and `gti` rules (including `%<dataset>.value` cross-checks, Livehunt/Retrohunt deployment schemas, and MITRE analytic alignment).
+- `/analyze-coverage [scope_or_question]`: Chains `graft --json mitre coverage`, `gaps`, and `inspect` to audit procedural depth (TT vs. TTP), surface cross-perimeter and multi-engine blind spots, and produce prioritized detection blueprints.
 
 #### 3. Engine Introspection, Offline Rendering, Pre-Merge Verification & Replay Testing
 ```bash
@@ -241,7 +246,7 @@ Graft also includes repository-native AI agent skills under [`.agents/skills/`](
 graft engines
 graft --json engines
 
-# Synthesize engine-native query text (e.g. full YARA-L or YARA-X rule with meta:) completely offline
+# Synthesize engine-native query text (full YARA-L 2.0 or YARA-X rule with meta:) completely offline
 graft secops render rulesets/secops/custom/workspace_nrd_email_opened.yaml
 graft gti render rulesets/gti/custom/lh_rogue_ssl_certificate_brand_impersonated.yaml
 
@@ -255,49 +260,53 @@ graft gti test
 
 # Test only rules modified in the current Git branch or working tree
 graft secops test --changed-only
+graft gti test --changed-only
 
 # Enforce hard failure if staging credentials are missing (used in strict CI)
 graft secops test --require-staging
+graft gti test --require-staging
 ```
 
 #### 4. GitOps Drift Detection & State Reconciliation
 ```bash
 # Preview changes for datasets and rules modified in current branch (Scoped Reconciliation: default)
 graft secops diff --env production
+graft gti diff --env production
 
 # Scan entire tenant catalog for out-of-band console drift (Full Catalog Reconciliation: --all)
 graft secops diff --all --env production
+graft gti diff --all --env production
 
-# Apply scoped branch changes to tenant in order: Datasets -> Custom Rules -> Managed Content
+# Apply scoped branch changes to target tenant
 graft secops apply --env production
+graft gti apply --env production
 
-# Force complete tenant convergence back to Git state, healing any console drift (Full Catalog Reconciliation)
+# Force complete tenant convergence back to Git state, healing any console drift
 graft secops apply --all --env production
+graft gti apply --all --env production
 
-# Target only datasets, custom rules, or vendor-managed curated content
+# Target specific tracks on multi-track engines (datasets, custom rules, or managed content)
 graft secops diff --target datasets --env production
-graft secops diff --target custom --env production
 graft secops apply --target managed --env production
 ```
 
 #### 5. Reverse Synchronization (Tenant Ingestion)
 ```bash
-# Reverse-sync live tenant custom rules and managed curated manifest into local repo
+# Reverse-sync live custom rules and managed content from Google SecOps or GTI (owner:self)
 graft secops pull --env production
+graft gti pull --env production
 
-# Reverse-sync only custom rules (with overwrite protection or --force)
+# Migrate colleague-owned GTI Livehunt rulesets matching a tag into Git envelopes
+GRAFT_GTI_FILTER="tag:migration" graft gti pull --env production
+
+# Reverse-sync only custom rules (with overwrite protection or --force) or opt-in datasets
 graft secops pull --target custom --env production --force
-
-# Opt-in reverse-sync for compatible 1-column STRING Data Tables (originalColumn == "value")
 graft secops pull --target datasets --env production
-
-# Granular reverse-sync for vendor-curated rule sets only
-graft secops managed pull --env production
 ```
 
 #### 6. MITRE Intelligence, Threat Matrix, Dataset & Catalog Exports
 ```bash
-# Render on-screen detection catalog table (default format; metadata alias supported)
+# Render on-screen detection catalog table across all engines (metadata alias supported)
 graft export catalog
 
 # Export active reusable datasets (after UTC ttl:YYYY-MM-DD filtering) as table, CSV, or JSON
@@ -310,8 +319,10 @@ graft mitre gaps --platform IaaS --top 10
 graft mitre inspect T1098.001 --analytics --platform IaaS
 graft mitre update --check
 
-# Generate official MITRE ATT&CK Enterprise Navigator layer (custom color gradient; matrix/mitre aliases supported)
+# Generate official MITRE ATT&CK Enterprise Navigator layers (unified or per-engine)
+graft export navigator --out exports/graft_coverage.json
 graft export navigator --engine secops --color "#4285F4" --out exports/secops_coverage.json
+graft export navigator --engine gti --color "#34A853" --out exports/gti_coverage.json
 
 # Export detection catalog for audits and documentation pipelines
 graft export catalog --format csv --out exports/detection_catalog.csv
@@ -328,27 +339,21 @@ graft export catalog --format json
 > - **Peer Review Scrutiny:** Total git commit count across renames (`review_count`) and unique contributor count (`contributor_count`).
 > - **Operational Ownership & Context:** Accountable rule owners (`owners`) and bus-factor indicator (`owner_count`), unified ATT&CK mappings (`mitre_attack: TAxxxx:Tyyyy.zzz`), and engine-evaluated deployment health (`status: enabled | silent | disabled`).
 >
-> Operators can pipe these indicators into data pipelines (e.g. Polars, BigQuery, Google Sheets, BI dashboards) and combine them with live operational telemetry from the SIEM (alert volume, true-positive precision, mean time to triage) to assess true detection maturity objectively.
-
+> Operators can pipe these indicators into data pipelines (e.g. Polars, BigQuery, Google Sheets, BI dashboards) and combine them with live operational telemetry (alert volume, true-positive precision, mean time to triage) to assess true detection maturity objectively.
 >
 > **Rule & Dataset Decommissioning & Archiving:**
-> When retiring a rule or dataset, move it to `rulesets/<engine>/_archived/` or `datasets/_archived/` rather than immediately deleting it. Rules in `_archived/` are excluded from loading, linting, matrix exports, and sync. Datasets in `datasets/_archived/` are skipped by `graft lint` and automatically emptied (`0` rows) and marked `"Deprecated on Graft"` on the SIEM during `diff`/`apply`, ensuring rules referencing `%<name>.value` never break before you remove the reference and delete the remote table.
+> When retiring a rule or dataset, move it to `rulesets/<engine>/_archived/` or `datasets/_archived/` rather than immediately deleting it. Rules in `_archived/` are excluded from loading, linting, matrix exports, and sync. Datasets in `datasets/_archived/` are skipped by `graft lint` and automatically emptied (`0` rows) and marked `"Deprecated on Graft"` during `diff`/`apply`, ensuring rules referencing `%<name>.value` never break before you remove the reference and delete the remote table.
 
 ---
 
 ## Platform Architecture & Governance
 
-Comprehensive documentation tracks for Detection Engineers, SecOps Operators, and Core Developers are available in the **[Graft Documentation Hub (docs/README.md)](docs/README.md)**.
+Comprehensive documentation tracks for Detection Engineers, Platform Operators, and Core Developers are available in the **[Graft Documentation Hub (docs/README.md)](docs/README.md)**.
 
 Operational directives, strict stdlib-first constraints, coding standards, and agent guidelines are documented in **[AGENTS.md](AGENTS.md)**.
 
 ---
 
-## License & Disclaimer
+## License
 
-### License
 This project is licensed under the **Apache License 2.0**. See the [LICENSE](LICENSE) file for full license terms.
-
-### Disclaimer
-> [!WARNING]
-> Graft is personal research and not an officially supported Google product. All code and configurations are provided as-is without warranty or official SLA.

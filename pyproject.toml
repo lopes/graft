@@ -5,7 +5,7 @@ build-backend = "uv_build"
 [project]
 name = "graft"
 version = "0.1.0"
-description = "Extensible Detection-as-Code platform for Google SecOps and modern enterprise security operations"
+description = "Unified Detection-as-Code engine for Google Security and beyond."
 readme = "README.md"
 requires-python = ">=3.13"
 license = "Apache-2.0"
@@ -14,10 +14,14 @@ authors = [
 ]
 keywords = [
     "detection-as-code",
+    "google-security",
     "secops",
     "chronicle",
+    "gti",
+    "virustotal",
     "siem",
     "yara-l",
+    "yara-x",
     "mitre-attack",
     "gitops",
 ]

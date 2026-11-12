@@ -381,6 +381,10 @@ When resolving a bearer token in `SecOpsAuthResolver`, Graft evaluates explicit 
 
 Google SecOps provides Curated Rule Sets—vendor-managed detection packages maintained by Google Cloud Threat Intelligence (GCTI). Graft manages the entire curated content lifecycle declaratively through a single consolidated manifest: [`rulesets/secops/managed/index.yaml`](../../../../../rulesets/secops/managed/index.yaml), and supports optional registration of individual curated rulesets in `rulesets/secops/managed/<rule_name>.yaml` for MITRE ATT&CK coverage and SOC runbooks.
 
+> [!NOTE]
+> **Public Curated Catalog Metadata vs. Private Operational State:**
+> The vendor-managed detection catalog metadata tracked in `rulesets/secops/managed/index.yaml` (category names, ruleset titles, descriptions, and catalog UUIDs) represents standard vendor content that is publicly published in official Google Cloud documentation (see [Google SecOps Curated Detections](https://docs.cloud.google.com/chronicle/docs/detection/curated-detections) and [Review Curated Detection Categories](https://docs.cloud.google.com/chronicle/docs/detection/cloud-threats-category)). However, live production deployment states (`enabled`, `alerting`) and operational exclusions (`findingsRefinements`) expose monitoring blind spots and internal entity identities (hostnames, IP ranges, usernames, service accounts) and must always be kept in a private repository.
+
 ```mermaid
 flowchart TD
     MANIFEST["<b>rulesets/secops/managed/index.yaml</b>"]
