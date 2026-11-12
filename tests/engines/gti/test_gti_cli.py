@@ -368,3 +368,26 @@ tests:
     out = json.loads(capsys.readouterr().out)
     assert out["success"] is False
     assert out["failed"] == 1
+
+
+def test_gti_workflow_steps_and_cloud_gates() -> None:
+    import yaml
+
+    pr_data = yaml.safe_load(Path(".github/workflows/pr-validation.yml").read_text("utf-8"))
+    jobs = pr_data.get("jobs", {})
+    assert "gti-cloud-gates" in jobs
+    gti_job = jobs["gti-cloud-gates"]
+    assert "dependabot[bot]" in str(gti_job.get("if", ""))
+    pr_runs = [s.get("run", "") for j in jobs.values() for s in j.get("steps", []) if "run" in s]
+    assert any("graft gti verify" in r for r in pr_runs)
+    assert any("graft gti test" in r for r in pr_runs)
+    assert any("graft gti diff" in r for r in pr_runs)
+
+    deploy_data = yaml.safe_load(Path(".github/workflows/deploy-production.yml").read_text("utf-8"))
+    deploy_runs = [
+        s.get("run", "")
+        for j in deploy_data.get("jobs", {}).values()
+        for s in j.get("steps", [])
+        if "run" in s
+    ]
+    assert any("graft gti apply --env production --all" in r for r in deploy_runs)

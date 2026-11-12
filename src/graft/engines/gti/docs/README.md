@@ -226,7 +226,53 @@ Graft submits `POST /api/v3/intelligence/retrohunt_jobs`, polls `GET /api/v3/int
 
 ---
 
-## 6. CLI Operations Reference
+## 6. Local Workstation vs. GitHub Actions CI/CD Configuration
+
+Graft follows a simple two-tier credential model for GTI: **a local git-ignored `.env` file for workstation development** and **a GitHub Actions Repository Secret (`GRAFT_GTI_API_KEY`) for automated CI/CD**.
+
+### 1. Provision the GTI Automation Account & Copy Its API Key
+1. In your Google Threat Intelligence Organization / Group, create a dedicated **standard (non-admin) GTI User Account** for Graft (e.g., `graft-automation@example.com`). In a single-user lab or evaluation tenant where creating a second account is not possible, use your non-admin user account with `GRAFT_GTI_FILTER="owner:self"` (the default).
+2. Log in as that GTI account, open your user profile menu $\rightarrow$ **API Key**, and copy the 64-character hexadecimal API key.
+
+### 2. Local Workstation Configuration (`src/graft/engines/gti/.env`)
+For local CLI commands (`graft gti verify`, `graft gti test`, `graft gti diff`, `graft gti apply`, `graft gti pull`), store your key in `src/graft/engines/gti/.env` (automatically loaded by Graft and ignored by Git):
+
+```bash
+cp src/graft/engines/gti/.env.example src/graft/engines/gti/.env
+```
+
+Edit `src/graft/engines/gti/.env`:
+
+```bash
+GRAFT_GTI_API_KEY="your-64-char-gti-api-key"
+GRAFT_GTI_FILTER="owner:self"
+# Optional: comma-separated recipients for Livehunt / Retrohunt match notifications
+# GRAFT_GTI_NOTIFICATION_EMAILS="soc-alerts@example.com"
+```
+
+### 3. GitHub Actions CI/CD Configuration (`.github/workflows/`)
+Graft's [`.github/workflows/pr-validation.yml`](../../../../../.github/workflows/pr-validation.yml) (`gti-cloud-gates`) and [`.github/workflows/deploy-production.yml`](../../../../../.github/workflows/deploy-production.yml) automatically activate live GTI server-side YARA-X compilation (`graft gti verify`), replay testing (`graft gti test`), PR reconciliation plans (`graft gti diff`), and mainline synchronization (`graft gti apply --env production --all`) as soon as `GRAFT_GTI_API_KEY` is added to your repository secrets:
+
+```bash
+# 1. Required: Store the GTI API key as an encrypted GitHub Actions Repository Secret
+gh secret set GRAFT_GTI_API_KEY --repo <owner>/<repo>
+
+# 2. Optional: Set discovery filter (defaults to "owner:self" if omitted)
+gh variable set GRAFT_GTI_FILTER --body "owner:self" --repo <owner>/<repo>
+
+# 3. Optional: Set default notification emails for Livehunt/Retrohunt alerts
+gh variable set GRAFT_GTI_NOTIFICATION_EMAILS --body "soc-alerts@example.com" --repo <owner>/<repo>
+```
+
+| GitHub Setting | Type | Name | Required? | Purpose |
+| :--- | :---: | :--- | :---: | :--- |
+| **Secrets** (`Settings -> Secrets and variables -> Actions -> Secrets`) | `Secret` | `GRAFT_GTI_API_KEY` | **Yes** (for cloud gates) | Authenticates `gti-cloud-gates` on PRs (`verify`, `test`, `diff`) and `deploy-production` on `main` (`apply --all`). If unset, CI still runs offline schema linting and Mode 1 synthetic YARA-X unit tests (`graft gti test`) while skipping live GTI API steps. |
+| **Variables** (`Settings -> Secrets and variables -> Actions -> Variables`) | `Variable` | `GRAFT_GTI_FILTER` | Optional | Remote ruleset discovery scope (`owner:self` default, `tag:<tag>`, or `all`). |
+| **Variables** (`Settings -> Secrets and variables -> Actions -> Variables`) | `Variable` | `GRAFT_GTI_NOTIFICATION_EMAILS` | Optional | Default comma-separated email recipients when a rule omits `deployment.notification_emails`. |
+
+---
+
+## 7. CLI Operations Reference
 
 ```bash
 # 1. Scaffold a new GTI custom rule

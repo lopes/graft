@@ -80,11 +80,16 @@ Runs on standard `ubuntu-latest` without requiring cloud credentials:
 - **Gate 5 (Rules, Datasets & Schemas):** `uv run graft lint` validates datasets (`datasets/*.yaml`, including `ttl:YYYY-MM-DD` inline comment directives), custom rules (`%<name>.value` cross-references), and managed manifests against Draft 2020-12 schemas and MITRE ATT&CK technique IDs.
 - **Advisory Upstream MITRE Release Check (Non-Blocking):** `uv run graft mitre update --check || true` checks the upstream MITRE ATT&CK Enterprise index and surfaces an informational notice when a newer ATT&CK release is available without failing offline builds.
 
-### 2. Cloud Gates (`secops-cloud-gates`)
-Requires WIF credentials and runs only on trusted internal branches:
-- **Gate 6 (Compiler Dry-Run):** `uv run graft secops verify --env staging` invokes Chronicle's `:verifyRuleText` endpoint to ensure YARA-L logic compiles cleanly against the live tenant schema without saving or deploying anything.
-- **Gate 7 (Synthetic Replay):** `uv run graft secops test` runs synthetic test fixtures against staging infrastructure (or non-alerting quarantine).
-- **Gate 8 (Scoped Reconciliation Diff):** `uv run graft secops diff --env production` computes a Scoped diff of datasets and rules modified in the branch and posts the plan directly to the PR discussion.
+### 2. Cloud Gates (`secops-cloud-gates` & `gti-cloud-gates`)
+Run on trusted internal branches when engine credentials are configured in GitHub Secrets/Variables:
+- **Google SecOps (`secops-cloud-gates`, via GCP WIF):**
+  - **Gate 6 (Compiler Dry-Run):** `uv run graft secops verify --env staging` invokes Chronicle's `:verifyRuleText` endpoint to ensure YARA-L logic compiles cleanly against the live tenant schema without saving or deploying anything.
+  - **Gate 7 (Synthetic Replay):** `uv run graft secops test` runs synthetic test fixtures against staging infrastructure (or non-alerting quarantine).
+  - **Gate 8 (Scoped Reconciliation Diff):** `uv run graft secops diff --env production` computes a scoped diff of datasets and rules modified in the branch and posts the plan directly to the PR discussion.
+- **Google Threat Intelligence (`gti-cloud-gates`, active when `secrets.GRAFT_GTI_API_KEY` is set):**
+  - **Gate 6 (Server-Side YARA-X Dry-Run):** `uv run graft gti verify` validates modified rules against GTI's server-side YARA-X compiler via a transient disabled ruleset.
+  - **Gate 7 (Synthetic & Retrohunt Replay):** `uv run graft gti test` executes synthetic unit vectors and any on-demand `mode: "retrohunt"` corpus checks.
+  - **Gate 8 (Scoped Reconciliation Diff):** `uv run graft gti diff --env production` computes the scoped Livehunt/Retrohunt plan (isolated to `owner:self` by default) and posts it to the PR.
 
 ---
 
@@ -146,6 +151,7 @@ Graft pipelines authenticate to downstream SIEM and cloud APIs using short-lived
    - **Repository Variables (`${{ vars.* }}`):** Store non-sensitive tenant routing coordinates (e.g., `GRAFT_<ENGINE>_PROD_*` and `GRAFT_<ENGINE>_STAGING_*`).
 4. **Engine-Specific Provisioning Runbooks:**
    - For step-by-step `gcloud` commands to provision Google Cloud Workload Identity Federation, service accounts, and GitHub Actions secrets/variables for Google SecOps, see the **[Google SecOps Engine Setup & Operations Guide](../../src/graft/engines/secops/docs/README.md)**.
+   - For provisioning a dedicated non-admin GTI User Account, local `src/graft/engines/gti/.env`, and GitHub Actions `GRAFT_GTI_API_KEY` secret for Google Threat Intelligence, see the **[Google Threat Intelligence (`gti`) Engine Setup & Operations Guide](../../src/graft/engines/gti/docs/README.md)**.
 
 ---
 
