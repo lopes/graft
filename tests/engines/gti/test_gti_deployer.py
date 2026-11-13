@@ -1,20 +1,23 @@
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any
 from unittest.mock import patch
 
 import pytest
 
+from graft.core.loader import load_rule_from_yaml
 from graft.core.models.rule import (
     BaseDeploymentConfig,
     RuleEnvelope,
     RuleMetadata,
     Runbook,
 )
+from graft.engines.gti.adapter import GTIAdapter
 from graft.engines.gti.client import GTIApiError, GTIClient
 from graft.engines.gti.compiler import synthesize_yara_rule
 from graft.engines.gti.config import GTIConfig
-from graft.engines.gti.deployer import GTIDeployerAdapter
+from graft.engines.gti.deployer import GTIDeployerAdapter, normalize_gti_deployment
 
 
 def _build_rule() -> RuleEnvelope:
@@ -391,3 +394,48 @@ def test_deployer_handles_nullable_json_api_attributes_and_reraises_retrohunt_50
         pytest.raises(GTIApiError, match="Internal server error"),
     ):
         deployer.list_rules()
+
+
+def test_gti_adapter_and_deployer_default_to_disabled_when_enabled_omitted() -> None:
+    cfg = GTIConfig(api_key="SYNTHETIC_TEST_KEY_000000")
+    client = GTIClient(cfg, base_delay_seconds=0.0)
+    deployer = GTIDeployerAdapter(client=client)
+    adapter = GTIAdapter()
+
+    base = _build_rule()
+    omitted_enabled_rule = RuleEnvelope(
+        metadata=base.metadata,
+        logic=base.logic,
+        deployment=BaseDeploymentConfig.from_dict(
+            {
+                "type": "livehunt",
+                "subtype": "domain",
+                "daily_limit": 100,
+            }
+        ),
+        runbook=base.runbook,
+    )
+
+    assert adapter.resolve_deployment_status(omitted_enabled_rule) == "disabled"
+    assert normalize_gti_deployment(omitted_enabled_rule)["enabled"] is False
+    attrs = deployer._build_livehunt_attributes(omitted_enabled_rule)
+    assert attrs["enabled"] is False
+
+
+def test_curated_gti_rules_are_disabled_by_default_and_rogue_ssl_has_gatekeeper() -> None:
+    repo_root = Path(__file__).resolve().parents[3]
+    gti_custom_dir = repo_root / "rulesets" / "gti" / "custom"
+    rule_files = sorted(gti_custom_dir.glob("*.yaml"))
+    assert len(rule_files) >= 6
+
+    for rule_path in rule_files:
+        rule = load_rule_from_yaml(rule_path)
+        assert rule.deployment.get("enabled") is False, (
+            f"Expected {rule_path.name} to be disabled by default in Git"
+        )
+
+    rogue_ssl = load_rule_from_yaml(
+        gti_custom_dir / "lh_rogue_ssl_certificate_brand_impersonated.yaml"
+    )
+    assert "vt.net.domain.new_domain" in rogue_ssl.logic
+    assert "vt.net.domain.gti_assessment.verdict.value" in rogue_ssl.logic

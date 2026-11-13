@@ -21,8 +21,19 @@ logic: |
   import "vt"
 
   condition:
-    // Exclude legitimate ACME Financial corporate root domain
+    // Gatekeeper: newly observed external domain with a GTI malicious/suspicious verdict or AV detection
+    vt.net.domain.new_domain and
     vt.net.domain.root != "acme.com" and
+    (
+      (
+        defined vt.net.domain.gti_assessment.verdict.value and
+        (
+          vt.net.domain.gti_assessment.verdict.value == vt.GtiVerdict.VERDICT_MALICIOUS or
+          vt.net.domain.gti_assessment.verdict.value == vt.GtiVerdict.VERDICT_SUSPICIOUS
+        )
+      ) or
+      (defined vt.net.domain.analysis_stats.malicious and vt.net.domain.analysis_stats.malicious >= 1)
+    ) and
     defined vt.net.domain.https_certificate.subject.common_name and
     (
       // Match lookalike domain names or X.509 certificate Subject CN / Org + SAN spoofing ACME
@@ -44,9 +55,9 @@ deployment:
 
 runbook:
   context: |
-    Before launching credential-harvesting or Adversary-in-the-Middle (AiTM) phishing campaigns against ACME Financial (`acme.com`) customers and employees, threat actors (`G0016` APT29, `G0032` Lazarus Group, and financial phishing operators) provision X.509 SSL/TLS certificates (`T1587.003`) for lookalike domains (`T1036.005`) so browsers render a trusted HTTPS padlock. This `subtype: "domain"` Livehunt rule inspects newly observed external domains (`vt.net.domain.root != "acme.com"`) whose HTTPS certificate (`vt.net.domain.https_certificate`) contains `"acme"` as a word boundary in `subject.common_name`, `vt.net.domain.raw`, or `subject.organization` correlated with `subject_alternative_name`. Requiring SAN correlation when matching `subject.organization` prevents false positives on multi-tenant CDN certificates. Legitimate third-party SaaS partners or marketing microsites hosted outside `acme.com` may occasionally trigger matches and should be verified against ACME's sanctioned vendor domain inventory.
+    Before launching credential-harvesting or Adversary-in-the-Middle (AiTM) phishing campaigns against ACME Financial (`acme.com`) customers and employees, threat actors (`G0016` APT29, `G0032` Lazarus Group, and financial phishing operators) provision X.509 SSL/TLS certificates (`T1587.003`) for lookalike domains (`T1036.005`) so browsers render a trusted HTTPS padlock. This `subtype: "domain"` Livehunt rule inspects newly observed external domains (`vt.net.domain.new_domain` and `vt.net.domain.root != "acme.com"`) carrying a GTI Malicious/Suspicious verdict (`VERDICT_MALICIOUS` or `VERDICT_SUSPICIOUS`) or AV detection (`analysis_stats.malicious >= 1`) whose HTTPS certificate (`vt.net.domain.https_certificate`) contains `"acme"` as a word boundary in `subject.common_name`, `vt.net.domain.raw`, or `subject.organization` correlated with `subject_alternative_name`. Requiring a threat verdict gatekeeper and SAN correlation prevents broad noise across benign Let's Encrypt ACME protocol subdomains and multi-tenant CDN certificates.
   triage: |
-    1. Inspect `vt.net.domain.raw`, `vt.net.domain.root`, and the full X.509 certificate details (`https_certificate.subject.common_name`, `subject.organization`, `issuer`, `subject_alternative_name`, and serial number) in Google Threat Intelligence.
+    1. Inspect `vt.net.domain.raw`, `vt.net.domain.root`, `vt.net.domain.gti_assessment`, and the full X.509 certificate details (`https_certificate.subject.common_name`, `subject.organization`, `issuer`, `subject_alternative_name`, and serial number) in Google Threat Intelligence.
     2. Check passive DNS (`A`, `AAAA`, `CNAME`, `MX` records), WHOIS registration date, and ASN hosting provider to determine whether the domain is newly staged adversary infrastructure or an authorized ACME vendor domain.
     3. Query ACME Financial's email gateway, DNS resolver logs, and proxy telemetry (`DC0078` Network Traffic Flow, `DC0082` Network Connection Creation) for any inbound messages or outbound connections referencing `vt.net.domain.raw`.
   response: |
@@ -56,13 +67,15 @@ runbook:
 
 tests:
   - id: "match_rogue_domain_with_acme_ssl_common_name"
-    description: "External domain presenting an HTTPS certificate with ACME in Subject Common Name triggers a match"
+    description: "Newly observed malicious external domain presenting an HTTPS certificate with ACME in Subject Common Name triggers a match"
     expect: 1
     events:
       - timestamp: "2026-10-15T12:00:00Z"
         payload:
+          vt.net.domain.new_domain: true
           vt.net.domain.root: "login-acme-wealth.test"
           vt.net.domain.raw: "sso.login-acme-wealth.test"
+          vt.net.domain.gti_assessment.verdict.value: "vt.GtiVerdict.VERDICT_MALICIOUS"
           vt.net.domain.https_certificate.subject.common_name: "sso.acme.com"
           vt.net.domain.https_certificate.subject.organization: "ACME Financial Corp"
           vt.net.domain.https_certificate.subject_alternative_name:
@@ -73,9 +86,26 @@ tests:
     events:
       - timestamp: "2026-10-15T12:05:00Z"
         payload:
+          vt.net.domain.new_domain: true
           vt.net.domain.root: "acme.com"
           vt.net.domain.raw: "sso.acme.com"
+          vt.net.domain.gti_assessment.verdict.value: "vt.GtiVerdict.VERDICT_MALICIOUS"
           vt.net.domain.https_certificate.subject.common_name: "sso.acme.com"
           vt.net.domain.https_certificate.subject.organization: "ACME Financial Corp"
           vt.net.domain.https_certificate.subject_alternative_name:
             - "sso.acme.com"
+  - id: "ignore_benign_external_domain_without_threat_verdict"
+    description: "Benign external domain lacking a GTI malicious/suspicious verdict or AV detection is excluded"
+    expect: 0
+    events:
+      - timestamp: "2026-10-15T12:10:00Z"
+        payload:
+          vt.net.domain.new_domain: true
+          vt.net.domain.root: "acme-staging.example.org"
+          vt.net.domain.raw: "acme-staging.example.org"
+          vt.net.domain.gti_assessment.verdict.value: "vt.GtiVerdict.VERDICT_HARMLESS"
+          vt.net.domain.analysis_stats.malicious: 0
+          vt.net.domain.https_certificate.subject.common_name: "acme-staging.example.org"
+          vt.net.domain.https_certificate.subject.organization: "Example Org"
+          vt.net.domain.https_certificate.subject_alternative_name:
+            - "acme-staging.example.org"
