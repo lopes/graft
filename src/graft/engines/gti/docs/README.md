@@ -327,7 +327,18 @@ logic: |
   import "vt"
 
   condition:
+    vt.net.domain.new_domain and
     vt.net.domain.root != "acme.com" and
+    (
+      (
+        defined vt.net.domain.gti_assessment.verdict.value and
+        (
+          vt.net.domain.gti_assessment.verdict.value == vt.GtiVerdict.VERDICT_MALICIOUS or
+          vt.net.domain.gti_assessment.verdict.value == vt.GtiVerdict.VERDICT_SUSPICIOUS
+        )
+      ) or
+      (defined vt.net.domain.analysis_stats.malicious and vt.net.domain.analysis_stats.malicious >= 1)
+    ) and
     defined vt.net.domain.https_certificate.subject.common_name and
     (
       vt.net.domain.raw matches /\bacme\b/i or
@@ -358,8 +369,19 @@ rule lh_rogue_ssl_certificate_brand_impersonated {
     tags = "acme, phishing, tls, x509"
 
   condition:
-    // Exclude legitimate ACME Financial corporate root domain
+    // Gatekeeper: newly observed external domain with a GTI malicious/suspicious verdict or AV detection
+    vt.net.domain.new_domain and
     vt.net.domain.root != "acme.com" and
+    (
+      (
+        defined vt.net.domain.gti_assessment.verdict.value and
+        (
+          vt.net.domain.gti_assessment.verdict.value == vt.GtiVerdict.VERDICT_MALICIOUS or
+          vt.net.domain.gti_assessment.verdict.value == vt.GtiVerdict.VERDICT_SUSPICIOUS
+        )
+      ) or
+      (defined vt.net.domain.analysis_stats.malicious and vt.net.domain.analysis_stats.malicious >= 1)
+    ) and
     defined vt.net.domain.https_certificate.subject.common_name and
     (
       // Match lookalike domain names or X.509 certificate Subject CN / Org + SAN spoofing ACME
@@ -398,13 +420,15 @@ Evaluates `vt.net.*`, `vt.metadata.*`, `vt.behaviour.*`, `filesize` (including `
 ```yaml
 tests:
   - id: "match_rogue_domain_with_acme_ssl_common_name"
-    description: "External domain presenting an HTTPS certificate with ACME in Subject Common Name triggers a match"
+    description: "Newly observed malicious external domain presenting an HTTPS certificate with ACME in Subject Common Name triggers a match"
     expect: 1
     events:
       - timestamp: "2026-10-15T12:00:00Z"
         payload:
+          vt.net.domain.new_domain: true
           vt.net.domain.root: "login-acme-wealth.test"
           vt.net.domain.raw: "sso.login-acme-wealth.test"
+          vt.net.domain.gti_assessment.verdict.value: "vt.GtiVerdict.VERDICT_MALICIOUS"
           vt.net.domain.https_certificate.subject.common_name: "sso.acme.com"
           vt.net.domain.https_certificate.subject.organization: "ACME Financial Corp"
           vt.net.domain.https_certificate.subject_alternative_name:

@@ -168,7 +168,15 @@ def test_gti_client_redacts_api_key_in_user_resolution_error_path() -> None:
 
     def fake_urlopen(req: Any, timeout: float = 30.0) -> _FakeResponse:
         err_body = json.dumps(
-            {"error": {"code": "NotAllowedError", "message": "Invalid API key"}}
+            {
+                "error": {
+                    "code": "NotAllowedError",
+                    "message": (
+                        "Invalid API key SYNTHETIC_TEST_KEY_000000 "
+                        "on /users/SYNTHETIC_TEST_KEY_000000"
+                    ),
+                }
+            }
         ).encode("utf-8")
         raise urllib.error.HTTPError(
             req.full_url, 401, "Unauthorized", Message(), io.BytesIO(err_body)

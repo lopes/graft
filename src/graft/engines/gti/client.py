@@ -196,6 +196,9 @@ class GTIClient:
                 except json.JSONDecodeError:
                     pass
 
+                if self._config.api_key:
+                    err_msg = err_msg.replace(self._config.api_key, "<self>")
+
                 raise GTIApiError(
                     message=err_msg,
                     status_code=status_code,

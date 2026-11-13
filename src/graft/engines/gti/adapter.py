@@ -70,7 +70,7 @@ class GTIAdapter(EngineAdapter):
     ) -> str:
         if rule.is_managed:
             return "disabled"
-        if not bool(rule.deployment.get("enabled", True)):
+        if not bool(rule.deployment.get("enabled", False)):
             return "disabled"
         emails = rule.deployment.get("notification_emails")
         if isinstance(emails, (list, tuple)) and len(emails) == 0:

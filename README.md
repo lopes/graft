@@ -118,7 +118,7 @@ Bridge the gap between detection engineering code, CTI analysis, SOC operations,
 $ graft export catalog
 Rule Name                                      Engine  Type     Status    MITRE ATT&CK                        Owners     Reviews  Updated   
 ---------------------------------------------  ------  -------  --------  ----------------------------------  ---------  -------  ----------
-lh_americas_financial_malware_family_uploaded  gti     custom   enabled   TA0002:T1204.002, TA0006:T1555.003  Joe Lopes  4        2026-11-12
+lh_americas_financial_malware_family_uploaded  gti     custom   disabled  TA0002:T1204.002, TA0006:T1555.003  Joe Lopes  4        2026-11-12
 lh_rogue_ssl_certificate_brand_impersonated    gti     custom   disabled  TA0005:T1036.005, TA0042:T1587.003  Joe Lopes  3        2026-11-12
 rh_corporate_secret_key_leak_swept             gti     custom   disabled  TA0006:T1552.001, TA0010:T1567.002  Joe Lopes  3        2026-11-12
 gcp_service_account_key_created                secops  custom   enabled   TA0003:T1098.001, TA0004:T1098.001  Joe Lopes  13       2026-10-01

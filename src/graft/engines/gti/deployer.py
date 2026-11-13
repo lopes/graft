@@ -76,7 +76,7 @@ def normalize_gti_deployment(
     default_emails: tuple[str, ...] = (),
 ) -> dict[str, object]:
     dep_type = resolve_gti_deployment_type(rule)
-    enabled = bool(rule.deployment.get("enabled", True))
+    enabled = bool(rule.deployment.get("enabled", False))
     raw_emails = rule.deployment.get("notification_emails")
     if isinstance(raw_emails, (list, tuple)):
         emails = [str(e).strip() for e in raw_emails if str(e).strip()]
@@ -457,7 +457,7 @@ class GTIDeployerAdapter(RuleDeployerPort):
         return {
             "name": rule.metadata.name,
             "rules": yara_text,
-            "enabled": bool(rule.deployment.get("enabled", True)),
+            "enabled": bool(rule.deployment.get("enabled", False)),
             "match_object_type": subtype,
             "limit": daily_limit,
             "notification_emails": emails,

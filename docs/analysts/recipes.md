@@ -517,7 +517,18 @@ logic: |
   import "vt"
 
   condition:
+    vt.net.domain.new_domain and
     vt.net.domain.root != "acme.com" and
+    (
+      (
+        defined vt.net.domain.gti_assessment.verdict.value and
+        (
+          vt.net.domain.gti_assessment.verdict.value == vt.GtiVerdict.VERDICT_MALICIOUS or
+          vt.net.domain.gti_assessment.verdict.value == vt.GtiVerdict.VERDICT_SUSPICIOUS
+        )
+      ) or
+      (defined vt.net.domain.analysis_stats.malicious and vt.net.domain.analysis_stats.malicious >= 1)
+    ) and
     defined vt.net.domain.https_certificate.subject.common_name and
     (
       vt.net.domain.raw matches /\bacme\b/i or
@@ -533,7 +544,7 @@ logic: |
 deployment:
   type: "livehunt"
   subtype: "domain"
-  enabled: true
+  enabled: false
   daily_limit: 100
 ```
 *(For a Retrohunt rule like [`rh_corporate_secret_key_leak_swept.yaml`](../../rulesets/gti/custom/rh_corporate_secret_key_leak_swept.yaml), set `type: "retrohunt"`, `corpus: "main"`, and `enabled: false` so it stays dormant in Git until you are ready to submit a historical scan job).*
