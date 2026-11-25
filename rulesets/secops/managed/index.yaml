@@ -789,8 +789,8 @@ categories:
         name: IAM Abuse
         deployments:
           - type: PRECISE
-            enabled: false
-            alerting: false
+            enabled: true
+            alerting: true
           - type: BROAD
             enabled: false
             alerting: false
@@ -1826,4 +1826,9 @@ categories:
           - type: BROAD
             enabled: false
             alerting: false
-exclusions: []
+exclusions:
+  - id: "exclude-terraform-deployer-iam-abuse"
+    description: "Exclude authorized Terraform deployer from Cloud Threats IAM Abuse"
+    rule_id: null
+    ruleset_id: "8c395bfe-bb62-b02d-ff93-cef098136aa0"
+    expression: 'principal.user.userid = "svc-terraform-deployer@corp.example.com"'
