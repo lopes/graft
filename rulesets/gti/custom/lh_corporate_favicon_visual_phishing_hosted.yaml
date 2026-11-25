@@ -24,6 +24,8 @@ logic: |
     // Gatekeeper: newly observed external URL rated High-Severity Malicious by GTI
     vt.net.url.new_url and
     vt.net.domain.root != "acme.com" and
+    // Exclude authorized pre-production staging domain
+    vt.net.domain.root != "acme-staging.example.com" and
     vt.net.url.gti_assessment.verdict.value == vt.GtiVerdict.VERDICT_MALICIOUS and
     vt.net.url.gti_assessment.severity.value == vt.GtiSeverity.SEVERITY_HIGH and
     // Visual brand impersonation: perceptual difference hash (dhash) of ACME Financial's favicon
