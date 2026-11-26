@@ -8,7 +8,7 @@ from graft.core.models.managed import (
     ManagedState,
 )
 from graft.core.ports.managed import ManagedEnginePort
-from graft.engines.secops.client import SecOpsClient
+from graft.engines.secops.client import SecOpsApiError, SecOpsClient
 
 logger = logging.getLogger("graft.secops.managed")
 
@@ -19,6 +19,7 @@ class SecOpsManagedAdapter(ManagedEnginePort):
         self._category_cache: dict[str, str] = {}
         self._category_name_to_id: dict[str, str] = {}
         self._category_id_to_name: dict[str, str] = {}
+        self._archived_exclusions_by_name: dict[str, str] = {}
 
     def _populate_category_caches(self) -> None:
         try:
@@ -184,27 +185,7 @@ class SecOpsManagedAdapter(ManagedEnginePort):
 
         # Fetch exclusions (findingsRefinements)
         logger.debug("Fetching findings refinements from Google SecOps API")
-        raw_exclusions: list[dict[str, object]] = []
-        ex_page_token: str | None = None
-        while True:
-            ex_params: dict[str, str] = {}
-            if ex_page_token:
-                ex_params["pageToken"] = ex_page_token
-            excl_resp = self._client.request(
-                "GET",
-                "findingsRefinements",
-                params=ex_params if ex_params else None,
-                api_version="v1alpha",
-            )
-            items = excl_resp.get("findingsRefinements", [])
-            if isinstance(items, list):
-                for it in items:
-                    if isinstance(it, dict):
-                        raw_exclusions.append(it)
-            next_ex_token = excl_resp.get("nextPageToken")
-            ex_page_token = str(next_ex_token) if next_ex_token else None
-            if not ex_page_token:
-                break
+        raw_exclusions = self._list_raw_exclusions()
 
         # Attempt bulk fetch of refinement deployments
         deployments_by_refinement: dict[str, dict[str, object]] = {}
@@ -241,13 +222,13 @@ class SecOpsManagedAdapter(ManagedEnginePort):
             if not dep_ref_page_token:
                 break
 
+        self._archived_exclusions_by_name.clear()
         exclusions: list[ManagedExclusion] = []
         for raw_ex in raw_exclusions:
             name_res = str(raw_ex.get("name", ""))
             excl_id = name_res.split("/")[-1] if "/" in name_res else name_res
-            desc = (
-                str(raw_ex.get("displayName", "")).strip() or f"Imported exclusion {excl_id}"[:256]
-            )
+            raw_display = str(raw_ex.get("displayName", "")).strip()
+            desc = raw_display or f"Imported exclusion {excl_id}"[:256]
             query = str(raw_ex.get("query", ""))
 
             dep_data = deployments_by_refinement.get(excl_id)
@@ -262,6 +243,8 @@ class SecOpsManagedAdapter(ManagedEnginePort):
                     logger.debug("Failed fetching deployment for refinement '%s': %s", excl_id, exc)
 
             if dep_data and dep_data.get("archived") is True:
+                if raw_display and excl_id:
+                    self._archived_exclusions_by_name[raw_display] = excl_id
                 continue
 
             rule_id: str | None = None
@@ -354,19 +337,94 @@ class SecOpsManagedAdapter(ManagedEnginePort):
             api_version="v1alpha",
         )
 
+    def _list_raw_exclusions(self) -> list[dict[str, object]]:
+        raw_exclusions: list[dict[str, object]] = []
+        ex_page_token: str | None = None
+        while True:
+            ex_params: dict[str, str] = {}
+            if ex_page_token:
+                ex_params["pageToken"] = ex_page_token
+            excl_resp = self._client.request(
+                "GET",
+                "findingsRefinements",
+                params=ex_params if ex_params else None,
+                api_version="v1alpha",
+            )
+            items = excl_resp.get("findingsRefinements", [])
+            if isinstance(items, list):
+                for it in items:
+                    if isinstance(it, dict):
+                        raw_exclusions.append(it)
+            next_ex_token = excl_resp.get("nextPageToken")
+            ex_page_token = str(next_ex_token) if next_ex_token else None
+            if not ex_page_token:
+                break
+        return raw_exclusions
+
+    def _find_archived_exclusion_id(self, display_name: str) -> str | None:
+        for raw_ex in self._list_raw_exclusions():
+            if str(raw_ex.get("displayName", "")).strip() != display_name:
+                continue
+            name_res = str(raw_ex.get("name", ""))
+            excl_id = name_res.split("/")[-1] if "/" in name_res else name_res
+            if not excl_id:
+                continue
+            dep_resp = self._client.request(
+                "GET", f"findingsRefinements/{excl_id}/deployment", api_version="v1alpha"
+            )
+            if isinstance(dep_resp, dict) and dep_resp.get("archived") is True:
+                return excl_id
+        return None
+
+    def _unarchive_and_update_exclusion(self, existing_id: str, exclusion: ManagedExclusion) -> str:
+        # SecOps rejects enabling or editing an archived refinement until archived is cleared.
+        logger.debug(
+            "Unarchiving retired findings refinement '%s' (id=%s) before restoring",
+            exclusion.id,
+            existing_id,
+        )
+        self._client.request(
+            "PATCH",
+            f"findingsRefinements/{existing_id}/deployment",
+            body={"archived": False},
+            params={"updateMask": "archived"},
+            api_version="v1alpha",
+        )
+        restored = ManagedExclusion(
+            id=existing_id,
+            rule_id=exclusion.rule_id,
+            ruleset_id=exclusion.ruleset_id,
+            expression=exclusion.expression,
+            description=exclusion.description,
+        )
+        self.update_exclusion(restored)
+        return existing_id
+
     def create_exclusion(self, exclusion: ManagedExclusion) -> str:
+        display_name = exclusion.description.strip()
+        archived_id = self._archived_exclusions_by_name.pop(display_name, None)
+        if archived_id:
+            return self._unarchive_and_update_exclusion(archived_id, exclusion)
+
         body: dict[str, object] = {
             "displayName": exclusion.description,
             "query": exclusion.expression,
             "type": "DETECTION_EXCLUSION",
         }
         logger.debug("Creating findings refinement '%s' (%s)", exclusion.id, exclusion.description)
-        resp = self._client.request(
-            "POST",
-            "findingsRefinements",
-            body=body,
-            api_version="v1alpha",
-        )
+        try:
+            resp = self._client.request(
+                "POST",
+                "findingsRefinements",
+                body=body,
+                api_version="v1alpha",
+            )
+        except SecOpsApiError as exc:
+            if exc.status_code == 409:
+                recovered_id = self._find_archived_exclusion_id(display_name)
+                if recovered_id:
+                    return self._unarchive_and_update_exclusion(recovered_id, exclusion)
+            raise
         name_res = str(resp.get("name", ""))
         created_id = name_res.split("/")[-1] if "/" in name_res else exclusion.id
 
