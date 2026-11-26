@@ -24,6 +24,8 @@ logic: |
     // Gatekeeper: newly observed external domain with a GTI malicious/suspicious verdict or AV detection
     vt.net.domain.new_domain and
     vt.net.domain.root != "acme.com" and
+    // Exclude authorized pre-production staging domain
+    vt.net.domain.root != "acme-staging.example.com" and
     (
       (
         defined vt.net.domain.gti_assessment.verdict.value and
