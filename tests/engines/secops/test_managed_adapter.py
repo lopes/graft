@@ -734,6 +734,226 @@ def test_exclusion_update_mask_omits_application_when_empty(
     assert "detectionExclusionApplication" not in (update_dep_call["body"] or {})
 
 
+def test_create_exclusion_unarchives_cached_archived_refinement(
+    mock_client: MockSecOpsClient, adapter: SecOpsManagedAdapter
+) -> None:
+    mock_client.set_response(
+        "GET",
+        "curatedRuleSetCategories/-/curatedRuleSets",
+        {
+            "curatedRuleSets": [
+                {
+                    "name": (
+                        f"{INSTANCE_BASE}/curatedRuleSetCategories/cloud/curatedRuleSets/"
+                        "rs-cloud-threats"
+                    ),
+                    "displayName": "Cloud Threats",
+                }
+            ]
+        },
+    )
+    mock_client.set_response(
+        "GET",
+        "curatedRuleSetCategories/-/curatedRuleSets/-/curatedRuleSetDeployments",
+        {"curatedRuleSetDeployments": []},
+    )
+    mock_client.set_response(
+        "GET",
+        "findingsRefinements",
+        {
+            "findingsRefinements": [
+                {
+                    "name": f"{INSTANCE_BASE}/findingsRefinements/fr_archived_123",
+                    "displayName": "Exclude authorized deployer",
+                    "query": 'principal.user.userid = "old-user@corp.example.com"',
+                }
+            ]
+        },
+    )
+    mock_client.set_response(
+        "GET",
+        ":listAllFindingsRefinementDeployments",
+        {
+            "allFindingsRefinementDeployments": [
+                {
+                    "name": f"{INSTANCE_BASE}/findingsRefinements/fr_archived_123/deployment",
+                    "enabled": False,
+                    "archived": True,
+                    "detectionExclusionApplication": {},
+                }
+            ]
+        },
+    )
+
+    state = adapter.fetch_managed_state()
+    assert state.exclusions == ()
+    mock_client.calls.clear()
+
+    exclusion = ManagedExclusion(
+        id="exclude-deployer",
+        rule_id=None,
+        ruleset_id="rs-cloud-threats",
+        expression='principal.user.userid = "svc-deployer@corp.example.com"',
+        description="Exclude authorized deployer",
+    )
+    result_id = adapter.create_exclusion(exclusion)
+
+    assert result_id == "fr_archived_123"
+    assert not any(c["method"] == "POST" for c in mock_client.calls)
+    assert len(mock_client.calls) == 3
+
+    unarchive_call, patch_def_call, patch_dep_call = mock_client.calls
+    assert unarchive_call["method"] == "PATCH"
+    assert unarchive_call["path"] == "findingsRefinements/fr_archived_123/deployment"
+    assert unarchive_call["params"] == {"updateMask": "archived"}
+    assert unarchive_call["body"] == {"archived": False}
+
+    assert patch_def_call["method"] == "PATCH"
+    assert patch_def_call["path"] == "findingsRefinements/fr_archived_123"
+    assert patch_def_call["params"] == {"updateMask": "displayName,query"}
+    assert patch_def_call["body"] == {
+        "displayName": "Exclude authorized deployer",
+        "query": 'principal.user.userid = "svc-deployer@corp.example.com"',
+    }
+
+    assert patch_dep_call["method"] == "PATCH"
+    assert patch_dep_call["path"] == "findingsRefinements/fr_archived_123/deployment"
+    assert patch_dep_call["params"] == {
+        "updateMask": "enabled,archived,detectionExclusionApplication"
+    }
+    assert patch_dep_call["body"] is not None
+    assert patch_dep_call["body"]["enabled"] is True
+    assert patch_dep_call["body"]["archived"] is False
+    app = patch_dep_call["body"]["detectionExclusionApplication"]
+    assert "rs-cloud-threats" in str(app["curatedRuleSets"])
+
+
+def test_create_exclusion_recovers_from_409_by_unarchiving_existing_archived_refinement(
+    mock_client: MockSecOpsClient,
+    adapter: SecOpsManagedAdapter,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from graft.engines.secops.client import SecOpsApiError
+
+    orig_request = mock_client.request
+
+    def conflict_on_post(
+        method: str,
+        path: str,
+        body: Mapping[str, object] | None = None,
+        params: Mapping[str, str] | None = None,
+        api_version: str | None = None,
+    ) -> dict[str, object]:
+        if method.upper() == "POST" and path == "findingsRefinements":
+            raise SecOpsApiError(
+                "display name Exclude authorized deployer already exists",
+                409,
+                status="ALREADY_EXISTS",
+                method=method,
+                path=path,
+            )
+        return orig_request(method, path, body=body, params=params, api_version=api_version)
+
+    mock_client.set_response(
+        "GET",
+        "findingsRefinements",
+        {
+            "findingsRefinements": [
+                {
+                    "name": f"{INSTANCE_BASE}/findingsRefinements/fr_archived_456",
+                    "displayName": "Exclude authorized deployer",
+                    "query": 'principal.user.userid = "old-user@corp.example.com"',
+                }
+            ]
+        },
+    )
+    mock_client.set_response(
+        "GET",
+        "findingsRefinements/fr_archived_456/deployment",
+        {"enabled": False, "archived": True},
+    )
+    monkeypatch.setattr(mock_client, "request", conflict_on_post)
+
+    exclusion = ManagedExclusion(
+        id="exclude-deployer",
+        rule_id=None,
+        ruleset_id="rs-cloud-threats",
+        expression='principal.user.userid = "svc-deployer@corp.example.com"',
+        description="Exclude authorized deployer",
+    )
+    result_id = adapter.create_exclusion(exclusion)
+
+    assert result_id == "fr_archived_456"
+    patch_calls = [c for c in mock_client.calls if c["method"] == "PATCH"]
+    assert len(patch_calls) == 3
+    assert patch_calls[0]["path"] == "findingsRefinements/fr_archived_456/deployment"
+    assert patch_calls[0]["body"] == {"archived": False}
+    assert patch_calls[1]["path"] == "findingsRefinements/fr_archived_456"
+    assert patch_calls[2]["path"] == "findingsRefinements/fr_archived_456/deployment"
+    assert patch_calls[2]["body"] is not None
+    assert patch_calls[2]["body"]["enabled"] is True
+
+
+def test_create_exclusion_reraises_409_when_conflicting_refinement_is_not_archived(
+    mock_client: MockSecOpsClient,
+    adapter: SecOpsManagedAdapter,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from graft.engines.secops.client import SecOpsApiError
+
+    orig_request = mock_client.request
+
+    def conflict_on_post(
+        method: str,
+        path: str,
+        body: Mapping[str, object] | None = None,
+        params: Mapping[str, str] | None = None,
+        api_version: str | None = None,
+    ) -> dict[str, object]:
+        if method.upper() == "POST" and path == "findingsRefinements":
+            raise SecOpsApiError(
+                "display name Active exclusion already exists",
+                409,
+                status="ALREADY_EXISTS",
+                method=method,
+                path=path,
+            )
+        return orig_request(method, path, body=body, params=params, api_version=api_version)
+
+    mock_client.set_response(
+        "GET",
+        "findingsRefinements",
+        {
+            "findingsRefinements": [
+                {
+                    "name": f"{INSTANCE_BASE}/findingsRefinements/fr_active_789",
+                    "displayName": "Active exclusion",
+                    "query": 'principal.user.userid = "svc-active@corp.example.com"',
+                }
+            ]
+        },
+    )
+    mock_client.set_response(
+        "GET",
+        "findingsRefinements/fr_active_789/deployment",
+        {"enabled": True, "archived": False},
+    )
+    monkeypatch.setattr(mock_client, "request", conflict_on_post)
+
+    exclusion = ManagedExclusion(
+        id="exclude-active",
+        rule_id=None,
+        ruleset_id="rs-cloud-threats",
+        expression='principal.user.userid = "svc-other@corp.example.com"',
+        description="Active exclusion",
+    )
+    with pytest.raises(SecOpsApiError) as exc_info:
+        adapter.create_exclusion(exclusion)
+
+    assert exc_info.value.status_code == 409
+    assert not any(c["method"] == "PATCH" for c in mock_client.calls)
+
+
 def test_secops_engine_emits_no_info_or_error_logs() -> None:
     import ast
     from pathlib import Path
